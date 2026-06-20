@@ -11,7 +11,7 @@ focus rooms so you never have to work alone.
 ---
 
 <p align="center">
-  <img src="web/icons/Icon-512.png" alt="OurMynd Logo" width="128">
+  <img src="assets/logo.png" alt="OurMynd Logo" width="128">
 </p>
 
 ## 🎥 Demo
