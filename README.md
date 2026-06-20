@@ -10,7 +10,25 @@ focus rooms so you never have to work alone.
 
 ---
 
+## 🎥 Demo
+
+See OurMynd in action — the energy-first home, focus rooms, community feed, and the
+AI coach, all in one walkthrough:
+
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=LzKIMGvY8P4">
+    <img src="https://img.youtube.com/vi/LzKIMGvY8P4/maxresdefault.jpg" alt="OurMynd demo video" width="720">
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=LzKIMGvY8P4"><b>▶ Watch the full demo on YouTube</b></a>
+</p>
+
+---
+
 ## Table of contents
+- [Demo](#-demo)
 - [Features](#features)
 - [Tech stack](#tech-stack)
 - [Repository layout](#repository-layout)
