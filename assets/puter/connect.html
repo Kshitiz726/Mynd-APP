@@ -1,0 +1,44 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<script src="https://js.puter.com/v2/"></script>
+<style>
+  html,body{height:100%;margin:0}
+  body{font-family:-apple-system,"Segoe UI",Roboto,sans-serif;background:#F6F4F1;color:#2A2A33;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;padding:28px;text-align:center}
+  .logo{width:64px;height:64px;border-radius:18px;background:linear-gradient(135deg,#6B70C9,#F0A479);margin-bottom:18px}
+  h2{margin:0 0 8px;font-size:22px;color:#6B70C9}
+  p{margin:0 0 24px;max-width:320px;line-height:1.5;color:#5b5b66}
+  button{padding:15px 30px;font-size:16px;font-weight:700;color:#fff;border:none;border-radius:16px;cursor:pointer;
+    background:linear-gradient(135deg,#6B70C9,#F0A479);box-shadow:0 8px 22px rgba(107,112,201,.35)}
+  button:active{transform:scale(.97)}
+  .msg{margin-top:18px;font-size:14px;color:#8a8a94;min-height:20px}
+</style></head>
+<body>
+  <div class="logo"></div>
+  <h2>Connect Puter</h2>
+  <p>Sign in once to power your AI coach — free, keyless, you cover your own usage.</p>
+  <button id="btn">Sign in to Puter</button>
+  <div class="msg" id="msg"></div>
+<script>
+  function flh(n,d){ try{ window.flutter_inappwebview.callHandler(n,d); }catch(e){} }
+  function authed(){ try{ return !!(window.puter && puter.auth && puter.auth.isSignedIn && puter.auth.isSignedIn()); }catch(e){ return false; } }
+  var msg = document.getElementById('msg');
+  window.addEventListener('load', function(){
+    try{ puter.quiet = true; }catch(e){}
+    if (authed()) { msg.textContent = 'Already connected'; flh('onConnected', { ok: true }); }
+  });
+  // Real in-page click → user activation → window.open (popup) is allowed.
+  function token(){ try{ return (window.puter && puter.authToken) ? puter.authToken : ''; }catch(e){ return ''; } }
+  document.getElementById('btn').addEventListener('click', async function(){
+    msg.textContent = 'Opening sign-in…';
+    try {
+      await puter.auth.signIn();
+      var ok = authed();
+      msg.textContent = ok ? 'Connected! Returning…' : 'Sign-in was not completed';
+      flh('onConnected', { ok: ok, token: token() });
+    } catch(e){
+      msg.textContent = 'Error: ' + String(e && (e.message || e));
+      flh('onConnected', { ok: false, error: String(e && (e.message || e)) });
+    }
+  });
+</script></body></html>

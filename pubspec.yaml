@@ -1,0 +1,61 @@
+name: ourmynd
+description: "OurMynd — an ADHD-focused productivity, wellness & community app."
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.6.0 <4.0.0"
+  flutter: ">=3.27.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State management (per spec).
+  provider: ^6.1.2
+
+  # Typography — Fredoka (display), Lexend (body), Atkinson Hyperlegible
+  # (accessibility) are all served from Google Fonts, so we don't bundle
+  # font binaries.
+  google_fonts: ^6.2.1
+
+  # Groq API — HTTP client for streaming SSE chat completions + REST backend.
+  http: ^1.2.2
+
+  # Embedded WebView (Android/iOS/macOS/Windows) — hosts Puter.js so the coach's
+  # AI chat + voice (speech↔text, TTS) run inside the native app via a JS bridge.
+  flutter_inappwebview: ^6.1.5
+
+  # Cross-session memory — stores conversation summary between app launches.
+  shared_preferences: ^2.3.2
+  lucide_icons_flutter: ^3.1.14+2
+
+  # Realtime backend — Socket.IO client for the Community feed + Focus Rooms
+  # (presence, timer sync, chat) and LiveKit for body-doubling voice channels.
+  socket_io_client: ^2.0.3+1
+  livekit_client: ^2.3.0
+  audioplayers: ^6.1.0
+
+  # Real Google OAuth sign-in (web uses Google Identity Services under the hood;
+  # client id is set via the meta tag in web/index.html).
+  google_sign_in: ^6.2.1
+
+  # Desktop (Windows/Linux) real Google OAuth: the loopback "installed app" flow
+  # opens the system browser (url_launcher) and uses PKCE (crypto) — google_sign_in
+  # has no desktop implementation.
+  url_launcher: ^6.3.0
+  crypto: ^3.0.3
+  intl: ^0.20.2
+  cupertino_icons: ^1.0.9
+  video_player: ^2.11.1
+
+dev_dependencies:
+  flutter_lints: ^4.0.0
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/audio/
+    - assets/puter/

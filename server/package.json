@@ -1,0 +1,45 @@
+{
+  "name": "ourmynd-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "OurMynd realtime + REST backend (Community + Focus Rooms).",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "dev:full": "node --import tsx scripts/devstack.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "migrate": "node --import tsx scripts/migrate.ts",
+    "smoke": "node --import tsx scripts/smoke.ts",
+    "smoke:rooms": "node --import tsx scripts/smoke_rooms.ts",
+    "smoke:chat": "node --import tsx scripts/smoke_chat.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@socket.io/redis-adapter": "^8.3.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "google-auth-library": "^10.7.0",
+    "ioredis": "^5.4.1",
+    "jsonwebtoken": "^9.0.2",
+    "livekit-server-sdk": "^2.6.1",
+    "pg-promise": "^11.9.1",
+    "pino": "^9.3.2",
+    "pino-http": "^10.2.0",
+    "socket.io": "^4.7.5"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/jsonwebtoken": "^9.0.6",
+    "@types/node": "^20.14.0",
+    "embedded-postgres": "^18.4.0-beta.17",
+    "socket.io-client": "^4.8.3",
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.0"
+  }
+}

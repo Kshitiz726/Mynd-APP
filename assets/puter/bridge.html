@@ -1,0 +1,109 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<script src="https://js.puter.com/v2/"></script></head>
+<body><script>
+function flh(name, data){ try { window.flutter_inappwebview.callHandler(name, data); } catch(e){} }
+function b64json(b64){ return JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(b64), c=>c.charCodeAt(0)))); }
+function b64str(b64){ return new TextDecoder().decode(Uint8Array.from(atob(b64), c=>c.charCodeAt(0))); }
+function authed(){ try { return !!(window.puter && puter.auth && puter.auth.isSignedIn && puter.auth.isSignedIn()); } catch(e){ return false; } }
+
+window.addEventListener('load', function(){
+  try { puter.quiet = true; } catch(e){}
+  flh('onReady', { ok: true, signedIn: authed() });
+});
+
+// Probe: report every window.open the page attempts (puter auth uses this).
+(function(){
+  var _open = window.open;
+  window.open = function(){ flh('onLog', 'window.open(' + (arguments[0] || '') + ')'); return _open.apply(window, arguments); };
+})();
+
+// ── Explicit Puter sign-in (popup) — triggered by the "Connect Puter" button ──
+window.omSignIn = async function(){
+  flh('onLog', 'omSignIn start (signedIn=' + authed() + ')');
+  try {
+    if (!authed()) { await puter.auth.signIn(); }
+    flh('onAuth', { signedIn: authed() });
+    flh('onLog', 'omSignIn resolved (signedIn=' + authed() + ')');
+  } catch(e){
+    flh('onAuth', { signedIn: authed(), error: String(e && (e.message || e)) });
+    flh('onLog', 'omSignIn error: ' + String(e && (e.message || e)));
+  }
+};
+window.omAuthCheck = function(){ flh('onAuth', { signedIn: authed() }); };
+
+// Apply a token obtained by the visible Connect screen so this (separate) bridge
+// webview becomes authenticated without its own popup.
+window.omApplyToken = function(b64){
+  try {
+    var t = b64str(b64);
+    if (window.puter && puter.setAuthToken) { puter.setAuthToken(t); }
+    else { try { localStorage.setItem('puter.auth.token', t); } catch(e){} }
+  } catch(e){ flh('onLog', 'applyToken error: ' + String(e && (e.message || e))); }
+  flh('onAuth', { signedIn: authed() });
+};
+
+// ── Streaming chat ──
+window.omChat = async function(id, b64, model){
+  try {
+    const messages = b64json(b64);
+    const resp = await puter.ai.chat(messages, { model: model, stream: true });
+    let full = '';
+    for await (const part of resp){
+      const t = part && (part.text || (part.message && part.message.content));
+      if (t){ full += t; flh('onChunk', { id: id, chunk: t }); }
+    }
+    flh('onDone', { id: id, full: full });
+  } catch(e){ flh('onError', { id: id, error: String(e && (e.message || e)) }); }
+};
+
+// ── Blocking completion (summaries) ──
+window.omComplete = async function(id, b64, model){
+  try {
+    const messages = b64json(b64);
+    const r = await puter.ai.chat(messages, { model: model });
+    const t = (r && r.message && r.message.content) || (r && r.text) || String(r);
+    flh('onDone', { id: id, full: t });
+  } catch(e){ flh('onError', { id: id, error: String(e && (e.message || e)) }); }
+};
+
+// ── Voice: record → speech2txt ──
+var __rec = null, __chunks = [], __stream = null;
+window.omStartVoice = async function(){
+  try {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      throw new Error('microphone not available in this context');
+    }
+    __stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    __chunks = [];
+    __rec = new MediaRecorder(__stream);
+    __rec.ondataavailable = function(e){ if (e.data && e.data.size) __chunks.push(e.data); };
+    __rec.onstop = async function(){
+      try { __stream.getTracks().forEach(function(t){ t.stop(); }); } catch(e){}
+      flh('onVoiceState', { state: 'transcribing' });
+      try {
+        const blob = new Blob(__chunks, { type: 'audio/webm' });
+        const res = await puter.ai.speech2txt(blob);
+        flh('onTranscript', { text: (res && res.text) || res || '' });
+      } catch(e){ flh('onError', { id: -1, error: 'stt: ' + String(e && (e.message || e)) }); flh('onTranscript', { text: '' }); }
+    };
+    __rec.start();
+    flh('onVoiceState', { state: 'listening' });
+  } catch(e){ flh('onError', { id: -1, error: 'mic: ' + String(e && (e.message || e)) }); flh('onTranscript', { text: '' }); }
+};
+window.omStopVoice = function(){ try { if (__rec && __rec.state !== 'inactive') __rec.stop(); } catch(e){} };
+
+// ── Voice: text → speech ──
+var __audio = null;
+window.omSpeak = async function(b64){
+  try {
+    const text = b64str(b64);
+    flh('onVoiceState', { state: 'speaking' });
+    __audio = await puter.ai.txt2speech(text);
+    __audio.onended = function(){ flh('onSpoken', { ok: true }); };
+    __audio.onerror = function(){ flh('onSpoken', { ok: false }); };
+    __audio.play();
+  } catch(e){ flh('onError', { id: -1, error: 'tts: ' + String(e && (e.message || e)) }); flh('onSpoken', { ok: false }); }
+};
+window.omStopSpeak = function(){ try { if (__audio){ __audio.pause(); __audio.currentTime = 0; } } catch(e){} };
+</script></body></html>

@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Puter AI Studio — Free, Unlimited AI</title>
+<script src="https://js.puter.com/v2/"></script>
+<style>
+  :root {
+    --bg: #0d1117;
+    --bg-elev: #161b22;
+    --bg-input: #1c2128;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-dim: #8b949e;
+    --accent: #2f81f7;
+    --accent-hover: #4a92f8;
+    --user-bubble: #1f6feb;
+    --danger: #f85149;
+    --green: #238636;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* Header */
+  header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    background: var(--bg-elev);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    flex-wrap: wrap;
+  }
+  .logo { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; display: flex; align-items: center; gap: 8px; }
+  .logo .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 12px var(--accent); }
+  .spacer { flex: 1; }
+
+  .tabs { display: flex; gap: 4px; background: var(--bg-input); padding: 4px; border-radius: 10px; border: 1px solid var(--border); }
+  .tab { padding: 6px 12px; border-radius: 7px; font-size: 13px; cursor: pointer; color: var(--text-dim); border: none; background: transparent; transition: all .15s; }
+  .tab.active { background: var(--accent); color: #fff; }
+  .tab:hover:not(.active) { color: var(--text); }
+
+  select, button {
+    font-family: inherit; font-size: 13px; color: var(--text);
+    background: var(--bg-input); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 10px; cursor: pointer;
+    transition: border-color .15s, background .15s;
+  }
+  select { max-width: 220px; }
+  select:hover, button:hover { border-color: var(--accent); }
+  button.icon-btn { color: var(--text-dim); }
+  button.icon-btn:hover { color: var(--text); }
+  button.icon-btn.on { color: var(--accent); border-color: var(--accent); }
+
+  /* Output area */
+  #stage { flex: 1; overflow-y: auto; padding: 24px 0; scroll-behavior: smooth; }
+  .inner { max-width: 840px; margin: 0 auto; padding: 0 18px; }
+
+  /* Chat messages */
+  .msg { display: flex; gap: 14px; margin-bottom: 24px; animation: fade .3s ease; }
+  @keyframes fade { from { opacity: 0; transform: translateY(6px);} to {opacity:1; transform:none;} }
+  .msg .avatar { width: 34px; height: 34px; border-radius: 8px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; }
+  .msg.user .avatar { background: var(--user-bubble); color: #fff; }
+  .msg.assistant .avatar { background: var(--green); color: #fff; }
+  .msg.tool .avatar { background: #8957e5; color: #fff; font-size:16px; }
+  .msg .body { flex: 1; min-width: 0; padding-top: 4px; line-height: 1.6; }
+  .msg .body img.analyzed { max-width: 260px; border-radius: 10px; margin-bottom: 10px; display:block; border:1px solid var(--border);}
+  .msg .role { font-weight: 600; font-size: 13px; color: var(--text-dim); margin-bottom: 4px; }
+  .msg .body p { margin-bottom: 10px; } .msg .body p:last-child { margin-bottom: 0; }
+  .msg .body pre { background: #010409; border: 1px solid var(--border); border-radius: 8px; padding: 14px; overflow-x: auto; margin: 10px 0; font-size: 13px; }
+  .msg .body code { font-family: "SF Mono", Consolas, monospace; background: rgba(110,118,129,0.3); padding: 2px 6px; border-radius: 5px; font-size: 13px; }
+  .msg .body pre code { background: none; padding: 0; }
+  .msg .body ul, .msg .body ol { margin: 8px 0 8px 22px; } .msg .body li { margin-bottom: 4px; }
+  .msg .body h1,.msg .body h2,.msg .body h3 { margin: 14px 0 8px; line-height:1.3; }
+  .msg .body a { color: var(--accent); }
+  .msg .body blockquote { border-left: 3px solid var(--border); padding-left: 12px; color: var(--text-dim); margin: 8px 0; }
+  .msg .reasoning { font-size:13px; color:var(--text-dim); border-left:3px solid #8957e5; padding:6px 0 6px 12px; margin-bottom:10px; white-space:pre-wrap; font-style:italic; }
+  .tool-card { background: var(--bg-elev); border:1px solid var(--border); border-radius:8px; padding:10px 12px; font-size:13px; font-family:monospace; color:var(--text-dim); }
+  .tool-card b { color: var(--text); }
+  .cursor { display:inline-block; width:8px; height:16px; background:var(--accent); animation:blink 1s steps(2) infinite; vertical-align:text-bottom; margin-left:1px; }
+  @keyframes blink { 0%,50%{opacity:1;} 51%,100%{opacity:0;} }
+
+  /* Media outputs */
+  .media-out { margin-bottom: 24px; animation: fade .3s ease; }
+  .media-out img, .media-out video { max-width: 100%; border-radius: 12px; border:1px solid var(--border); display:block; }
+  .media-out audio { width: 100%; }
+  .media-out .cap { font-size: 13px; color: var(--text-dim); margin-bottom: 8px; }
+  .spinner { width: 28px; height: 28px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg);} }
+  .loading-row { display:flex; align-items:center; gap:12px; color:var(--text-dim); margin-bottom: 24px; }
+
+  /* Empty state */
+  #empty { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; color: var(--text-dim); padding: 20px; }
+  #empty h1 { font-size: 28px; color: var(--text); margin-bottom: 8px; font-weight: 700;}
+  #empty p { max-width: 480px; margin-bottom: 24px; line-height:1.6; }
+  .suggestions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; max-width: 560px; width:100%; }
+  .suggestion { text-align: left; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; cursor: pointer; transition: border-color .15s, transform .1s; font-size: 14px; color: var(--text); }
+  .suggestion:hover { border-color: var(--accent); transform: translateY(-2px); }
+  .suggestion b { display:block; margin-bottom: 3px; } .suggestion span { color: var(--text-dim); font-size: 13px; }
+
+  /* Composer */
+  .composer-wrap { flex-shrink: 0; background: var(--bg); padding: 0 18px 16px; }
+  .composer { max-width: 840px; margin: 0 auto; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px; display: flex; align-items: flex-end; gap: 8px; transition: border-color .15s; }
+  .composer:focus-within { border-color: var(--accent); }
+  #input { flex: 1; background: transparent; border: none; outline: none; color: var(--text); font-family: inherit; font-size: 15px; line-height: 1.5; resize: none; max-height: 200px; padding: 8px 6px; }
+  #input::placeholder { color: var(--text-dim); }
+  .send-btn { background: var(--accent); border: none; border-radius: 9px; width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; color: #fff; flex-shrink: 0; padding: 0; }
+  .send-btn:hover { background: var(--accent-hover); } .send-btn:disabled { background: var(--border); cursor: not-allowed; }
+  .composer .attach { background: transparent; border: none; color: var(--text-dim); width: 38px; height: 38px; display:flex; align-items:center; justify-content:center; flex-shrink: 0; padding: 0; }
+  .composer .attach:hover { color: var(--text); }
+  .hint { max-width: 840px; margin: 8px auto 0; text-align: center; font-size: 12px; color: var(--text-dim); }
+  .img-preview { max-width:840px; margin: 0 auto 8px; display:none; }
+  .img-preview img { max-height: 80px; border-radius: 8px; border:1px solid var(--border); vertical-align:middle;}
+  .img-preview .remove { color: var(--danger); cursor:pointer; font-size:12px; margin-left:8px; }
+
+  ::-webkit-scrollbar { width: 10px; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 5px; }
+  ::-webkit-scrollbar-thumb:hover { background: #484f58; }
+
+  @media (max-width: 720px) {
+    .suggestions { grid-template-columns: 1fr; }
+    .logo span.full { display:none; }
+    select { max-width: 150px; }
+  }
+</style>
+</head>
+<body>
+  <header>
+    <div class="logo"><span class="dot"></span><span class="full">Puter AI Studio</span></div>
+    <div class="tabs" id="tabs">
+      <button class="tab active" data-mode="chat">💬 Chat</button>
+      <button class="tab" data-mode="image">🎨 Image</button>
+      <button class="tab" data-mode="video">🎬 Video</button>
+      <button class="tab" data-mode="speech">🔊 Speech</button>
+    </div>
+    <div class="spacer"></div>
+
+    <!-- Chat model picker -->
+    <select id="model" title="Model"></select>
+    <!-- TTS provider/voice -->
+    <select id="ttsProvider" title="Speech provider" style="display:none">
+      <option value="elevenlabs|eleven_multilingual_v2">ElevenLabs · multilingual v2</option>
+      <option value="openai|gpt-4o-mini-tts">OpenAI · gpt-4o-mini-tts</option>
+      <option value="openai|tts-1-hd">OpenAI · tts-1-hd</option>
+      <option value="openai|tts-1">OpenAI · tts-1</option>
+    </select>
+
+    <button class="icon-btn" id="webSearch" title="Toggle web search">🌐 Web</button>
+    <button class="icon-btn" id="toolsBtn" title="Toggle function calling (weather + time tools)">🛠 Tools</button>
+    <button class="icon-btn" id="clear" title="New / clear">＋ New</button>
+  </header>
+
+  <div id="stage">
+    <div id="empty">
+      <h1 id="emptyTitle">What can I help with?</h1>
+      <p id="emptyDesc">Free access to 400+ AI models — OpenAI, Claude, Gemini, Grok, and more — plus image, video, and speech generation. No API key, no sign-up, no server.</p>
+      <div class="suggestions" id="suggestions"></div>
+    </div>
+    <div class="inner" id="output"></div>
+  </div>
+
+  <div class="composer-wrap">
+    <div class="img-preview" id="imgPreview"></div>
+    <div class="composer">
+      <button class="attach" id="attachBtn" title="Attach image for analysis (chat mode)">📎</button>
+      <input type="file" id="fileInput" accept="image/*" style="display:none" />
+      <textarea id="input" rows="1" placeholder="Message…"></textarea>
+      <button class="send-btn" id="send" title="Send">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 12L20 4L13 20L11 13L4 12Z" fill="currentColor"/></svg>
+      </button>
+    </div>
+    <div class="hint" id="hint">Powered by Puter.js (User-Pays model). Conversation history is kept in this session.</div>
+  </div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ====================================================================
+  //  Model catalog — grouped for the chat picker
+  // ====================================================================
+  const CHAT_MODELS = [
+    ["Flagship", [
+      ["openai/gpt-5.5", "GPT-5.5 (OpenAI)"],
+      ["gpt-5.4-nano", "GPT-5.4 Nano (fast)"],
+      ["gpt-5.4", "GPT-5.4"],
+      ["anthropic/claude-opus-4-8", "Claude Opus 4.8 (Anthropic)"],
+      ["google/gemini-3.5-flash", "Gemini 3.5 Flash (Google)"],
+      ["x-ai/grok-4.3", "Grok 4.3 (xAI)"],
+    ]],
+    ["Coding", [
+      ["openai/gpt-5.3-codex", "GPT-5.3 Codex (OpenAI)"],
+      ["deepseek/deepseek-v4-pro", "DeepSeek V4 Pro"],
+    ]],
+    ["Open-source", [
+      ["z-ai/glm-5.2", "GLM 5.2 (Z.AI)"],
+      ["qwen/qwen3.7-max", "Qwen 3.7 Max (Alibaba)"],
+      ["mistralai/mistral-small-2603", "Mistral Small 4"],
+      ["moonshotai/kimi-k2.6", "Kimi K2.6 (Moonshot)"],
+      ["google/gemma-4-31b-it", "Gemma 4 (Google)"],
+      ["meta-llama/llama-4-maverick", "Llama 4 Maverick (Meta)"],
+      ["microsoft/phi-4", "Phi-4 (Microsoft)"],
+      ["openai/gpt-oss-120b", "GPT-OSS 120B (OpenAI)"],
+    ]],
+  ];
+
+  const SUGGESTIONS = {
+    chat: [
+      ["Compare models", "Ask Claude vs GPT to write a poem", "Write a 4-line poem about the ocean, then critique it."],
+      ["Write code", "Fibonacci in Python", "Write a Python function that returns the nth Fibonacci number."],
+      ["Use a tool", "What's the weather in Tokyo? (enable 🛠 Tools)", "What's the weather in Tokyo right now?"],
+      ["Search the web", "Latest in fusion energy (enable 🌐 Web)", "What are the latest developments in fusion energy?"],
+    ],
+    image: [
+      ["Landscape", "Futuristic city at sunset", "A futuristic city skyline at sunset, ultra detailed, cinematic lighting"],
+      ["Character", "Astronaut on a horse", "An astronaut riding a horse on Mars, photorealistic"],
+      ["Art style", "Watercolor fox", "A cute fox in a forest, watercolor painting style"],
+      ["Product", "Minimalist sneaker", "A minimalist white sneaker on a pastel background, studio photo"],
+    ],
+    video: [
+      ["Nature", "Ocean wave at sunset", "A serene ocean wave rolling onto the shore at sunset"],
+      ["Cityscape", "Rainy neon street", "A rainy neon-lit street in Tokyo at night, cinematic"],
+      ["Animal", "Running cheetah", "A cheetah running across the savanna in slow motion"],
+      ["Abstract", "Flowing colors", "Abstract flowing liquid colors, smooth and mesmerizing"],
+    ],
+    speech: [
+      ["Greeting", "Friendly hello", "Hello from Puter! This speech was generated for free."],
+      ["Story", "Narration", "Once upon a time, in a land far away, a curious traveler set out on a great adventure."],
+      ["Announcement", "Welcome message", "Welcome to Puter AI Studio, where every major AI model is available for free."],
+      ["Quote", "Inspirational", "The only way to do great work is to love what you do."],
+    ],
+  };
+
+  // ====================================================================
+  //  Function-calling tools (client-side)
+  // ====================================================================
+  const TOOL_DEFS = [
+    {
+      type: "function",
+      function: {
+        name: "getWeather",
+        description: "Get the current weather for a given city.",
+        parameters: {
+          type: "object",
+          properties: { location: { type: "string", description: "City name, e.g. Paris" } },
+          required: ["location"],
+        },
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "getCurrentTime",
+        description: "Get the current local date and time.",
+        parameters: { type: "object", properties: {}, required: [] },
+      },
+    },
+  ];
+  const TOOL_IMPL = {
+    getWeather: function (args) {
+      const data = {
+        paris: { temp: "22°C", condition: "Partly Cloudy", humidity: "65%" },
+        london: { temp: "18°C", condition: "Rainy", humidity: "80%" },
+        "new york": { temp: "25°C", condition: "Sunny", humidity: "45%" },
+        tokyo: { temp: "28°C", condition: "Clear", humidity: "70%" },
+      };
+      const loc = (args.location || "").toLowerCase();
+      const w = data[loc] || { temp: "20°C", condition: "Unknown (mock data)", humidity: "—" };
+      return JSON.stringify({ location: args.location, ...w });
+    },
+    getCurrentTime: function () {
+      return JSON.stringify({ now: new Date().toString() });
+    },
+  };
+
+  // ====================================================================
+  //  State + elements
+  // ====================================================================
+  let mode = "chat";
+  let history = [];
+  let busy = false;
+  let webSearchOn = false;
+  let toolsOn = false;
+  let attachedImageURL = null;
+
+  const $ = function (id) { return document.getElementById(id); };
+  const stage = $("stage"), output = $("output"), emptyEl = $("empty");
+  const input = $("input"), sendBtn = $("send"), modelSel = $("model");
+  const ttsSel = $("ttsProvider"), webBtn = $("webSearch"), toolsBtn = $("toolsBtn");
+  const clearBtn = $("clear"), attachBtn = $("attachBtn"), fileInput = $("fileInput");
+  const imgPreview = $("imgPreview"), suggestionsEl = $("suggestions");
+  const emptyTitle = $("emptyTitle"), emptyDesc = $("emptyDesc"), hint = $("hint");
+
+  // Populate model dropdown
+  CHAT_MODELS.forEach(function (grp) {
+    const og = document.createElement("optgroup");
+    og.label = grp[0];
+    grp[1].forEach(function (m) {
+      const o = document.createElement("option");
+      o.value = m[0]; o.textContent = m[1];
+      og.appendChild(o);
+    });
+    modelSel.appendChild(og);
+  });
+  modelSel.value = "openai/gpt-5.5";
+
+  // ====================================================================
+  //  Markdown renderer (safe)
+  // ====================================================================
+  function escapeHtml(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+  function renderMarkdown(md) {
+    if (!md) return "";
+    const blocks = [];
+    md = md.replace(/```(\w*)\n?([\s\S]*?)```/g, function (_, lang, code) {
+      blocks.push('<pre><code>' + escapeHtml(code.replace(/\n$/, "")) + '</code></pre>');
+      return " BLOCK" + (blocks.length - 1) + " ";
+    });
+    let html = escapeHtml(md);
+    html = html.replace(/`([^`\n]+)`/g, function (_, c) { return "<code>" + c + "</code>"; });
+    html = html.replace(/^### (.*)$/gm, "<h3>$1</h3>").replace(/^## (.*)$/gm, "<h2>$1</h2>").replace(/^# (.*)$/gm, "<h1>$1</h1>");
+    html = html.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>").replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
+    html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    html = html.replace(/^&gt; (.*)$/gm, "<blockquote>$1</blockquote>");
+    html = html.replace(/(?:^[-*] .*(?:\n|$))+/gm, function (b) {
+      return "<ul>" + b.trim().split("\n").map(function (l) { return "<li>" + l.replace(/^[-*] /, "") + "</li>"; }).join("") + "</ul>";
+    });
+    html = html.replace(/(?:^\d+\. .*(?:\n|$))+/gm, function (b) {
+      return "<ol>" + b.trim().split("\n").map(function (l) { return "<li>" + l.replace(/^\d+\. /, "") + "</li>"; }).join("") + "</ol>";
+    });
+    html = html.split(/\n{2,}/).map(function (chunk) {
+      if (/^\s*<(h\d|ul|ol|pre|blockquote)/.test(chunk)) return chunk;
+      return "<p>" + chunk.replace(/\n/g, "<br>") + "</p>";
+    }).join("");
+    html = html.replace(/ BLOCK(\d+) /g, function (_, i) { return blocks[+i]; });
+    return html;
+  }
+
+  // ====================================================================
+  //  DOM helpers
+  // ====================================================================
+  function showOutput() { emptyEl.style.display = "none"; }
+  function scrollDown() { stage.scrollTop = stage.scrollHeight; }
+
+  function addMessage(role, htmlContent, imageURL) {
+    showOutput();
+    const wrap = document.createElement("div");
+    wrap.className = "msg " + role;
+    const avatar = document.createElement("div");
+    avatar.className = "avatar";
+    avatar.textContent = role === "user" ? "U" : role === "tool" ? "🛠" : "AI";
+    const body = document.createElement("div");
+    body.className = "body";
+    const lbl = document.createElement("div");
+    lbl.className = "role";
+    lbl.textContent = role === "user" ? "You" : role === "tool" ? "Tool" : "Assistant";
+    body.appendChild(lbl);
+    if (imageURL) {
+      const img = document.createElement("img");
+      img.className = "analyzed"; img.src = imageURL;
+      body.appendChild(img);
+    }
+    const content = document.createElement("div");
+    content.className = "content";
+    content.innerHTML = htmlContent;
+    body.appendChild(content);
+    wrap.appendChild(avatar); wrap.appendChild(body);
+    output.appendChild(wrap);
+    scrollDown();
+    return content;
+  }
+
+  function addMedia(captionHtml) {
+    showOutput();
+    const box = document.createElement("div");
+    box.className = "media-out";
+    const cap = document.createElement("div");
+    cap.className = "cap";
+    cap.innerHTML = captionHtml;
+    box.appendChild(cap);
+    output.appendChild(box);
+    scrollDown();
+    return box;
+  }
+
+  function setBusy(b) { busy = b; sendBtn.disabled = b; }
+
+  // ====================================================================
+  //  CHAT
+  // ====================================================================
+  async function runChat(text) {
+    const model = modelSel.value;
+    const imageForThisMsg = attachedImageURL;
+    addMessage("user", renderMarkdown(text), imageForThisMsg);
+
+    history.push({
+      role: "user",
+      content: imageForThisMsg
+        ? [{ type: "text", text: text }, { type: "file", puter_path: imageForThisMsg }]
+        : text,
+    });
+
+    clearAttachment();
+    setBusy(true);
+
+    // Function-calling path (non-streaming, supports tool loop)
+    if (toolsOn && !imageForThisMsg) {
+      await runChatWithTools(model);
+      setBusy(false); input.focus();
+      return;
+    }
+
+    const contentEl = addMessage("assistant", '<span class="cursor"></span>', null);
+    const opts = { model: model, stream: true };
+    if (webSearchOn) opts.tools = [{ type: "web_search" }];
+
+    try {
+      let response = imageForThisMsg
+        ? await puter.ai.chat(text, imageForThisMsg, opts)
+        : await puter.ai.chat(history, opts);
+
+      let full = "", reasoning = "";
+      for await (const part of response) {
+        if (part && part.reasoning) {
+          reasoning += part.reasoning;
+        }
+        const t = part && (part.text || (part.message && part.message.content));
+        if (t) full += t;
+        let html = "";
+        if (reasoning) html += '<div class="reasoning">' + escapeHtml(reasoning) + "</div>";
+        html += renderMarkdown(full) + '<span class="cursor"></span>';
+        contentEl.innerHTML = html;
+        scrollDown();
+      }
+      if (!full && !reasoning) full = "*(empty response)*";
+      let finalHtml = "";
+      if (reasoning) finalHtml += '<div class="reasoning">' + escapeHtml(reasoning) + "</div>";
+      finalHtml += renderMarkdown(full);
+      contentEl.innerHTML = finalHtml;
+      history.push({ role: "assistant", content: full });
+    } catch (err) {
+      showError(contentEl, err);
+      history.pop();
+    } finally {
+      setBusy(false); input.focus();
+    }
+    scrollDown();
+  }
+
+  async function runChatWithTools(model) {
+    const contentEl = addMessage("assistant", '<span class="cursor"></span>', null);
+    try {
+      // Loop until the model stops requesting tools (cap iterations).
+      for (let i = 0; i < 5; i++) {
+        const resp = await puter.ai.chat(history, { model: model, tools: TOOL_DEFS });
+        const message = resp.message || resp;
+        const calls = message.tool_calls || [];
+
+        // Record the assistant turn (may contain tool_calls).
+        history.push(message);
+
+        if (!calls.length) {
+          contentEl.innerHTML = renderMarkdown(message.content || String(resp));
+          return;
+        }
+
+        // Execute each requested tool and feed results back.
+        for (const call of calls) {
+          const fn = call.function && call.function.name;
+          let args = {};
+          try { args = JSON.parse(call.function.arguments || "{}"); } catch (e) {}
+          const result = TOOL_IMPL[fn] ? TOOL_IMPL[fn](args) : JSON.stringify({ error: "unknown tool" });
+          addMessage("tool", '<div class="tool-card"><b>' + escapeHtml(fn) + "</b>(" +
+            escapeHtml(JSON.stringify(args)) + ") → " + escapeHtml(result) + "</div>");
+          history.push({ role: "tool", tool_call_id: call.id, content: result });
+        }
+      }
+      contentEl.innerHTML = '<p style="color:var(--text-dim)">Tool loop limit reached.</p>';
+    } catch (err) {
+      showError(contentEl, err);
+    }
+    scrollDown();
+  }
+
+  // ====================================================================
+  //  IMAGE / VIDEO / SPEECH
+  // ====================================================================
+  async function runImage(text) {
+    const box = addMedia('🎨 Generating image: "' + escapeHtml(text) + '"');
+    const load = document.createElement("div");
+    load.className = "loading-row"; load.innerHTML = '<div class="spinner"></div> Painting…';
+    box.appendChild(load);
+    setBusy(true);
+    try {
+      // testMode true: free testing without credits; flip to false for full quality.
+      const img = await puter.ai.txt2img(text, true);
+      load.remove();
+      img.style.maxWidth = "100%";
+      box.appendChild(img);
+    } catch (err) { load.innerHTML = errText(err); }
+    finally { setBusy(false); input.focus(); }
+    scrollDown();
+  }
+
+  async function runVideo(text) {
+    const box = addMedia('🎬 Generating video: "' + escapeHtml(text) + '"');
+    const load = document.createElement("div");
+    load.className = "loading-row"; load.innerHTML = '<div class="spinner"></div> Rendering (this can take a while)…';
+    box.appendChild(load);
+    setBusy(true);
+    try {
+      const video = await puter.ai.txt2vid(text);
+      load.remove();
+      if (video.setAttribute) { video.setAttribute("controls", ""); video.setAttribute("autoplay", ""); video.setAttribute("loop", ""); video.muted = true; }
+      box.appendChild(video);
+    } catch (err) { load.innerHTML = errText(err); }
+    finally { setBusy(false); input.focus(); }
+    scrollDown();
+  }
+
+  async function runSpeech(text) {
+    const box = addMedia('🔊 Synthesizing: "' + escapeHtml(text) + '"');
+    const load = document.createElement("div");
+    load.className = "loading-row"; load.innerHTML = '<div class="spinner"></div> Generating audio…';
+    box.appendChild(load);
+    setBusy(true);
+    const parts = ttsSel.value.split("|");
+    try {
+      const audio = await puter.ai.txt2speech(text, { provider: parts[0], model: parts[1] });
+      load.remove();
+      audio.setAttribute("controls", "");
+      box.appendChild(audio);
+      try { audio.play(); } catch (e) {}
+    } catch (err) { load.innerHTML = errText(err); }
+    finally { setBusy(false); input.focus(); }
+    scrollDown();
+  }
+
+  // ====================================================================
+  //  Errors
+  // ====================================================================
+  function errText(err) {
+    console.error(err);
+    const m = (err && (err.message || err.error || (typeof err === "string" ? err : JSON.stringify(err)))) || "Something went wrong.";
+    return '<span style="color:var(--danger)">⚠️ ' + escapeHtml(m) + "</span>";
+  }
+  function showError(el, err) {
+    el.innerHTML = '<p style="color:var(--danger)">⚠️ ' +
+      escapeHtml((err && (err.message || err.error || JSON.stringify(err))) || "Something went wrong.") +
+      '</p><p style="color:var(--text-dim);font-size:13px">If this is an auth error, allow the Puter sign-in popup and retry. Some models may be temporarily unavailable — try GPT-5.4 Nano.</p>';
+  }
+
+  // ====================================================================
+  //  Dispatch
+  // ====================================================================
+  async function send(text) {
+    text = (text != null ? text : input.value).trim();
+    if (!text || busy) return;
+    input.value = ""; autoGrow();
+    if (mode === "chat") return runChat(text);
+    if (mode === "image") return runImage(text);
+    if (mode === "video") return runVideo(text);
+    if (mode === "speech") return runSpeech(text);
+  }
+
+  // ====================================================================
+  //  Mode switching
+  // ====================================================================
+  function setMode(m) {
+    mode = m;
+    document.querySelectorAll(".tab").forEach(function (t) {
+      t.classList.toggle("active", t.dataset.mode === m);
+    });
+    // Toggle controls relevant to each mode
+    modelSel.style.display = m === "chat" ? "" : "none";
+    ttsSel.style.display = m === "speech" ? "" : "none";
+    webBtn.style.display = m === "chat" ? "" : "none";
+    toolsBtn.style.display = m === "chat" ? "" : "none";
+    attachBtn.style.display = m === "chat" ? "" : "none";
+
+    const ph = { chat: "Message any AI model…", image: "Describe an image to generate…", video: "Describe a video to generate…", speech: "Type text to turn into speech…" };
+    input.placeholder = ph[m];
+
+    const titles = { chat: "What can I help with?", image: "Generate an image", video: "Generate a video", speech: "Text to speech" };
+    const descs = {
+      chat: "Free access to 400+ AI models — OpenAI, Claude, Gemini, Grok, and more. Toggle 🌐 Web search or 🛠 Tools, or attach 📎 an image to analyze.",
+      image: "Describe anything and generate it with FLUX / Stable Diffusion. Test mode is on (free, no credits).",
+      video: "Describe a short scene to generate video (Kling, PixVerse, and more). Generation can take a while.",
+      speech: "Convert text to natural speech via ElevenLabs or OpenAI. Pick a provider in the header.",
+    };
+    emptyTitle.textContent = titles[m];
+    emptyDesc.textContent = descs[m];
+
+    buildSuggestions(m);
+    resetView();
+  }
+
+  function buildSuggestions(m) {
+    suggestionsEl.innerHTML = "";
+    SUGGESTIONS[m].forEach(function (s) {
+      const el = document.createElement("div");
+      el.className = "suggestion";
+      el.innerHTML = "<b>" + escapeHtml(s[0]) + "</b><span>" + escapeHtml(s[1]) + "</span>";
+      el.addEventListener("click", function () { send(s[2]); });
+      suggestionsEl.appendChild(el);
+    });
+  }
+
+  function resetView() {
+    history = [];
+    output.innerHTML = "";
+    emptyEl.style.display = "flex";
+    clearAttachment();
+    input.focus();
+  }
+
+  // ====================================================================
+  //  Composer + events
+  // ====================================================================
+  function autoGrow() { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 200) + "px"; }
+  input.addEventListener("input", autoGrow);
+  input.addEventListener("keydown", function (e) {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
+  });
+  sendBtn.addEventListener("click", function () { send(); });
+
+  document.querySelectorAll(".tab").forEach(function (t) {
+    t.addEventListener("click", function () { if (!busy) setMode(t.dataset.mode); });
+  });
+
+  clearBtn.addEventListener("click", function () { if (!busy) resetView(); });
+
+  webBtn.addEventListener("click", function () {
+    webSearchOn = !webSearchOn; webBtn.classList.toggle("on", webSearchOn);
+  });
+  toolsBtn.addEventListener("click", function () {
+    toolsOn = !toolsOn; toolsBtn.classList.toggle("on", toolsOn);
+  });
+
+  attachBtn.addEventListener("click", function () { fileInput.click(); });
+  fileInput.addEventListener("change", function () {
+    const file = fileInput.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function () {
+      attachedImageURL = reader.result;
+      imgPreview.style.display = "block";
+      imgPreview.innerHTML = '<img src="' + attachedImageURL + '" alt="attachment"/><span class="remove" id="rmImg">remove ✕</span>';
+      $("rmImg").addEventListener("click", clearAttachment);
+    };
+    reader.readAsDataURL(file);
+  });
+  function clearAttachment() {
+    attachedImageURL = null; fileInput.value = "";
+    imgPreview.style.display = "none"; imgPreview.innerHTML = "";
+  }
+
+  // Init
+  buildSuggestions("chat");
+  input.focus();
+})();
+</script>
+</body>
+</html>

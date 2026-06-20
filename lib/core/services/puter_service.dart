@@ -1,0 +1,311 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+
+/// Default Puter chat model. Puter exposes 400+ models; swap freely.
+const String kPuterChatModel = 'gpt-5.4-nano';
+
+/// The model picker shown in the coach (mirrors index.html's catalog).
+const List<({String id, String label})> kPuterModels = [
+  (id: 'gpt-5.4-nano', label: 'GPT-5.4 Nano (fast)'),
+  (id: 'openai/gpt-5.5', label: 'GPT-5.5 (OpenAI)'),
+  (id: 'gpt-5.4', label: 'GPT-5.4'),
+  (id: 'anthropic/claude-opus-4-8', label: 'Claude Opus 4.8'),
+  (id: 'google/gemini-3.5-flash', label: 'Gemini 3.5 Flash'),
+  (id: 'x-ai/grok-4.3', label: 'Grok 4.3 (xAI)'),
+  (id: 'deepseek/deepseek-v4-pro', label: 'DeepSeek V4 Pro'),
+  (id: 'meta-llama/llama-4-maverick', label: 'Llama 4 Maverick'),
+];
+
+/// Voice-session lifecycle, surfaced to the talk UI for its orb animation.
+enum PuterVoiceState { idle, listening, transcribing, thinking, speaking }
+
+/// Bridges the native app to **Puter.js** (a browser-only library) by hosting
+/// it inside an embedded WebView and shuttling calls across a JS bridge.
+///
+/// The [PuterHost] widget owns the actual `InAppWebView`; it hands us the
+/// controller via [attachController] and signals JS readiness. Everything the
+/// coach needs — streaming chat, blocking completion, speech-to-text and
+/// text-to-speech — runs through `puter.ai.*` inside that page.
+class PuterService {
+  PuterService._();
+  static final PuterService instance = PuterService._();
+
+  InAppWebViewController? _controller;
+  final Completer<void> _ready = Completer<void>();
+  Future<void> get ready => _ready.future;
+  bool get isReady => _ready.isCompleted;
+
+  int _seq = 0;
+  final Map<int, StreamController<String>> _chatStreams = {};
+  final Map<int, Completer<String>> _completes = {};
+  final Map<int, Timer> _watchdogs = {};
+
+  /// Currently-selected chat model (the coach model picker writes this).
+  String model = kPuterChatModel;
+  void setModel(String id) => model = id;
+
+  // Auth (Puter user-pays needs a one-time sign-in popup)
+  bool signedIn = false;
+  final _authState = StreamController<bool>.broadcast();
+  Stream<bool> get authState => _authState.stream;
+
+  // Shared WebView environment (Windows/WebView2) so the off-screen bridge and
+  // the visible Connect screen share session + storage (the Puter token).
+  WebViewEnvironment? env;
+  Future<void> ensureEnv() async {
+    if (env != null || !Platform.isWindows) return;
+    try {
+      env = await WebViewEnvironment.create();
+    } catch (e) {
+      debugPrint('[puter] WebViewEnvironment.create failed: $e');
+    }
+  }
+
+  // ── Local bridge server ──────────────────────────────────────────────────
+  // The bridge/connect HTML is served over a real loopback HTTP server (a
+  // SECURE CONTEXT, so getUserMedia/mic works). We use dart:io's HttpServer on
+  // an EPHEMERAL port instead of a fixed-port InAppLocalhostServer because the
+  // latter is unreliable on Windows AND a fixed port collides when two app
+  // instances run — both were the "localhost refused to connect" on Connect.
+  HttpServer? _assetServer;
+  int? _serverPort;
+  Completer<void>? _serverReady;
+
+  /// The port the bridge HTML is served on (0 until [ensureServer] completes).
+  int get serverPort => _serverPort ?? 0;
+
+  /// Start the loopback asset server once. Safe to call repeatedly.
+  Future<void> ensureServer() async {
+    if (_serverReady != null) return _serverReady!.future;
+    final ready = Completer<void>();
+    _serverReady = ready;
+    try {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      _assetServer = server;
+      _serverPort = server.port;
+      server.listen((req) async {
+        try {
+          var path = req.uri.path;
+          if (path == '/' || path.isEmpty) path = '/bridge.html';
+          final data = await rootBundle.load('assets/puter$path');
+          final bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+          req.response
+            ..statusCode = 200
+            ..headers.contentType = _contentTypeFor(path)
+            ..add(bytes);
+          await req.response.close();
+        } catch (_) {
+          req.response.statusCode = 404;
+          await req.response.close();
+        }
+      });
+      debugPrint('[puter] asset server on http://localhost:$_serverPort');
+    } catch (e) {
+      debugPrint('[puter] asset server bind failed: $e');
+    } finally {
+      if (!ready.isCompleted) ready.complete();
+    }
+  }
+
+  ContentType _contentTypeFor(String path) {
+    if (path.endsWith('.html')) return ContentType.html;
+    if (path.endsWith('.js')) return ContentType('application', 'javascript', charset: 'utf-8');
+    if (path.endsWith('.css')) return ContentType('text', 'css', charset: 'utf-8');
+    return ContentType.binary;
+  }
+
+  // Voice
+  final _voiceState = StreamController<PuterVoiceState>.broadcast();
+  Stream<PuterVoiceState> get voiceState => _voiceState.stream;
+  PuterVoiceState _state = PuterVoiceState.idle;
+  PuterVoiceState get state => _state;
+  Completer<String>? _transcript;
+  Completer<void>? _spoken;
+
+  // ───────────────────────── Wiring (called by PuterHost) ─────────────────────
+
+  void attachController(InAppWebViewController controller) {
+    _controller = controller;
+    controller
+      ..addJavaScriptHandler(handlerName: 'onReady', callback: (args) {
+        if (!_ready.isCompleted) _ready.complete();
+        final d = args.isNotEmpty ? args.first as Map : const {};
+        _setSignedIn(d['signedIn'] == true);
+        debugPrint('[puter] bridge ready (signedIn=$signedIn)');
+      })
+      ..addJavaScriptHandler(handlerName: 'onAuth', callback: (args) {
+        final d = args.first as Map;
+        _setSignedIn(d['signedIn'] == true);
+        debugPrint('[puter] auth → signedIn=$signedIn ${d['error'] ?? ''}');
+      })
+      ..addJavaScriptHandler(handlerName: 'onLog', callback: (args) {
+        debugPrint('[puter:log] ${args.first}');
+      })
+      ..addJavaScriptHandler(handlerName: 'onChunk', callback: (args) {
+        final d = args.first as Map;
+        final id = d['id'] as int;
+        _watchdogs.remove(id)?.cancel(); // first token → no longer "stuck"
+        _chatStreams[id]?.add((d['chunk'] ?? '') as String);
+      })
+      ..addJavaScriptHandler(handlerName: 'onDone', callback: (args) {
+        final d = args.first as Map;
+        final id = d['id'] as int;
+        _watchdogs.remove(id)?.cancel();
+        _completes.remove(id)?.complete((d['full'] ?? '') as String);
+        final s = _chatStreams.remove(id);
+        if (s != null && !s.isClosed) s.close();
+      })
+      ..addJavaScriptHandler(handlerName: 'onError', callback: (args) {
+        final d = args.first as Map;
+        final id = d['id'] as int? ?? -1;
+        _watchdogs.remove(id)?.cancel();
+        final err = PuterException((d['error'] ?? 'puter error') as String);
+        debugPrint('[puter] error: ${err.message}');
+        _completes.remove(id)?.completeError(err);
+        final s = _chatStreams.remove(id);
+        if (s != null && !s.isClosed) {
+          s.addError(err);
+          s.close();
+        }
+      })
+      ..addJavaScriptHandler(handlerName: 'onVoiceState', callback: (args) {
+        final st = ((args.first as Map)['state'] ?? 'idle') as String;
+        _emitState(switch (st) {
+          'listening' => PuterVoiceState.listening,
+          'transcribing' => PuterVoiceState.transcribing,
+          'speaking' => PuterVoiceState.speaking,
+          _ => PuterVoiceState.idle,
+        });
+      })
+      ..addJavaScriptHandler(handlerName: 'onTranscript', callback: (args) {
+        _transcript?.complete(((args.first as Map)['text'] ?? '') as String);
+        _transcript = null;
+      })
+      ..addJavaScriptHandler(handlerName: 'onSpoken', callback: (_) {
+        _emitState(PuterVoiceState.idle);
+        _spoken?.complete();
+        _spoken = null;
+      });
+  }
+
+  void _emitState(PuterVoiceState s) {
+    _state = s;
+    if (!_voiceState.isClosed) _voiceState.add(s);
+  }
+
+  void _setSignedIn(bool v) {
+    signedIn = v;
+    if (!_authState.isClosed) _authState.add(v);
+  }
+
+  /// Trigger Puter's sign-in popup; resolves the auth state via [authState].
+  Future<void> signIn() => _eval('window.omSignIn();');
+  void refreshAuth() => _eval('window.omAuthCheck();');
+
+  /// Hand the off-screen bridge the token obtained by the visible Connect screen
+  /// (separate webview), so it becomes authenticated without its own popup.
+  Future<void> applyToken(String token) async {
+    if (token.isEmpty) {
+      refreshAuth();
+      return;
+    }
+    await _eval("window.omApplyToken('${_encStr(token)}');");
+  }
+
+  /// Reload the bridge page (re-reads any shared-storage Puter token).
+  void reloadBridge() => _controller?.reload();
+
+  Future<void> _eval(String js) async {
+    await ready;
+    await _controller?.evaluateJavascript(source: js);
+  }
+
+  String _enc(Object o) => base64.encode(utf8.encode(jsonEncode(o)));
+  String _encStr(String s) => base64.encode(utf8.encode(s));
+
+  // ───────────────────────── Chat API (mirrors GroqService) ────────────────────
+
+  /// Streams the assistant reply token-by-token via `puter.ai.chat(stream:true)`.
+  /// A watchdog guarantees the stream errors instead of hanging forever (e.g.
+  /// when Puter isn't signed in) so the coach never sticks on "…".
+  Stream<String> streamCompletion(List<Map<String, String>> messages, {String? model}) {
+    final id = _seq++;
+    final ctrl = StreamController<String>();
+    _chatStreams[id] = ctrl;
+    _watchdogs[id] = Timer(const Duration(seconds: 40), () {
+      _watchdogs.remove(id);
+      final s = _chatStreams.remove(id);
+      if (s != null && !s.isClosed) {
+        s.addError(PuterException(
+            signedIn ? 'Puter timed out — try again' : 'Not connected to Puter — tap "Connect Puter"'));
+        s.close();
+      }
+    });
+    _eval("window.omChat($id, '${_enc(messages)}', '${model ?? this.model}');").catchError((Object e) {
+      _watchdogs.remove(id)?.cancel();
+      if (!ctrl.isClosed) {
+        ctrl.addError(e);
+        ctrl.close();
+      }
+      _chatStreams.remove(id);
+    });
+    ctrl.onCancel = () {
+      _watchdogs.remove(id)?.cancel();
+      _chatStreams.remove(id);
+    };
+    return ctrl.stream;
+  }
+
+  /// Blocking completion — for memory summarisation.
+  Future<String> complete(List<Map<String, String>> messages, {String? model}) async {
+    final id = _seq++;
+    final c = Completer<String>();
+    _completes[id] = c;
+    await _eval("window.omComplete($id, '${_enc(messages)}', '${model ?? this.model}');");
+    return c.future.timeout(const Duration(seconds: 45), onTimeout: () {
+      _completes.remove(id);
+      throw PuterException('completion timed out');
+    });
+  }
+
+  // ───────────────────────────── Voice API ─────────────────────────────────────
+
+  Future<void> startListening() => _eval('window.omStartVoice();');
+
+  /// Stops recording and resolves with the transcribed text ('' on failure).
+  Future<String> stopAndTranscribe() {
+    _transcript = Completer<String>();
+    _eval('window.omStopVoice();');
+    return _transcript!.future.timeout(const Duration(seconds: 30), onTimeout: () {
+      _transcript = null;
+      return '';
+    });
+  }
+
+  /// Speaks [text] aloud; resolves when playback ends.
+  Future<void> speak(String text) {
+    _spoken = Completer<void>();
+    _eval("window.omSpeak('${_encStr(text)}');");
+    return _spoken!.future.timeout(const Duration(seconds: 90), onTimeout: () {
+      _spoken = null;
+      _emitState(PuterVoiceState.idle);
+    });
+  }
+
+  void stopSpeaking() => _eval('window.omStopSpeak();');
+
+  void emitThinking() => _emitState(PuterVoiceState.thinking);
+  void resetVoice() => _emitState(PuterVoiceState.idle);
+}
+
+class PuterException implements Exception {
+  PuterException(this.message);
+  final String message;
+  @override
+  String toString() => 'PuterException: $message';
+}

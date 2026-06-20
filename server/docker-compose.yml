@@ -1,0 +1,12 @@
+# Runs the OurMynd app server only. Postgres, Redis and LiveKit are CLOUD
+# managed services (Supabase / Upstash / LiveKit Cloud) — referenced via .env,
+# never run locally. This keeps the deployment identical to production.
+services:
+  api:
+    build: .
+    env_file: .env
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    # Scale horizontally — Redis adapter fans out socket events across replicas:
+    #   docker compose up --scale api=3
