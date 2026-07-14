@@ -269,7 +269,7 @@ Respond ONLY with a valid JSON array of objects. Do not wrap it in markdown. For
                               ),
                             )
                           : Icon(
-                              recording ? Icons.stop_circle_rounded : Icons.mic_rounded,
+                              recording ? OmIcons.byName('mic-off') : OmIcons.byName('mic'),
                               size: 24,
                               color: recording ? colors.error : colors.primary,
                             ),

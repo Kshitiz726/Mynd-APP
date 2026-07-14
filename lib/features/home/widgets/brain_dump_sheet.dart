@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../../core/constants/app_spacing.dart';
 import '../../../core/services/groq_service.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/om_icons.dart';
 import '../../../models/energy_level.dart';
 import '../../../models/task.dart';
 import '../../../providers/task_provider.dart';
@@ -136,12 +137,12 @@ class _BrainDumpSheetState extends State<BrainDumpSheet> {
                 alignment: Alignment.center,
                 child: _processing 
                     ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                    : const Row(
+                    : Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.auto_awesome, color: Colors.white, size: 20),
-                          SizedBox(width: 8),
-                          Text('Process with AI', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16)),
+                          Icon(OmIcons.byName('sparkles'), color: Colors.white, size: 20),
+                          const SizedBox(width: 8),
+                          const Text('Process with AI', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16)),
                         ],
                       ),
               ),

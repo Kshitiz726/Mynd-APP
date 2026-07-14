@@ -133,7 +133,7 @@ Future<void> showAddGoalSheet(BuildContext context) async {
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.calendar_today_rounded, size: 18, color: colors.text2),
+                        Icon(OmIcons.byName('calendar'), size: 18, color: colors.text2),
                         const SizedBox(width: 12),
                         Text(
                           targetDate == null

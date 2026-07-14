@@ -1,29 +1,30 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// The primary bottom-navigation destinations, mirroring the prototype's
 /// `.navbar` buttons: today · focus · community · alerts · coach · you.
 ///
-/// Each tab carries an outline glyph (inactive) and a solid glyph (active) so
-/// the bar can do a Facebook-style fill on the selected tab. Material's rounded
-import 'package:flutter/cupertino.dart';
-
+/// Icons come from **Lucide** — the one icon family used everywhere else in the
+/// app — so the tab bar matches the rest of the UI. The selected tab is
+/// distinguished by the nav bar's tinted "expanding pill" (icon + label), not by
+/// swapping to a filled glyph, so [activeIcon] mirrors [icon].
 enum AppTab {
-  today(label: 'today', icon: CupertinoIcons.home, activeIcon: CupertinoIcons.house_fill),
-  focus(label: 'focus', icon: CupertinoIcons.timer, activeIcon: CupertinoIcons.timer_fill),
-  community(label: 'community', icon: CupertinoIcons.group, activeIcon: CupertinoIcons.group_solid),
-  alerts(label: 'alerts', icon: CupertinoIcons.bell, activeIcon: CupertinoIcons.bell_fill),
-  coach(label: 'coach', icon: CupertinoIcons.chat_bubble, activeIcon: CupertinoIcons.chat_bubble_fill),
-  you(label: 'you', icon: CupertinoIcons.person, activeIcon: CupertinoIcons.person_solid);
+  today(label: 'today', icon: LucideIcons.house),
+  focus(label: 'focus', icon: LucideIcons.timer),
+  community(label: 'community', icon: LucideIcons.users),
+  alerts(label: 'alerts', icon: LucideIcons.bell),
+  coach(label: 'coach', icon: LucideIcons.messageCircle),
+  you(label: 'you', icon: LucideIcons.user);
 
-  const AppTab({required this.label, required this.icon, required this.activeIcon});
+  const AppTab({required this.label, required this.icon});
 
   final String label;
 
-  /// Outline glyph shown when the tab is inactive.
+  /// The tab's Lucide glyph (same for active/inactive — the pill marks active).
   final IconData icon;
 
-  /// Solid glyph shown when the tab is active (the filled "Facebook" state).
-  final IconData activeIcon;
+  /// Kept for API compatibility with call sites; identical to [icon].
+  IconData get activeIcon => icon;
 }
 
 /// Holds the selected tab so both the nav bar and in-content shortcuts (e.g.
