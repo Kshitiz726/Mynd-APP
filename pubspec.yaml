@@ -54,8 +54,29 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
 
+  # Generates platform app icons (iOS/Android/web/macOS) from a single source
+  # PNG — pure Dart, so it runs on Windows. See `flutter_launcher_icons:` below.
+  flutter_launcher_icons: ^0.14.1
+
 flutter:
   uses-material-design: true
   assets:
     - assets/audio/
     - assets/puter/
+
+# App-icon generation from the OurMynd logo.
+# Run: dart run flutter_launcher_icons
+# iOS forbids alpha in app icons (App Store rejects them), so we flatten the
+# transparent logo onto white — matching the logo's own background.
+flutter_launcher_icons:
+  image_path: "assets/logo.png"
+  android: true
+  ios: true
+  remove_alpha_ios: true
+  background_color_ios: "#FFFFFF"
+  web:
+    generate: true
+    image_path: "assets/logo.png"
+  macos:
+    generate: true
+    image_path: "assets/logo.png"

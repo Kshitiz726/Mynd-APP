@@ -56,3 +56,7 @@ app.*.map.json
 # Local Claude Code state
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
+
+# Local run scripts holding dart-define secrets (Groq/Google keys) — never commit
+*.local.ps1
+*.local.sh
