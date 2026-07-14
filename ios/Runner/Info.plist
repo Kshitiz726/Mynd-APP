@@ -66,5 +66,16 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>OurMynd uses the microphone for voice coaching and focus rooms.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>OurMynd uses the camera for video in focus rooms.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>OurMynd lets you attach images to posts and your profile.</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 </dict>
 </plist>
