@@ -252,7 +252,7 @@ class _TimelineBlock extends StatelessWidget {
                                       color: c.text2,
                                     )),
                                     const SizedBox(width: 5),
-                                    Icon(Icons.edit_outlined, size: 12, color: c.text2),
+                                    Icon(OmIcons.byName('edit'), size: 12, color: c.text2),
                                   ],
                                 ),
                               ),
@@ -525,7 +525,7 @@ class _CheckCircle extends StatelessWidget {
           shape: BoxShape.circle,
           border: Border.all(color: color, width: 2),
         ),
-        child: done ? Icon(Icons.check, size: 14, color: color) : null,
+        child: done ? Icon(OmIcons.byName('check'), size: 14, color: color) : null,
       ),
     );
   }

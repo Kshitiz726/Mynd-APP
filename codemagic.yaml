@@ -1,0 +1,130 @@
+# Codemagic CI/CD — OurMynd iOS builds.
+# Docs: https://docs.codemagic.io/yaml/yaml-getting-started/
+#
+# Secrets are NOT stored here. In the Codemagic UI create an environment
+# variable group named "ourmynd_secrets" with these variables (mark them
+# "Secure"): OURMYND_API, GOOGLE_SERVER_CLIENT_ID, GROQ_API_KEY.
+# They are injected below as --dart-define values, exactly like the local
+# Android run script.
+
+workflows:
+  # ---------------------------------------------------------------------------
+  # 1) Unsigned iOS build — proves the app compiles for iPhone.
+  #    Requires NO Apple Developer account. Start here.
+  # ---------------------------------------------------------------------------
+  ios-unsigned:
+    name: iOS build (unsigned)
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+      groups:
+        - ourmynd_secrets
+    scripts:
+      - name: Flutter version
+        script: flutter --version
+      - name: Get packages
+        script: flutter pub get
+      - name: Analyze (portability check)
+        script: flutter analyze || true
+      - name: Install CocoaPods deps
+        script: |
+          cd ios
+          pod install
+      - name: Build unsigned iOS app
+        script: |
+          flutter build ios --release --no-codesign \
+            --dart-define=OURMYND_API="$OURMYND_API" \
+            --dart-define=GOOGLE_SERVER_CLIENT_ID="$GOOGLE_SERVER_CLIENT_ID" \
+            --dart-define=GROQ_API_KEY="$GROQ_API_KEY"
+      - name: Package .app as artifact
+        script: |
+          cd build/ios/iphoneos
+          zip -r Runner.app.zip Runner.app
+    artifacts:
+      - build/ios/iphoneos/Runner.app.zip
+      - flutter_drive.log
+
+  # ---------------------------------------------------------------------------
+  # 2) Simulator build — the only build you can actually *interact with* from
+  #    Windows. The .app produced here runs on an iOS Simulator, so you can
+  #    upload the zip to appetize.io and drive the real app in a browser.
+  #    Requires NO Apple Developer account.
+  #
+  #    Note: simulator builds are debug-mode — the Simulator can't run AOT
+  #    (release) code. Expect debug perf; judge layout/flow here, not framerate.
+  # ---------------------------------------------------------------------------
+  ios-simulator:
+    name: iOS build (simulator - for Appetize)
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+      groups:
+        - ourmynd_secrets
+    scripts:
+      - name: Get packages
+        script: flutter pub get
+      - name: Install CocoaPods deps
+        script: |
+          cd ios
+          pod install
+      - name: Build for iOS Simulator
+        script: |
+          flutter build ios --simulator --debug \
+            --dart-define=OURMYND_API="$OURMYND_API" \
+            --dart-define=GOOGLE_SERVER_CLIENT_ID="$GOOGLE_SERVER_CLIENT_ID" \
+            --dart-define=GROQ_API_KEY="$GROQ_API_KEY"
+      - name: Package .app for Appetize
+        script: |
+          cd build/ios/iphonesimulator
+          zip -r OurMynd-simulator.zip Runner.app
+    artifacts:
+      - build/ios/iphonesimulator/OurMynd-simulator.zip
+
+  # ---------------------------------------------------------------------------
+  # 3) Signed TestFlight build — for later, once you have an Apple Developer
+  #    account ($99/yr). Configure "iOS code signing" (App Store Connect API
+  #    key) in the Codemagic UI, then uncomment the integrations block below.
+  # ---------------------------------------------------------------------------
+  ios-testflight:
+    name: iOS build (TestFlight)
+    instance_type: mac_mini_m2
+    max_build_duration: 90
+    # integrations:
+    #   app_store_connect: OurMynd ASC key   # name of the key you add in the UI
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+      groups:
+        - ourmynd_secrets
+      # ios_signing:
+      #   distribution_type: app_store
+      #   bundle_identifier: com.ourmynd.app   # must match your real bundle id
+    scripts:
+      - name: Get packages
+        script: flutter pub get
+      - name: Set up code signing
+        script: xcode-project use-profiles
+      - name: Install CocoaPods deps
+        script: |
+          cd ios
+          pod install
+      - name: Build signed IPA
+        script: |
+          flutter build ipa --release \
+            --dart-define=OURMYND_API="$OURMYND_API" \
+            --dart-define=GOOGLE_SERVER_CLIENT_ID="$GOOGLE_SERVER_CLIENT_ID" \
+            --dart-define=GROQ_API_KEY="$GROQ_API_KEY" \
+            --export-options-plist=/Users/builder/export_options.plist
+    artifacts:
+      - build/ios/ipa/*.ipa
+    # publishing:
+    #   app_store_connect:
+    #     auth: integration
+    #     submit_to_testflight: true

@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -14,6 +13,7 @@ import '../../../models/task.dart';
 import '../../../providers/goal_provider.dart';
 import '../../../providers/task_provider.dart';
 import '../../../widgets/om_avatar.dart';
+import '../../../widgets/om_card.dart';
 import '../../../widgets/om_mascot.dart';
 import '../../../widgets/om_states.dart';
 import '../../../widgets/om_tappable.dart';
@@ -159,7 +159,7 @@ class HomeHero extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.local_fire_department_rounded, size: 16, color: Colors.white),
+                      Icon(OmIcons.byName('flame'), size: 15, color: Colors.white),
                       const SizedBox(width: 4),
                       Text('$done',
                           style: Theme.of(context).textTheme.labelMedium?.copyWith(
@@ -230,7 +230,7 @@ class FeaturedGoalCard extends StatelessWidget {
                   shape: BoxShape.circle,
                   border: Border.all(color: Colors.white.withValues(alpha: 0.5)),
                 ),
-                child: const Icon(Icons.rocket_launch_rounded, color: Colors.white, size: 32),
+                child: Icon(OmIcons.byName('target'), color: Colors.white, size: 30),
               ),
               const SizedBox(width: AppSpacing.md),
               Expanded(
@@ -257,7 +257,7 @@ class FeaturedGoalCard extends StatelessWidget {
                   color: Colors.white.withValues(alpha: 0.25),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.add, color: Colors.white, size: 24),
+                child: Icon(OmIcons.byName('plus'), color: Colors.white, size: 22),
               ),
             ],
           ),
@@ -266,68 +266,50 @@ class FeaturedGoalCard extends StatelessWidget {
     }
 
     final g = goal;
-    return OmTappable(
+    return OmCard.hero(
+      tint: c.primary,
+      padding: const EdgeInsets.all(18),
       onTap: () => Navigator.of(context).pushNamed(AppRoutes.profile),
-      feedback: OmTapFeedback.light,
-      pressedScale: 0.98,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-          child: Container(
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [c.primaryTint.withValues(alpha: 0.3), c.surface.withValues(alpha: 0.4)],
-              ),
-              borderRadius: BorderRadius.circular(AppRadius.card),
-              border: Border.all(color: c.primary.withValues(alpha: 0.15), width: 1.5),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(g.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 19)),
+                const SizedBox(height: 6),
+                Text('Step ${g.doneCount} of ${g.total}',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: c.text2)),
+                const SizedBox(height: 12),
+                _ProgressDots(total: g.total, done: g.doneCount),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Icon(OmIcons.byName('flame'), size: 15, color: c.accent),
+                    const SizedBox(width: 5),
+                    Text('${(g.progress * 100).round()}% there',
+                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                              color: c.primary,
+                              fontWeight: FontWeight.w700,
+                            )),
+                  ],
+                ),
+              ],
             ),
-            child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(g.title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 19)),
-                  const SizedBox(height: 6),
-                  Text('Step ${g.doneCount} of ${g.total}',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: c.text2)),
-                  const SizedBox(height: 12),
-                  _ProgressDots(total: g.total, done: g.doneCount),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Icon(OmIcons.byName('flame'), size: 15, color: c.accent),
-                      const SizedBox(width: 5),
-                      Text('${(g.progress * 100).round()}% there',
-                          style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                                color: c.primary,
-                                fontWeight: FontWeight.w700,
-                              )),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Container(
-              width: 76,
-              height: 76,
-              decoration: BoxDecoration(color: c.surface, borderRadius: BorderRadius.circular(20)),
-              alignment: Alignment.center,
-              child: Icon(OmIcons.byName('activity'), color: c.primary, size: 30),
-            ),
-          ],
-        ),
-        ),
-        ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Container(
+            width: 76,
+            height: 76,
+            decoration: BoxDecoration(color: c.surface, borderRadius: BorderRadius.circular(20)),
+            alignment: Alignment.center,
+            child: Icon(OmIcons.byName('activity'), color: c.primary, size: 30),
+          ),
+        ],
       ),
     );
   }
@@ -353,24 +335,7 @@ class GoalAchievementCard extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.md),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-          child: Container(
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  c.surface.withValues(alpha: 0.6),
-                  c.surface.withValues(alpha: 0.2),
-                ],
-              ),
-              borderRadius: BorderRadius.circular(AppRadius.card),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.4), width: 1.5),
-            ),
+      child: OmCard(
         child: Row(
           children: [
             SizedBox(
@@ -444,8 +409,6 @@ class GoalAchievementCard extends StatelessWidget {
               ),
             ),
           ],
-        ),
-        ),
         ),
       ),
     );
@@ -532,6 +495,7 @@ class _QuickActionsState extends State<QuickActions> {
     );
   }
 }
+
 class _ActionCard extends StatelessWidget {
   const _ActionCard({super.key, required this.task});
 
@@ -544,33 +508,15 @@ class _ActionCard extends StatelessWidget {
     final timeStr = task.startTime != null ? DateFormat.jm().format(task.startTime!) : 'anytime';
 
     return ShimmerSwipe(
-      child: OmTappable(
+      child: OmCard.hero(
+        tint: color,
+        padding: const EdgeInsets.all(12),
         onLongPress: () => showEditTaskSheet(context, task),
         onTap: () {
           Haptics.success();
           context.read<TaskProvider>().toggleDone(task);
         },
-        feedback: OmTapFeedback.none,
-        pressedScale: 0.98,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(AppRadius.control),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: c.surface.withValues(alpha: 0.3),
-                borderRadius: BorderRadius.circular(AppRadius.control),
-                border: Border.all(color: color.withValues(alpha: 0.3), width: 1.5),
-                boxShadow: [
-                  BoxShadow(
-                    color: color.withValues(alpha: 0.1),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  )
-                ],
-              ),
-              child: Row(
+        child: Row(
           children: [
             Container(
               width: 46,
@@ -607,9 +553,6 @@ class _ActionCard extends StatelessWidget {
             Icon(OmIcons.byName('chevR'), size: 18, color: c.text2),
           ],
         ),
-        ),
-        ),
-      ),
       ),
     );
   }
@@ -652,24 +595,8 @@ class _GoalRow extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-          child: Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  c.surface.withValues(alpha: 0.4),
-                  c.surface.withValues(alpha: 0.1),
-                ],
-              ),
-              borderRadius: BorderRadius.circular(AppRadius.card),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.3), width: 1.5),
-            ),
+      child: OmCard(
+        padding: const EdgeInsets.all(14),
         child: Row(
           children: [
             // Completion checkbox circle
@@ -689,7 +616,7 @@ class _GoalRow extends StatelessWidget {
                   border: Border.all(color: complete ? c.primary : c.border, width: 2),
                 ),
                 child: complete
-                    ? const Icon(Icons.check, size: 17, color: Colors.white)
+                    ? Icon(OmIcons.byName('check'), size: 16, color: Colors.white)
                     : null,
               ),
             ),
@@ -742,8 +669,6 @@ class _GoalRow extends StatelessWidget {
           ],
         ),
       ),
-      ),
-      ),
     );
   }
 }
@@ -754,42 +679,21 @@ class _AddGoalButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.omColors;
-    return OmTappable(
+    return OmCard.hero(
+      tint: c.primary,
+      padding: const EdgeInsets.symmetric(vertical: 14),
       onTap: () => showAddGoalSheet(context),
-      feedback: OmTapFeedback.light,
-      pressedScale: 0.98,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 13),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  c.primary.withValues(alpha: 0.2),
-                  c.primary.withValues(alpha: 0.05),
-                ],
-              ),
-              borderRadius: BorderRadius.circular(AppRadius.card),
-              border: Border.all(color: c.primary.withValues(alpha: 0.3), width: 1.5),
-            ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(OmIcons.byName('plus'), size: 18, color: c.primary),
-            const SizedBox(width: 8),
-            Text('New goal',
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: c.primary,
-                      fontWeight: FontWeight.w800,
-                    )),
-          ],
-        ),
-      ),
-      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(OmIcons.byName('plus'), size: 18, color: c.primary),
+          const SizedBox(width: 8),
+          Text('New goal',
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: c.primary,
+                    fontWeight: FontWeight.w800,
+                  )),
+        ],
       ),
     );
   }
@@ -802,53 +706,43 @@ class _GoalsEmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.omColors;
-    return OmTappable(
+    return OmCard(
+      padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 18),
       onTap: () => showAddGoalSheet(context),
-      feedback: OmTapFeedback.light,
-      pressedScale: 0.98,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 18),
-        decoration: BoxDecoration(
-          color: c.surface,
-          borderRadius: BorderRadius.circular(AppRadius.card),
-          border: Border.all(color: c.border.withValues(alpha: 0.8)),
-        ),
-        child: Column(
-          children: [
-            Container(
-              width: 64,
-              height: 64,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  colors: [c.primaryTint, c.primary.withValues(alpha: 0.12)],
-                ),
+      child: Column(
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                colors: [c.primaryTint, c.primary.withValues(alpha: 0.12)],
               ),
-              child: Icon(OmIcons.byName('target'), color: c.primary, size: 30),
             ),
-            const SizedBox(height: 14),
-            Text('No active goals',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                    )),
-            const SizedBox(height: 4),
-            Text("Set a goal — we'll break it into daily steps.",
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodySmall),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              decoration: BoxDecoration(
-                gradient: c.brandGradient,
-                borderRadius: BorderRadius.circular(AppRadius.pill),
-              ),
-              child: const Text('Set your first goal',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 14)),
+            child: Icon(OmIcons.byName('target'), color: c.primary, size: 30),
+          ),
+          const SizedBox(height: 14),
+          Text('No active goals',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  )),
+          const SizedBox(height: 4),
+          Text("Set a goal — we'll break it into daily steps.",
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            decoration: BoxDecoration(
+              gradient: c.brandGradient,
+              borderRadius: BorderRadius.circular(AppRadius.pill),
             ),
-          ],
-        ),
+            child: const Text('Set your first goal',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 14)),
+          ),
+        ],
       ),
     );
   }
@@ -864,57 +758,35 @@ class BrainDumpCard extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.only(top: AppSpacing.md),
-      child: OmTappable(
+      child: OmCard.hero(
+        tint: c.primary,
         onTap: () => showBrainDumpSheet(context),
-        feedback: OmTapFeedback.light,
-        pressedScale: 0.98,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(AppRadius.card),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-            child: Container(
-              padding: const EdgeInsets.all(18),
+        child: Row(
+          children: [
+            Container(
+              width: 56,
+              height: 56,
               decoration: BoxDecoration(
-                color: c.surfaceAlt.withValues(alpha: 0.3),
-                borderRadius: BorderRadius.circular(AppRadius.card),
-                border: Border.all(color: c.primary.withValues(alpha: 0.3), width: 1.5),
-                boxShadow: [
-                  BoxShadow(
-                    color: c.primary.withValues(alpha: 0.1),
-                    blurRadius: 16,
-                    offset: const Offset(0, 4),
-                  )
+                gradient: LinearGradient(colors: [c.primary, c.flow]),
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Icon(OmIcons.byName('sparkles'), color: Colors.white, size: 26),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Brain Dump',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(fontSize: 17, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 2),
+                  Text('Let AI organize your thoughts',
+                      style: Theme.of(context).textTheme.bodySmall),
                 ],
               ),
-              child: Row(
-            children: [
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(colors: [c.primary, c.flow]),
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                child: const Icon(Icons.auto_awesome, color: Colors.white, size: 26),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Brain Dump',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(fontSize: 17, fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 2),
-                    Text('Let AI organize your thoughts',
-                        style: Theme.of(context).textTheme.bodySmall),
-                  ],
-                ),
-              ),
-              Icon(OmIcons.byName('plus-circle'), color: c.primary, size: 24),
-            ],
-          ),
-          ),
-          ),
+            ),
+            Icon(OmIcons.byName('plus-circle'), color: c.primary, size: 24),
+          ],
         ),
       ),
     );

@@ -4,14 +4,15 @@ import '../../providers/alerts_provider.dart';
 
 import '../../core/constants/app_spacing.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/om_icons.dart';
 import '../../models/task.dart';
 import '../../providers/energy_provider.dart';
-import '../../providers/chat_provider.dart';
 import '../../providers/goal_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../providers/task_provider.dart';
 import '../../widgets/om_chip.dart';
 import '../../widgets/om_states.dart';
+import '../../widgets/om_tappable.dart';
 import '../../widgets/vibe_pill.dart';
 import 'widgets/day_timeline.dart';
 import 'widgets/energy_sheet.dart';
@@ -206,74 +207,119 @@ class _SleepScheduleBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.omColors;
     final settings = context.watch<SettingsProvider>();
-    
+
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
           Expanded(
-            child: InkWell(
+            child: _TimePill(
+              icon: 'sun',
+              label: 'Wake',
+              value: settings.wakeUpTime.format(context),
               onTap: () => _pickTime(context, settings.wakeUpTime, settings.setWakeUpTime),
-              borderRadius: BorderRadius.circular(8),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
-                child: Row(
-                  children: [
-                    Icon(Icons.wb_sunny_rounded, size: 16, color: c.text2),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerLeft,
-                        child: Text('Wake: ${settings.wakeUpTime.format(context)}', style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600)),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
             ),
           ),
+          const SizedBox(width: AppSpacing.sm),
           Expanded(
-            child: InkWell(
+            child: _TimePill(
+              icon: 'moon',
+              label: 'Sleep',
+              value: settings.sleepTime.format(context),
               onTap: () => _pickTime(context, settings.sleepTime, settings.setSleepTime),
-              borderRadius: BorderRadius.circular(8),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
-                child: Row(
-                  children: [
-                    Icon(Icons.nights_stay_rounded, size: 16, color: c.text2),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerLeft,
-                        child: Text('Sleep: ${settings.sleepTime.format(context)}', style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600)),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
             ),
           ),
-          OutlinedButton(
-            style: OutlinedButton.styleFrom(
-              foregroundColor: c.primary,
-              side: BorderSide(color: c.primary),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
-              minimumSize: const Size(0, 32),
-            ),
-            onPressed: () {
+          const SizedBox(width: AppSpacing.sm),
+          OmTappable(
+            onTap: () {
               context.read<GoalProvider>().refreshTodayTasks();
               context.read<TaskProvider>().autoScheduleDay(
-                settings.wakeUpTime, 
-                settings.sleepTime,
-                context.read<AlertsProvider>(),
-                settings.selectedRingtone,
-              );
+                    settings.wakeUpTime,
+                    settings.sleepTime,
+                    context.read<AlertsProvider>(),
+                    settings.selectedRingtone,
+                  );
             },
-            child: const Text('Auto-Schedule AI', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+            feedback: OmTapFeedback.medium,
+            pressedScale: 0.95,
+            child: Container(
+              height: 40,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              decoration: BoxDecoration(
+                gradient: c.brandGradient,
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+                boxShadow: [
+                  BoxShadow(
+                    color: c.primary.withValues(alpha: 0.28),
+                    blurRadius: 12,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(OmIcons.byName('sparkles'), size: 15, color: Colors.white),
+                  const SizedBox(width: 6),
+                  Text('Auto-Schedule',
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                          )),
+                ],
+              ),
+            ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// A compact tappable pill showing a labelled time (Wake / Sleep) on the day
+/// header. Opens a time picker on tap.
+class _TimePill extends StatelessWidget {
+  const _TimePill({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.onTap,
+  });
+
+  final String icon;
+  final String label;
+  final String value;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.omColors;
+    return OmTappable(
+      onTap: onTap,
+      feedback: OmTapFeedback.light,
+      pressedScale: 0.96,
+      child: Container(
+        height: 40,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: c.surfaceAlt,
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+          border: Border.all(color: c.border.withValues(alpha: 0.7)),
+        ),
+        child: Row(
+          children: [
+            Icon(OmIcons.byName(icon), size: 15, color: c.text2),
+            const SizedBox(width: 6),
+            Expanded(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text('$label · $value',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w700)),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
