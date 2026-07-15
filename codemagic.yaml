@@ -48,7 +48,46 @@ workflows:
       - flutter_drive.log
 
   # ---------------------------------------------------------------------------
-  # 2) Signed TestFlight build — for later, once you have an Apple Developer
+  # 2) Simulator build — the only build you can actually *interact with* from
+  #    Windows. The .app produced here runs on an iOS Simulator, so you can
+  #    upload the zip to appetize.io and drive the real app in a browser.
+  #    Requires NO Apple Developer account.
+  #
+  #    Note: simulator builds are debug-mode — the Simulator can't run AOT
+  #    (release) code. Expect debug perf; judge layout/flow here, not framerate.
+  # ---------------------------------------------------------------------------
+  ios-simulator:
+    name: iOS build (simulator - for Appetize)
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+      groups:
+        - ourmynd_secrets
+    scripts:
+      - name: Get packages
+        script: flutter pub get
+      - name: Install CocoaPods deps
+        script: |
+          cd ios
+          pod install
+      - name: Build for iOS Simulator
+        script: |
+          flutter build ios --simulator --debug \
+            --dart-define=OURMYND_API="$OURMYND_API" \
+            --dart-define=GOOGLE_SERVER_CLIENT_ID="$GOOGLE_SERVER_CLIENT_ID" \
+            --dart-define=GROQ_API_KEY="$GROQ_API_KEY"
+      - name: Package .app for Appetize
+        script: |
+          cd build/ios/iphonesimulator
+          zip -r OurMynd-simulator.zip Runner.app
+    artifacts:
+      - build/ios/iphonesimulator/OurMynd-simulator.zip
+
+  # ---------------------------------------------------------------------------
+  # 3) Signed TestFlight build — for later, once you have an Apple Developer
   #    account ($99/yr). Configure "iOS code signing" (App Store Connect API
   #    key) in the Codemagic UI, then uncomment the integrations block below.
   # ---------------------------------------------------------------------------
