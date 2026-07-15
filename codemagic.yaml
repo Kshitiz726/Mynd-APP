@@ -73,9 +73,13 @@ workflows:
         script: |
           cd ios
           pod install
+      # OURMYND_DEMO boots straight into the shell. A cloud Simulator can reach
+      # neither the dev backend nor an iOS OAuth client, so without this the
+      # login screen is a dead end and the build is unexplorable.
       - name: Build for iOS Simulator
         script: |
           flutter build ios --simulator --debug \
+            --dart-define=OURMYND_DEMO=true \
             --dart-define=OURMYND_API="$OURMYND_API" \
             --dart-define=GOOGLE_SERVER_CLIENT_ID="$GOOGLE_SERVER_CLIENT_ID" \
             --dart-define=GROQ_API_KEY="$GROQ_API_KEY"

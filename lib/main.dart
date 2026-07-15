@@ -30,6 +30,20 @@ import 'widgets/puter_host.dart';
 /// sign-in popup over whatever screen is showing.
 final rootNavigatorKey = GlobalKey<NavigatorState>();
 
+/// Demo mode — enable with `--dart-define=OURMYND_DEMO=true`.
+///
+/// Boots straight into the shell, skipping Google sign-in, and leaves realtime
+/// disconnected. This exists for environments where neither the backend nor an
+/// iOS OAuth client is reachable — chiefly a cloud iOS Simulator, where sign-in
+/// is impossible and the login screen would be a dead end.
+///
+/// Today/goals/tasks/energy/settings are backed by `shared_preferences`, so they
+/// work fully offline. The server-backed tabs (Community, Focus rooms, Coach,
+/// Alerts) will be empty or error — that is expected here, not a bug.
+///
+/// Defaults to false, so release builds are unaffected.
+const kDemoMode = bool.fromEnvironment('OURMYND_DEMO');
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -40,13 +54,17 @@ void main() async {
   // Auto-login: if a session was saved, restore it and reconnect realtime so we
   // land straight in the shell. Otherwise start at the login screen.
   final hasSession = await SessionStore.restore();
-  if (hasSession) {
+  // Demo mode has no session to authenticate the socket with, and an
+  // unreachable server would just retry-storm in the background.
+  if (hasSession && !kDemoMode) {
     RealtimeService.instance.connect();
   }
 
   AlarmService.instance.init();
 
-  runApp(OurMyndApp(initialRoute: hasSession ? AppRoutes.shell : AppRoutes.login));
+  runApp(OurMyndApp(
+    initialRoute: (hasSession || kDemoMode) ? AppRoutes.shell : AppRoutes.login,
+  ));
 }
 
 class OurMyndApp extends StatelessWidget {
