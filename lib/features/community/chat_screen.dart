@@ -80,7 +80,16 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
-    _chat.exitConversation();
+    // exitConversation() notifies, and AppShell watches ChatProvider — notifying
+    // here would rebuild the shell while this route is still deactivating, which
+    // strands the inherited-widget dependents below it. Defer past the frame.
+    // Guard on the id: the user may already have opened another conversation by
+    // the time this runs, and clearing that one would empty a live chat.
+    final chat = _chat;
+    final id = widget.conversationId;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (chat.activeConversationId == id) chat.exitConversation();
+    });
     _controller.dispose();
     _scroll.dispose();
     super.dispose();
