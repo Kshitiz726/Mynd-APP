@@ -8,7 +8,6 @@ import '../../core/utils/om_icons.dart';
 import '../../models/task.dart';
 import '../../providers/energy_provider.dart';
 import '../../providers/goal_provider.dart';
-import '../../providers/habit_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../providers/task_provider.dart';
 import '../../widgets/om_chip.dart';
@@ -235,7 +234,11 @@ class _SleepScheduleBar extends StatelessWidget {
           ),
           const SizedBox(width: AppSpacing.sm),
           OmTappable(
-            onTap: () {
+            // A day that has already happened is a record, so there is nothing
+            // to plan on it.
+            onTap: !context.watch<TaskProvider>().canPlan(context.watch<TaskProvider>().selectedDate)
+                ? null
+                : () {
               context.read<GoalProvider>().refreshTodayTasks();
               final tasks = context.read<TaskProvider>();
               tasks.autoScheduleDay(
@@ -243,8 +246,6 @@ class _SleepScheduleBar extends StatelessWidget {
                 settings.sleepTime,
                 context.read<AlertsProvider>(),
                 settings.selectedRingtone,
-                // Habits are part of the day, so auto-schedule lays them in too.
-                habitBoards: context.read<HabitProvider>().boards,
                 // Plan the day being looked at, not always today.
                 day: tasks.selectedDate,
               );

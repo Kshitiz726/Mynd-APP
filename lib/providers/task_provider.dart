@@ -3,7 +3,6 @@ import 'package:intl/intl.dart';
 
 import '../models/community/chat_models.dart';
 import '../models/energy_level.dart';
-import '../models/habit.dart';
 import '../models/task.dart';
 import '../services/notification_service.dart';
 import 'alerts_provider.dart';
@@ -240,7 +239,6 @@ class TaskProvider extends ChangeNotifier {
     TimeOfDay sleep,
     AlertsProvider alerts,
     String ringtone, {
-    List<HabitBoard> habitBoards = const [],
     DateTime? day,
   }) {
     final now = DateTime.now();
@@ -248,6 +246,9 @@ class TaskProvider extends ChangeNotifier {
     // the current clock, so "is it too late for this block" is measured against
     // the start of that day instead of NOW.
     final target = day ?? now;
+    // The past is a record. Re-planning it would rewrite history and fire alarms
+    // for times that have already gone.
+    if (!canPlan(target)) return;
     final packingToday = _isSameDay(target, now);
     final floor = packingToday ? now : DateTime(target.year, target.month, target.day);
 
@@ -306,11 +307,13 @@ class TaskProvider extends ChangeNotifier {
 
     // Begin packing from NOW (rounded), or wake time if we're still pre-wake.
     DateTime cursor = floor.isBefore(wakeTime) ? wakeTime : _roundUpToFive(floor);
+    // The wake block owns the first half hour, so work starts after it rather
+    // than on top of it.
+    final wakeBlock = _firstById('wake_anchor');
+    if (wakeBlock?.endTime != null && wakeBlock!.endTime!.isAfter(cursor)) {
+      cursor = wakeBlock.endTime!;
+    }
 
-    // Habits are the day's scaffolding, so they are laid before tasks: the
-    // morning board straight after waking, every other board in the evening
-    // ahead of the wind-down. Tasks then fill whatever is left between them.
-    cursor = _layHabits(habitBoards, cursor, windDown, ringtone, alerts);
     final chunkBlocks = <Task>[];
 
     for (final t in toSchedule) {
@@ -361,76 +364,6 @@ class TaskProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Places every habit on the day as a short block and returns the cursor to
-  /// carry on packing tasks from.
-  ///
-  /// Habits are routine, not work: they are deliberately given the edges of the
-  /// day (morning board on waking, the rest before wind-down) so the productive
-  /// middle stays free for actual tasks.
-  DateTime _layHabits(
-    List<HabitBoard> boards,
-    DateTime cursor,
-    DateTime windDown,
-    String ringtone,
-    AlertsProvider alerts,
-  ) {
-    if (boards.isEmpty) return cursor;
-
-    final morning = boards.where((b) => b.name.toLowerCase().contains('morning'));
-    final rest = boards.where((b) => !b.name.toLowerCase().contains('morning'));
-
-    // Evening habits are laid backwards from the wind-down so they always sit at
-    // the end of the day, whatever the task load turns out to be.
-    var eveningCursor = windDown;
-    for (final board in rest.toList().reversed) {
-      for (final habit in board.items.reversed) {
-        final dur = Duration(minutes: habit.minutes ?? 15);
-        final start = eveningCursor.subtract(dur);
-        if (!start.isAfter(cursor)) break; // No room left before the day's work.
-        _addHabitBlock(habit, board, start, dur, ringtone, alerts);
-        eveningCursor = start;
-      }
-    }
-
-    for (final board in morning) {
-      for (final habit in board.items) {
-        final dur = Duration(minutes: habit.minutes ?? 15);
-        if (cursor.add(dur).isAfter(eveningCursor)) break;
-        _addHabitBlock(habit, board, cursor, dur, ringtone, alerts);
-        cursor = cursor.add(dur);
-      }
-    }
-
-    return cursor;
-  }
-
-  void _addHabitBlock(
-    Habit habit,
-    HabitBoard board,
-    DateTime start,
-    Duration dur,
-    String ringtone,
-    AlertsProvider alerts,
-  ) {
-    final block = Task(
-      id: 'habit-${habit.id}-${start.millisecondsSinceEpoch}',
-      title: habit.name,
-      time: board.name.toLowerCase(),
-      // Habits should never be split into focus chunks.
-      energy: EnergyLevel.low,
-      isAnchor: true,
-    )
-      ..scheduled = true
-      ..startTime = start
-      ..duration = dur;
-    _tasks.add(block);
-    _scheduleAlarm(block, start, ringtone);
-    alerts.addLocalReminder(AppNotification(
-      id: 'rem-${block.id}', kind: 'reminder', read: false,
-      payload: {'title': habit.name, 'time': DateFormat.jm().format(start)},
-    ));
-  }
-
   /// Returns the per-block durations a task should occupy. A task at or under
   /// [_chunkThreshold] is one block; a longer one is split into [_chunkLength]
   /// pieces (the last one carrying the remainder).
@@ -460,23 +393,76 @@ class TaskProvider extends ChangeNotifier {
   /// Repack a manually reordered timeline. Available slots stay put - only the
   /// task blocks move - so packing starts at the first block's existing start
   /// (clamped to NOW) and lays the reordered blocks back-to-back from there.
-  void recalculateSchedule(List<Task> reordered, TimeOfDay wakeUp, String ringtone) {
-    if (reordered.isEmpty) return;
+  /// Repack [ordered] back-to-back inside the window [windowStart]..[windowEnd].
+  ///
+  /// Anchors (wake, sleep) are never passed in: they are fixed points, and the
+  /// old behaviour of packing them along with everything else is what threw the
+  /// whole day out of alignment. Anything that no longer fits before
+  /// [windowEnd] is returned to the backlog rather than silently overflowing
+  /// past bedtime.
+  void recalculateSchedule(
+    List<Task> ordered,
+    DateTime windowStart,
+    DateTime windowEnd,
+    String ringtone,
+  ) {
+    if (ordered.isEmpty) return;
 
     NotificationService().cancelAll();
 
     final now = DateTime.now();
-    final firstStart = reordered.first.startTime ??
-        DateTime(now.year, now.month, now.day, wakeUp.hour, wakeUp.minute);
-    DateTime cursor = firstStart.isBefore(now) ? _roundUpToFive(now) : firstStart;
+    // Never lay a block in the past on today's timeline.
+    DateTime cursor = windowStart.isBefore(now) && _isSameDay(windowStart, now)
+        ? _roundUpToFive(now)
+        : windowStart;
 
-    for (final t in reordered) {
-      t.duration ??= const Duration(hours: 1);
+    for (final t in ordered) {
+      if (t.isAnchor) continue;
+      final dur = t.duration ??= const Duration(hours: 1);
+      if (cursor.add(dur).isAfter(windowEnd)) {
+        t.scheduled = false;
+        t.startTime = null;
+        continue;
+      }
       t.startTime = cursor;
-      cursor = cursor.add(t.duration!);
+      t.scheduled = true;
+      cursor = cursor.add(dur);
       _scheduleAlarm(t, t.startTime!, ringtone);
     }
     notifyListeners();
+  }
+
+  /// Whether [day] can still be planned. The past is a record, not a plan.
+  bool canPlan(DateTime day) {
+    final today = DateTime.now();
+    final d = DateTime(day.year, day.month, day.day);
+    return !d.isBefore(DateTime(today.year, today.month, today.day));
+  }
+
+  /// Everything completed on [day], newest last, for the read-only past view.
+  List<Task> doneOn(DateTime day) {
+    final list = _tasks
+        .where((t) => t.done && t.startTime != null && _isSameDay(t.startTime!, day))
+        .toList();
+    list.sort((a, b) => a.startTime!.compareTo(b.startTime!));
+    return list;
+  }
+
+  /// Headline numbers for a past day: how much was finished, and how long it took.
+  ({int done, int missed, Duration focused}) statsFor(DateTime day) {
+    final finished = doneOn(day);
+    final missed = _tasks
+        .where((t) =>
+            !t.done &&
+            t.startTime != null &&
+            _isSameDay(t.startTime!, day) &&
+            !t.isAnchor)
+        .length;
+    var focused = Duration.zero;
+    for (final t in finished) {
+      if (!t.isAnchor) focused += t.duration ?? const Duration(hours: 1);
+    }
+    return (done: finished.where((t) => !t.isAnchor).length, missed: missed, focused: focused);
   }
 
   /// Drop a backlog [task] into a tapped Available slot starting at [start],

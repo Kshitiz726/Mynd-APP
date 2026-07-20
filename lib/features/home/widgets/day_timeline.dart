@@ -7,6 +7,7 @@ import '../../../core/constants/app_spacing.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../core/utils/om_icons.dart';
+import '../../../core/utils/task_icon.dart';
 import '../../../core/utils/toast.dart';
 import '../../../providers/goal_provider.dart';
 import '../../../providers/settings_provider.dart';
@@ -25,7 +26,13 @@ class DayTimeline extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheduled = context.watch<TaskProvider>().daySchedule;
+    final tasks = context.watch<TaskProvider>();
+    final day = tasks.selectedDate;
+
+    // A past day is a record of what happened, not something to re-plan.
+    if (!tasks.canPlan(day)) return _PastDay(day: day);
+
+    final scheduled = tasks.daySchedule;
 
     if (scheduled.isEmpty) {
       return const OmEmptyState(
@@ -33,7 +40,13 @@ class DayTimeline extends StatelessWidget {
       );
     }
 
-    // Gap between NOW and the first scheduled block - a fillable, locked slot.
+    // Wake and sleep are fixed points, so they are pulled out of the reorderable
+    // list entirely: a block cannot be dropped above waking or below bedtime,
+    // and no drag can shift their times.
+    final wake = scheduled.where((t) => t.id == 'wake_anchor').firstOrNull;
+    final sleep = scheduled.where((t) => t.id == 'sleep_anchor').firstOrNull;
+    final movable = scheduled.where((t) => !t.isAnchor).toList();
+
     final now = DateTime.now();
     final firstStart = scheduled.first.startTime;
     Duration? leadingGap;
@@ -45,23 +58,26 @@ class DayTimeline extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _NowIndicator(),
-        const SizedBox(height: AppSpacing.md),
+        if (tasks.viewingToday) ...[
+          const _NowIndicator(),
+          const SizedBox(height: AppSpacing.md),
+        ],
         if (leadingGap != null) ...[
           _AvailableSlot(start: now, gap: leadingGap),
           const SizedBox(height: AppSpacing.sm),
         ],
+        if (wake != null) _TimelineBlock(task: wake, pinned: true),
         ReorderableListView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           buildDefaultDragHandles: false,
-          itemCount: scheduled.length,
+          itemCount: movable.length,
           itemBuilder: (context, index) {
-            final current = scheduled[index];
+            final current = movable[index];
             Duration? gapAfter;
             DateTime? gapStart;
-            if (index < scheduled.length - 1) {
-              final next = scheduled[index + 1];
+            if (index < movable.length - 1) {
+              final next = movable[index + 1];
               if (current.endTime != null && next.startTime != null && current.endTime!.isBefore(next.startTime!)) {
                 final diff = next.startTime!.difference(current.endTime!);
                 if (diff.inMinutes >= 5) {
@@ -70,7 +86,9 @@ class DayTimeline extends StatelessWidget {
                 }
               }
             }
-            return ReorderableDragStartListener(
+            // Delayed, not immediate: an immediate listener swallowed vertical
+            // drags, so scrolling the page picked a block up instead.
+            return ReorderableDelayedDragStartListener(
               key: ValueKey(current.id),
               index: index,
               child: _TimelineBlock(
@@ -82,13 +100,117 @@ class DayTimeline extends StatelessWidget {
           },
           onReorder: (oldIndex, newIndex) {
             if (newIndex > oldIndex) newIndex -= 1;
-            final item = scheduled.removeAt(oldIndex);
-            scheduled.insert(newIndex, item);
+            final item = movable.removeAt(oldIndex);
+            movable.insert(newIndex, item);
+            Haptics.medium();
+
             final settings = context.read<SettingsProvider>();
-            context.read<TaskProvider>().recalculateSchedule(scheduled, settings.wakeUpTime, settings.selectedRingtone);
+            // Repack strictly between the anchors: after the wake block ends,
+            // and finishing before wind-down begins.
+            final windowStart = wake?.endTime ??
+                DateTime(day.year, day.month, day.day,
+                    settings.wakeUpTime.hour, settings.wakeUpTime.minute);
+            final windowEnd = sleep?.startTime ??
+                DateTime(day.year, day.month, day.day,
+                    settings.sleepTime.hour, settings.sleepTime.minute);
+            context.read<TaskProvider>().recalculateSchedule(
+                  movable,
+                  windowStart,
+                  windowEnd,
+                  settings.selectedRingtone,
+                );
           },
         ),
+        if (sleep != null) _TimelineBlock(task: sleep, pinned: true),
       ],
+    );
+  }
+}
+
+/// A finished day: what actually happened, with no way to edit it.
+class _PastDay extends StatelessWidget {
+  const _PastDay({required this.day});
+
+  final DateTime day;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.omColors;
+    final tasks = context.watch<TaskProvider>();
+    final stats = tasks.statsFor(day);
+    final done = tasks.doneOn(day).where((t) => !t.isAnchor).toList();
+
+    final hours = stats.focused.inMinutes / 60;
+    final focusedLabel = stats.focused.inMinutes < 60
+        ? '${stats.focused.inMinutes}m'
+        : '${hours.toStringAsFixed(hours.truncateToDouble() == hours ? 0 : 1)}h';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: c.surface,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: c.border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                DateFormat('EEEE, MMM d').format(day).toLowerCase(),
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(color: c.text2),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  _Stat(value: '${stats.done}', label: 'done', color: c.primary),
+                  _Stat(value: focusedLabel, label: 'focused', color: c.primary),
+                  _Stat(value: '${stats.missed}', label: 'missed', color: c.text2),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        if (done.isEmpty)
+          const OmEmptyState(message: "nothing was ticked off that day. that is allowed.")
+        else
+          for (final t in done) _TimelineBlock(task: t, pinned: true),
+      ],
+    );
+  }
+}
+
+class _Stat extends StatelessWidget {
+  const _Stat({required this.value, required this.label, required this.color});
+
+  final String value;
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.omColors;
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            value,
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  color: color,
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(color: c.text2),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -150,11 +272,20 @@ class _NowIndicatorState extends State<_NowIndicator> {
 }
 
 class _TimelineBlock extends StatelessWidget {
-  const _TimelineBlock({required this.task, this.gapAfter, this.gapStart});
+  const _TimelineBlock({
+    required this.task,
+    this.gapAfter,
+    this.gapStart,
+    this.pinned = false,
+  });
 
   final Task task;
   final Duration? gapAfter;
   final DateTime? gapStart;
+
+  /// Fixed blocks (wake, sleep, and everything on a past day): no editing, no
+  /// dragging, and visually quieter so they read as the frame of the day.
+  final bool pinned;
 
   @override
   Widget build(BuildContext context) {
@@ -175,9 +306,9 @@ class _TimelineBlock extends StatelessWidget {
     Widget block = Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
       child: OmTappable(
-        onLongPress: () => showEditTaskSheet(context, task),
+        onLongPress: pinned ? null : () => showEditTaskSheet(context, task),
         feedback: OmTapFeedback.none,
-        pressedScale: 0.99,
+        pressedScale: pinned ? 1.0 : 0.99,
         onTap: null, // Just for long press right now
         child: Container(
           decoration: BoxDecoration(
@@ -201,26 +332,45 @@ class _TimelineBlock extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // The check leads the card, so completing is the nearest action.
+              // A pinned block cannot be completed, so it shows its glyph there.
               Padding(
                 padding: const EdgeInsets.only(top: 2),
-                child: _CheckCircle(
-                  done: task.done,
-                  color: task.done ? accent : c.border.withValues(alpha: 0.9),
-                  onTap: () {
-                    Haptics.medium();
-                    context.read<TaskProvider>().toggleDone(task);
-                    if (task.isGoalTask) {
-                      context.read<GoalProvider>().markMilestoneDone(task.id, task.done);
-                    }
-                  },
-                ),
+                child: pinned && !task.done
+                    ? Container(
+                        width: 24,
+                        height: 24,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: accent.withValues(alpha: 0.12),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(taskIcon(task.title), size: 13, color: accent),
+                      )
+                    : _CheckCircle(
+                        done: task.done,
+                        color: task.done ? accent : c.border.withValues(alpha: 0.9),
+                        onTap: () {
+                          Haptics.medium();
+                          context.read<TaskProvider>().toggleDone(task);
+                          if (task.isGoalTask) {
+                            context.read<GoalProvider>().markMilestoneDone(task.id, task.done);
+                          }
+                        },
+                      ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
+                    Row(
+                      children: [
+                        if (!pinned) ...[
+                          Icon(taskIcon(task.title), size: 16, color: accent),
+                          const SizedBox(width: 7),
+                        ],
+                        Expanded(
+                          child: Text(
                       task.title,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                             fontSize: 17,
@@ -229,12 +379,15 @@ class _TimelineBlock extends StatelessWidget {
                             color: task.done ? c.text2 : c.text,
                             decoration: task.done ? TextDecoration.lineThrough : null,
                           ),
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 8),
                     // Time reads as metadata under the title, the way the
                     // reference's "1 min article" line does - still tappable.
                     OmTappable(
-                      onTap: () => _editBlockTime(context, task),
+                      onTap: pinned ? null : () => _editBlockTime(context, task),
                       feedback: OmTapFeedback.none,
                       pressedScale: 0.97,
                       child: Row(
