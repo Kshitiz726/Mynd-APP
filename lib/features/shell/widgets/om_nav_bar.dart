@@ -7,13 +7,13 @@ import '../../../widgets/om_glass.dart';
 import '../../../widgets/om_mascot.dart';
 import '../../../widgets/om_tappable.dart';
 
-/// The floating, pill-shaped bottom navigation bar.
+/// The floating bottom navigation bar — a liquid-glass capsule.
 ///
-/// A rounded, iOS-style frosted-glass capsule that floats above the bottom edge
-/// (content blurs through it). Destinations collapse to a bare icon when
-/// inactive; the selected one expands into a tinted pill showing its icon +
-/// label — the modern "expanding pill" pattern, which keeps six tabs legible
-/// and uncluttered. The final "you" destination is the user's mascot avatar.
+/// Every destination shows its icon over its label; the selected one is marked
+/// by a translucent "lens" that glides between slots rather than appearing in
+/// place, which is what makes the movement read as liquid. Slots are equal
+/// width, so the lens travel is linear and the longest label ("community")
+/// cannot push its neighbours around.
 class OmNavBar extends StatelessWidget {
   const OmNavBar({
     super.key,
@@ -31,6 +31,8 @@ class OmNavBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.omColors;
+    final dark = context.isDark;
+
     // IMPORTANT: a plain Container/Material — NOT a BottomAppBar (its clipper
     // reads ScaffoldGeometry during hit-test and freezes input on desktop).
     return SafeArea(
@@ -40,42 +42,120 @@ class OmNavBar extends StatelessWidget {
         // Shadow lives on this outer (unclipped) box; the glass clips its blur.
         child: Container(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(30),
+            borderRadius: BorderRadius.circular(28),
             boxShadow: [
               BoxShadow(
-                color: c.shadow.withValues(alpha: context.isDark ? 0.5 : 0.16),
-                blurRadius: 30,
-                spreadRadius: -2,
-                offset: const Offset(0, 14),
+                color: c.shadow.withValues(alpha: dark ? 0.55 : 0.18),
+                blurRadius: 34,
+                spreadRadius: -4,
+                offset: const Offset(0, 16),
               ),
             ],
           ),
           child: OmGlass(
-            borderRadius: 30,
-            blur: 32,
-            opacity: context.isDark ? 0.42 : 0.6,
-            child: SizedBox(
-              height: 64,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 6),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    for (final tab in AppTab.values)
-                      _NavItem(
-                        tab: tab,
-                        active: tab == current,
-                        showDot: tab == AppTab.alerts && alertsUnread > 0,
-                        onTap: () {
-                          if (tab != current) Haptics.select();
-                          onSelect(tab);
-                        },
-                      ),
+            borderRadius: 28,
+            blur: 36,
+            opacity: dark ? 0.34 : 0.55,
+            child: DecoratedBox(
+              // Real glass is lit from above: a top-down sheen sells the depth
+              // that blur alone cannot.
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(28),
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.white.withValues(alpha: dark ? 0.10 : 0.45),
+                    Colors.white.withValues(alpha: 0.0),
                   ],
+                  stops: const [0.0, 0.55],
+                ),
+              ),
+              child: SizedBox(
+                height: 66,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      const tabs = AppTab.values;
+                      final slot = constraints.maxWidth / tabs.length;
+                      final index = tabs.indexOf(current);
+
+                      return Stack(
+                        children: [
+                          // The lens glides to the active slot behind the icons.
+                          AnimatedPositioned(
+                            duration: const Duration(milliseconds: 380),
+                            curve: Curves.easeOutCubic,
+                            left: slot * index,
+                            top: 0,
+                            bottom: 0,
+                            width: slot,
+                            child: _Lens(dark: dark),
+                          ),
+                          Row(
+                            children: [
+                              for (final tab in tabs)
+                                SizedBox(
+                                  width: slot,
+                                  child: _NavItem(
+                                    tab: tab,
+                                    active: tab == current,
+                                    showDot: tab == AppTab.alerts && alertsUnread > 0,
+                                    onTap: () {
+                                      if (tab != current) Haptics.select();
+                                      onSelect(tab);
+                                    },
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ],
+                      );
+                    },
+                  ),
                 ),
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The translucent puck marking the selected destination.
+class _Lens extends StatelessWidget {
+  const _Lens({required this.dark});
+
+  final bool dark;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.omColors;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 3),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(19),
+          color: dark
+              ? Colors.white.withValues(alpha: 0.13)
+              : Colors.white.withValues(alpha: 0.78),
+          // A brighter hairline than the bar's own edge, so the puck reads as a
+          // separate pane of glass sitting on top rather than a painted shape.
+          border: Border.all(
+            color: dark
+                ? Colors.white.withValues(alpha: 0.20)
+                : c.primary.withValues(alpha: 0.14),
+            width: 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: c.shadow.withValues(alpha: dark ? 0.28 : 0.10),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
       ),
     );
@@ -99,58 +179,37 @@ class _NavItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.omColors;
     final color = active ? c.primary : c.text2;
-    final isYou = tab == AppTab.you;
-
-    final leading = isYou
-        ? _YouAvatar(active: active)
-        : _NavIcon(tab: tab, active: active, color: color, showDot: showDot);
 
     return OmTappable(
       onTap: onTap,
       feedback: OmTapFeedback.none, // bar fires its own select haptic
-      pressedScale: 0.88,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 320),
-        curve: Curves.easeOutCubic,
-        padding: EdgeInsets.symmetric(horizontal: active ? 12 : 8, vertical: 9),
-        decoration: BoxDecoration(
-          color: active ? c.primaryTint : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            leading,
-            // The label reveals only for the active tab, animating its width.
-            ClipRect(
-              child: AnimatedAlign(
-                alignment: Alignment.centerLeft,
-                duration: const Duration(milliseconds: 320),
-                curve: Curves.easeOutCubic,
-                widthFactor: active ? 1 : 0,
-                child: AnimatedOpacity(
-                  opacity: active ? 1 : 0,
-                  duration: const Duration(milliseconds: 200),
-                  child: Padding(
-                    padding: const EdgeInsets.only(left: 7),
-                    child: Text(
-                      tab.label,
-                      maxLines: 1,
-                      softWrap: false,
-                      overflow: TextOverflow.clip,
-                      style: Theme.of(context).textTheme.labelMedium!.copyWith(
-                            color: c.primary,
-                            fontSize: 12.5,
-                            letterSpacing: -0.2,
-                            fontWeight: FontWeight.w800,
-                          ),
+      pressedScale: 0.9,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          tab == AppTab.you
+              ? _YouAvatar(active: active)
+              : _NavIcon(tab: tab, color: color, showDot: showDot),
+          const SizedBox(height: 3),
+          // Labels never wrap or ellipsize: the slot is sized for the longest
+          // one, and shrinking beats clipping if a translation runs long.
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: AnimatedDefaultTextStyle(
+                duration: const Duration(milliseconds: 220),
+                style: Theme.of(context).textTheme.labelMedium!.copyWith(
+                      color: color,
+                      fontSize: 10,
+                      letterSpacing: -0.1,
+                      fontWeight: active ? FontWeight.w800 : FontWeight.w600,
                     ),
-                  ),
-                ),
+                child: Text(tab.label, maxLines: 1, softWrap: false),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -159,13 +218,11 @@ class _NavItem extends StatelessWidget {
 class _NavIcon extends StatelessWidget {
   const _NavIcon({
     required this.tab,
-    required this.active,
     required this.color,
     required this.showDot,
   });
 
   final AppTab tab;
-  final bool active;
   final Color color;
   final bool showDot;
 
@@ -175,18 +232,12 @@ class _NavIcon extends StatelessWidget {
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        AnimatedSwitcher(
-          duration: const Duration(milliseconds: 220),
-          transitionBuilder: (child, anim) => FadeTransition(
-            opacity: anim,
-            child: ScaleTransition(scale: anim, child: child),
-          ),
-          child: Icon(
-            tab.icon,
-            key: ValueKey(active),
-            color: color,
-            size: 22,
-          ),
+        // Colour animates rather than the glyph swapping, so the icon never
+        // pops between states.
+        TweenAnimationBuilder<Color?>(
+          duration: const Duration(milliseconds: 240),
+          tween: ColorTween(end: color),
+          builder: (context, value, _) => Icon(tab.icon, color: value, size: 21),
         ),
         if (showDot)
           Positioned(
@@ -227,7 +278,7 @@ class _YouAvatar extends StatelessWidget {
           width: 2,
         ),
       ),
-      child: const OmMascot(size: 24),
+      child: const OmMascot(size: 18),
     );
   }
 }
