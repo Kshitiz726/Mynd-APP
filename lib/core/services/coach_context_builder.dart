@@ -89,7 +89,7 @@ class CoachContextBuilder {
       for (final habit in board.items) {
         total++;
         if (habit.done) done++;
-        // Streak tracking — seeded data uses 0; wire to persistence later.
+        // Streak tracking - seeded data uses 0; wire to persistence later.
         if (0 > longestDays) {
           longestDays = 0;
           longestName = habit.name;
@@ -136,7 +136,7 @@ class CoachContextBuilder {
     final undone = tasks.all.where((t) => !t.done).length;
     if (undone >= 5 && energy != EnergyLevel.high) {
       patterns.add(
-        'The user has $undone unfinished tasks and is not at high energy — '
+        'The user has $undone unfinished tasks and is not at high energy - '
         'cognitive load is likely high. Help reduce the pile, not add to it.',
       );
     }
@@ -167,7 +167,7 @@ class CoachContextBuilder {
     if (memo.contains('overwhelm') || memo.contains('stuck')) {
       patterns.add(
         'In previous sessions, overwhelm and feeling stuck have come up. '
-        'Be aware this may surface again — acknowledge before solving.',
+        'Be aware this may surface again - acknowledge before solving.',
       );
     }
 

@@ -6,8 +6,8 @@ import 'api_config.dart';
 /// stays logged in across restarts and a re-launch lands straight in the shell.
 ///
 /// The token is account-scoped (keyed by Google email on the server), so
-/// restoring it brings back the user's entire account — posts, friends, chats,
-/// rooms — exactly like signing back in. Cleared on sign out.
+/// restoring it brings back the user's entire account - posts, friends, chats,
+/// rooms - exactly like signing back in. Cleared on sign out.
 class SessionStore {
   SessionStore._();
 

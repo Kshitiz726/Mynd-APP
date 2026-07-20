@@ -39,7 +39,7 @@ class SettingsProvider extends ChangeNotifier {
   ThemeMode get themeMode => _darkMode ? ThemeMode.dark : ThemeMode.light;
 
   /// How many backlog tasks to show at once. Tighter in low-stim mode to
-  /// reduce overwhelm — mirrors `cap = lowStim ? 2 : 3` in the prototype.
+  /// reduce overwhelm - mirrors `cap = lowStim ? 2 : 3` in the prototype.
   int get backlogCap => _lowStim ? 2 : 3;
 
   /// Effective animation duration, collapsed to zero under reduce-motion.

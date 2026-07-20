@@ -8,6 +8,7 @@ import '../../core/utils/om_icons.dart';
 import '../../models/task.dart';
 import '../../providers/energy_provider.dart';
 import '../../providers/goal_provider.dart';
+import '../../providers/habit_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../providers/task_provider.dart';
 import '../../widgets/om_chip.dart';
@@ -19,8 +20,9 @@ import 'widgets/energy_sheet.dart';
 import 'widgets/home_banners.dart';
 import 'widgets/home_dashboard.dart';
 import 'widgets/task_tile.dart';
+import 'widgets/week_strip.dart';
 
-/// The "Today" dashboard — the app's home base.
+/// The "Today" dashboard - the app's home base.
 ///
 /// Composition (reference-styled): top bar → hero mascot + stat → vibe →
 /// featured goal → do-this-now → your day timeline → backlog.
@@ -51,7 +53,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Stack(
       children: [
-        // A single soft, radiant peach glow blooming from the top — no hard
+        // A single soft, radiant peach glow blooming from the top - no hard
         // circles, just a clean radial wash that melts into the surface.
         Positioned.fill(
           child: DecoratedBox(
@@ -96,6 +98,8 @@ class _HomeScreenState extends State<HomeScreen> {
             const OmSectionHeader('your day', trailing: 'view all'),
             const _SleepScheduleBar(),
             const SizedBox(height: AppSpacing.sm),
+            const WeekStrip(),
+            const SizedBox(height: AppSpacing.md),
             const DayTimeline(),
 
             const OmSectionHeader('backlog'),
@@ -148,7 +152,7 @@ class _Backlog extends StatelessWidget {
     if (items.isEmpty) {
       final f = tasks.filter;
       final phrase = f == BacklogFilter.all ? 'right now' : '${f.energy?.filterLabel ?? f.label} right now';
-      return OmEmptyState(message: 'nothing $phrase — wanna add a 2-min win?');
+      return OmEmptyState(message: 'nothing $phrase - wanna add a 2-min win?');
     }
 
     final visible = items.take(cap).toList();
@@ -233,12 +237,17 @@ class _SleepScheduleBar extends StatelessWidget {
           OmTappable(
             onTap: () {
               context.read<GoalProvider>().refreshTodayTasks();
-              context.read<TaskProvider>().autoScheduleDay(
-                    settings.wakeUpTime,
-                    settings.sleepTime,
-                    context.read<AlertsProvider>(),
-                    settings.selectedRingtone,
-                  );
+              final tasks = context.read<TaskProvider>();
+              tasks.autoScheduleDay(
+                settings.wakeUpTime,
+                settings.sleepTime,
+                context.read<AlertsProvider>(),
+                settings.selectedRingtone,
+                // Habits are part of the day, so auto-schedule lays them in too.
+                habitBoards: context.read<HabitProvider>().boards,
+                // Plan the day being looked at, not always today.
+                day: tasks.selectedDate,
+              );
             },
             feedback: OmTapFeedback.medium,
             pressedScale: 0.95,

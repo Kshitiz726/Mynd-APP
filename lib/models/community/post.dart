@@ -41,7 +41,7 @@ class Post {
   final String avatarTextColor;
   final String body;
   final EnergyLevel? mood;      // the "Low Energy" / "Energized" pill
-  final List<String> tags;      // ['Study', 'Struggles'] — render with '#'
+  final List<String> tags;      // ['Study', 'Struggles'] - render with '#'
   final DateTime createdAt;
   final int commentCount;
 

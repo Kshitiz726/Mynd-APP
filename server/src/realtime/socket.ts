@@ -92,7 +92,7 @@ export function attachRealtime(io: Server) {
       });
     });
 
-    // ── Mic state (visual grid only — the real track lives in LiveKit) ──
+    // ── Mic state (visual grid only - the real track lives in LiveKit) ──
     socket.on('toggle_mute', async ({ roomId, muted }: { roomId: string; muted: boolean }) => {
       await presence.patch(roomId, user.id, {
         micState: muted ? 'muted' : 'speaking',
@@ -158,7 +158,7 @@ export function attachRealtime(io: Server) {
 
     // ════════════ CHAT ════════════
     // ack-style join so the client KNOWS it is subscribed before it relies on
-    // live delivery. Membership is enforced here — a stray/forged convo id can
+    // live delivery. Membership is enforced here - a stray/forged convo id can
     // never join you to a room you don't belong to (root of "couldn't open chat"
     // when a stale/null id was navigated to).
     socket.on(
@@ -201,7 +201,7 @@ export function attachRealtime(io: Server) {
             clientTempId,
             replyToId: replyToId ?? null,
           });
-          // Broadcast to everyone in the convo (the sender too — they reconcile
+          // Broadcast to everyone in the convo (the sender too - they reconcile
           // the optimistic bubble by clientTempId / server id).
           io.to(`convo:${conversationId}`).emit('message_new', { conversationId, message, clientTempId });
           // Also push to each other member's PERSONAL room so it lands instantly

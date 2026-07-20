@@ -4,8 +4,8 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 /// The primary bottom-navigation destinations, mirroring the prototype's
 /// `.navbar` buttons: today · focus · community · alerts · coach · you.
 ///
-/// Icons come from **Lucide** — the one icon family used everywhere else in the
-/// app — so the tab bar matches the rest of the UI. The selected tab is
+/// Icons come from **Lucide** - the one icon family used everywhere else in the
+/// app - so the tab bar matches the rest of the UI. The selected tab is
 /// distinguished by the nav bar's tinted "expanding pill" (icon + label), not by
 /// swapping to a filled glyph, so [activeIcon] mirrors [icon].
 enum AppTab {
@@ -20,7 +20,7 @@ enum AppTab {
 
   final String label;
 
-  /// The tab's Lucide glyph (same for active/inactive — the pill marks active).
+  /// The tab's Lucide glyph (same for active/inactive - the pill marks active).
   final IconData icon;
 
   /// Kept for API compatibility with call sites; identical to [icon].
@@ -35,7 +35,7 @@ class NavProvider extends ChangeNotifier {
 
   AppTab get tab => _tab;
 
-  /// The tab we were on before the current one — lets immersive tabs (Coach,
+  /// The tab we were on before the current one - lets immersive tabs (Coach,
   /// You) that hide the bottom bar offer a header "back" that returns there.
   AppTab get previous => _prev;
   int get index => AppTab.values.indexOf(_tab);

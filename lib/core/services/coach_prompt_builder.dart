@@ -4,11 +4,11 @@ import '../../models/coach_context.dart';
 /// Assembles the exact message list sent to the Groq API.
 ///
 /// Message architecture (top → bottom):
-///   1. [system]    — Static identity + style rules (~700 tokens, never changes)
-///   2. [system]    — Memory recall (previous session summary, if any)
-///   3. [system]    — Dynamic context note (energy, mood, tasks, patterns)
-///   4. [user/asst] — Conversation history (last N turns)
-///   5. [user]      — Current user message
+///   1. [system]    - Static identity + style rules (~700 tokens, never changes)
+///   2. [system]    - Memory recall (previous session summary, if any)
+///   3. [system]    - Dynamic context note (energy, mood, tasks, patterns)
+///   4. [user/asst] - Conversation history (last N turns)
+///   5. [user]      - Current user message
 ///
 /// Keeping the system prompt static and the context injected as a second
 /// system message means we never bloat the main prompt with per-turn data,
@@ -26,10 +26,10 @@ class CoachPromptBuilder {
   }) {
     final messages = <Map<String, String>>[];
 
-    // 1. Static system identity — defines who Mynd IS.
+    // 1. Static system identity - defines who Mynd IS.
     messages.add({'role': 'system', 'content': _systemPrompt(context)});
 
-    // 2. Memory recall — what was talked about before this session.
+    // 2. Memory recall - what was talked about before this session.
     if (context.previousConversationSummary.isNotEmpty) {
       messages.add({
         'role': 'system',
@@ -37,13 +37,13 @@ class CoachPromptBuilder {
       });
     }
 
-    // 3. Dynamic context — current user state, injected fresh every turn.
+    // 3. Dynamic context - current user state, injected fresh every turn.
     final contextNote = _contextNote(context);
     if (contextNote.isNotEmpty) {
       messages.add({'role': 'system', 'content': contextNote});
     }
 
-    // 4. Conversation history — already trimmed by CoachMemoryService.
+    // 4. Conversation history - already trimmed by CoachMemoryService.
     for (final msg in history) {
       if (msg.isStreaming) continue; // never send incomplete messages
       messages.add(msg.toGroqMessage());
@@ -60,12 +60,12 @@ class CoachPromptBuilder {
   String _systemPrompt(CoachContext ctx) {
     final nameLine = ctx.userPreferences.preferredName != null
         ? "The user's name is ${ctx.userPreferences.preferredName}. "
-            "Use their name occasionally and naturally — not every message, "
+            "Use their name occasionally and naturally - not every message, "
             "only when it feels grounding and warm."
         : '';
 
     final brevityLine = ctx.userPreferences.prefersBrevity
-        ? 'This user prefers brief responses. Keep it tight — 2 short '
+        ? 'This user prefers brief responses. Keep it tight - 2 short '
             'paragraphs maximum.'
         : '';
 
@@ -125,7 +125,7 @@ Good: "Huge relief. Glad that's finally off your plate."
   // ─── Memory Block ─────────────────────────────────────────────────────────
 
   String _memoryBlock(String summary) {
-    return '[MEMORY — from previous sessions, use as background awareness, '
+    return '[MEMORY - from previous sessions, use as background awareness, '
         'not as a script]\n$summary';
   }
 
@@ -134,25 +134,25 @@ Good: "Huge relief. Glad that's finally off your plate."
   String _contextNote(CoachContext ctx) {
     final parts = <String>[];
 
-    // Energy level — most important signal, shapes everything.
+    // Energy level - most important signal, shapes everything.
     switch (ctx.currentEnergyLevel) {
       case 'brain-dead':
         parts.add(
-          'ENERGY: The user has reported being at brain-dead energy — '
+          'ENERGY: The user has reported being at brain-dead energy - '
           'essentially depleted. Keep your response very gentle and brief. '
           'Do not suggest additional tasks or actions. Focus entirely on '
           'presence, validation, and reducing pressure.',
         );
       case 'low':
         parts.add(
-          'ENERGY: The user is at low energy right now. Match their pace — '
+          'ENERGY: The user is at low energy right now. Match their pace - '
           'slower, softer, warmer. Avoid suggesting they take on more.',
         );
       case 'high':
         parts.add('ENERGY: The user is at high energy today.');
     }
 
-    // Recent brain dumps — what's been on their mind.
+    // Recent brain dumps - what's been on their mind.
     if (ctx.recentBrainDumps.isNotEmpty) {
       final snippets = ctx.recentBrainDumps
           .take(3)
@@ -169,7 +169,7 @@ Good: "Huge relief. Glad that's finally off your plate."
       if (pending.length >= 5) {
         parts.add(
           'The task list is quite full. If tasks come up in conversation, '
-          'help reduce cognitive load — not add to it.',
+          'help reduce cognitive load - not add to it.',
         );
       }
     }
@@ -190,7 +190,7 @@ Good: "Huge relief. Glad that's finally off your plate."
       );
     }
 
-    // Detected patterns — pre-computed observations from the context builder.
+    // Detected patterns - pre-computed observations from the context builder.
     if (ctx.detectedPatterns.isNotEmpty) {
       final patternBlock = ctx.detectedPatterns.join('\n');
       parts.add('PATTERNS TO BE AWARE OF:\n$patternBlock');
@@ -198,7 +198,7 @@ Good: "Huge relief. Glad that's finally off your plate."
 
     if (parts.isEmpty) return '';
 
-    return '[CONTEXT NOTE — not shown to the user. Use this information '
+    return '[CONTEXT NOTE - not shown to the user. Use this information '
         'naturally to shape your response, not as a checklist to address.]\n\n'
         '${parts.join('\n\n')}';
   }

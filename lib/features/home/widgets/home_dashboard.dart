@@ -24,7 +24,7 @@ import 'brain_dump_sheet.dart';
 import 'edit_task_sheet.dart';
 
 /// Top chrome for the Today dashboard: the user's avatar, a global app-search
-/// field, and a "berries" momentum pill — mirroring the reference's
+/// field, and a "berries" momentum pill - mirroring the reference's
 /// avatar · search · points header.
 class HomeTopBar extends StatelessWidget {
   const HomeTopBar({super.key});
@@ -184,7 +184,7 @@ class HomeHero extends StatelessWidget {
   }
 }
 
-/// The featured progress card — the user's primary active goal rendered like the
+/// The featured progress card - the user's primary active goal rendered like the
 /// reference's "Get rid of your back pain · Session 4 · 100" tile, with milestone
 /// progress dots. Falls back to a "set a goal" CTA when there are none.
 class FeaturedGoalCard extends StatelessWidget {
@@ -315,7 +315,7 @@ class FeaturedGoalCard extends StatelessWidget {
   }
 }
 
-/// Tracks overall goal achievement — how much of every goal's daily-step plan
+/// Tracks overall goal achievement - how much of every goal's daily-step plan
 /// has been completed on the way to each deadline, plus whether the user is
 /// keeping pace. Sits above the featured goal so the big picture comes first.
 class GoalAchievementCard extends StatelessWidget {
@@ -446,8 +446,8 @@ class _ProgressDots extends StatelessWidget {
   }
 }
 
-/// "do this now" — a single focus: the one task happening now (or next up).
-/// Deliberately one card so there's no decision paralysis — the next thing,
+/// "do this now" - a single focus: the one task happening now (or next up).
+/// Deliberately one card so there's no decision paralysis - the next thing,
 /// nothing else. Falls back to the top backlog item when nothing is scheduled.
 class QuickActions extends StatefulWidget {
   const QuickActions({super.key});
@@ -489,7 +489,7 @@ class _QuickActionsState extends State<QuickActions> {
           duration: const Duration(milliseconds: 300),
           child: _displayTask != null
               ? _ActionCard(key: ValueKey(_displayTask!.id), task: _displayTask!)
-              : const OmEmptyState(key: ValueKey('empty'), message: 'take a breather — you’re all caught up!'),
+              : const OmEmptyState(key: ValueKey('empty'), message: 'take a breather - you’re all caught up!'),
         ),
       ),
     );
@@ -558,7 +558,7 @@ class _ActionCard extends StatelessWidget {
   }
 }
 
-/// The active-goals list — each goal as a row with a completion checkbox circle,
+/// The active-goals list - each goal as a row with a completion checkbox circle,
 /// its deadline and step progress. Shows a clean empty state when there are no
 /// goals yet. This is the simple, at-a-glance goals module on Home.
 class GoalsList extends StatelessWidget {
@@ -729,7 +729,7 @@ class _GoalsEmptyState extends StatelessWidget {
                     fontWeight: FontWeight.w700,
                   )),
           const SizedBox(height: 4),
-          Text("Set a goal — we'll break it into daily steps.",
+          Text("Set a goal - we'll break it into daily steps.",
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodySmall),
           const SizedBox(height: 16),

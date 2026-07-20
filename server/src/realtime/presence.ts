@@ -245,13 +245,13 @@ export function makePresence(io: Server) {
       }
     },
 
-    // ── Explicit "Leave Room" — remove immediately, no grace period. ──
+    // ── Explicit "Leave Room" - remove immediately, no grace period. ──
     async leave(roomId: string, userId: string, socketId: string) {
       await redis.srem(`sock:${socketId}:rooms`, roomId);
       await presence.evict(roomId, userId);
     },
 
-    // ── Socket dropped (app closed / network blip) — grey them, hold a 30s
+    // ── Socket dropped (app closed / network blip) - grey them, hold a 30s
     // grace so a reconnect can rejoin seamlessly, then evict if still gone. ──
     async handleDisconnect(socketId: string, userId: string, rooms: string[]) {
       for (const roomId of rooms) {

@@ -29,8 +29,8 @@ enum PuterVoiceState { idle, listening, transcribing, thinking, speaking }
 ///
 /// The [PuterHost] widget owns the actual `InAppWebView`; it hands us the
 /// controller via [attachController] and signals JS readiness. Everything the
-/// coach needs — streaming chat, blocking completion, speech-to-text and
-/// text-to-speech — runs through `puter.ai.*` inside that page.
+/// coach needs - streaming chat, blocking completion, speech-to-text and
+/// text-to-speech - runs through `puter.ai.*` inside that page.
 class PuterService {
   PuterService._();
   static final PuterService instance = PuterService._();
@@ -71,7 +71,7 @@ class PuterService {
   // SECURE CONTEXT, so getUserMedia/mic works). We use dart:io's HttpServer on
   // an EPHEMERAL port instead of a fixed-port InAppLocalhostServer because the
   // latter is unreliable on Windows AND a fixed port collides when two app
-  // instances run — both were the "localhost refused to connect" on Connect.
+  // instances run - both were the "localhost refused to connect" on Connect.
   HttpServer? _assetServer;
   int? _serverPort;
   Completer<void>? _serverReady;
@@ -242,7 +242,7 @@ class PuterService {
       final s = _chatStreams.remove(id);
       if (s != null && !s.isClosed) {
         s.addError(PuterException(
-            signedIn ? 'Puter timed out — try again' : 'Not connected to Puter — tap "Connect Puter"'));
+            signedIn ? 'Puter timed out - try again' : 'Not connected to Puter - tap "Connect Puter"'));
         s.close();
       }
     });
@@ -261,7 +261,7 @@ class PuterService {
     return ctrl.stream;
   }
 
-  /// Blocking completion — for memory summarisation.
+  /// Blocking completion - for memory summarisation.
   Future<String> complete(List<Map<String, String>> messages, {String? model}) async {
     final id = _seq++;
     final c = Completer<String>();

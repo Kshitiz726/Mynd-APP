@@ -44,7 +44,7 @@ Color _hex(String s, [Color fallback = const Color(0xFF6366F1)]) {
 
 enum _CmTab { feed, rooms, groups, chats }
 
-/// "community" — a calm feed, focus rooms, interest groups and DMs. Mirrors
+/// "community" - a calm feed, focus rooms, interest groups and DMs. Mirrors
 /// the prototype's `#screen-community` (hero card → tabs → per-tab content).
 class CommunityScreen extends StatefulWidget {
   const CommunityScreen({super.key});
@@ -65,7 +65,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
       try {
         final r = await ApiClient.instance.fetchRooms();
         if (mounted) context.read<FocusRoomProvider>().setRooms(r.rooms, r.globalLive);
-      } catch (_) {/* server offline — UI shows empty state */}
+      } catch (_) {/* server offline - UI shows empty state */}
     });
   }
 
@@ -441,7 +441,7 @@ class _ComposerSheetState extends State<_ComposerSheet> {
     } catch (e) {
       if (mounted) {
         setState(() => _posting = false);
-        Toast.show(context, "Couldn't share — is the server running?");
+        Toast.show(context, "Couldn't share - is the server running?");
       }
     }
   }
@@ -895,7 +895,7 @@ class _CreateRoomSheetState extends State<_CreateRoomSheet> {
     } catch (e) {
       if (mounted) {
         setState(() => _creating = false);
-        Toast.show(context, "Couldn't create room — is the server running?");
+        Toast.show(context, "Couldn't create room - is the server running?");
       }
     }
   }
@@ -1042,7 +1042,7 @@ class _GroupsTabState extends State<_GroupsTab> {
     final suggested = chat.suggestedGroups;
     final mine = chat.myGroups;
     // Lives inside the outer Community ListView, so this is a (non-scrolling)
-    // Column — never a nested vertical ListView.
+    // Column - never a nested vertical ListView.
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenH),
       child: Column(
@@ -1092,7 +1092,7 @@ class _GroupRow extends StatelessWidget {
 
   /// Open the group's chat. Resolves a guaranteed-valid conversation id (the
   /// joined group already carries it; otherwise the bug-proof resolver fetches
-  /// one) — no more "Could not open chat" from a null/stale id.
+  /// one) - no more "Could not open chat" from a null/stale id.
   Future<void> _open(BuildContext context) async {
     Haptics.select();
     final chat = context.read<ChatProvider>();
@@ -1108,7 +1108,7 @@ class _GroupRow extends StatelessWidget {
         isGroup: true,
       );
     } catch (e) {
-      if (context.mounted) Toast.show(context, 'Could not open chat — retrying may help');
+      if (context.mounted) Toast.show(context, 'Could not open chat - retrying may help');
     }
   }
 
@@ -1117,7 +1117,7 @@ class _GroupRow extends StatelessWidget {
     try {
       await context.read<ChatProvider>().joinGroup(group);
     } catch (_) {
-      if (context.mounted) Toast.show(context, "Couldn't join — try again");
+      if (context.mounted) Toast.show(context, "Couldn't join - try again");
     }
   }
 

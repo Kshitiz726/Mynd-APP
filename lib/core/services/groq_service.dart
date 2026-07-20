@@ -5,9 +5,9 @@ import 'package:http/http.dart' as http;
 /// All communication with the Groq REST API lives here.
 ///
 /// Two modes:
-///   [streamCompletion] — Server-Sent Events. Yields token chunks as they
+///   [streamCompletion] - Server-Sent Events. Yields token chunks as they
 ///     arrive. Used for every live coaching turn so the UI feels immediate.
-///   [complete]         — Plain blocking POST. Used for low-stakes internal
+///   [complete]         - Plain blocking POST. Used for low-stakes internal
 ///     work like memory summarisation, where streaming adds no value.
 class GroqService {
   GroqService._();
@@ -16,7 +16,7 @@ class GroqService {
   // ─── Config ───────────────────────────────────────────────────────────────
 
   /// Provided at build/run time via `--dart-define=GROQ_API_KEY=...`.
-  /// Never hard-code the key — it must not be committed to source control.
+  /// Never hard-code the key - it must not be committed to source control.
   static const _apiKey = String.fromEnvironment('GROQ_API_KEY');
   static const _endpoint =
       'https://api.groq.com/openai/v1/chat/completions';
@@ -82,14 +82,14 @@ class GroqService {
         final chunk = delta?['content'] as String?;
         if (chunk != null && chunk.isNotEmpty) yield chunk;
       } catch (_) {
-        // Malformed SSE chunk — skip silently.
+        // Malformed SSE chunk - skip silently.
       }
     }
   }
 
   // ─── Blocking ─────────────────────────────────────────────────────────────
 
-  /// Non-streaming completion — for summarisation and housekeeping tasks.
+  /// Non-streaming completion - for summarisation and housekeeping tasks.
   Future<String> complete(List<Map<String, String>> messages) async {
     final response = await _client.post(
       Uri.parse(_endpoint),

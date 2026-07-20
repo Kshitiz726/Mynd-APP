@@ -11,7 +11,7 @@ import '../../widgets/om_screen_header.dart';
 import '../../widgets/om_tappable.dart';
 import 'note_editor_screen.dart';
 
-/// "Notebook" — a calm, searchable home for thoughts: pinned notes up top,
+/// "Notebook" - a calm, searchable home for thoughts: pinned notes up top,
 /// recent notes below, and a quick-capture FAB. Mirrors the prototype's
 /// `#screen-notebook`.
 class NotesScreen extends StatefulWidget {

@@ -13,7 +13,7 @@ import '../../../widgets/om_card.dart';
 import '../../../widgets/om_tappable.dart';
 import 'goal_sheet.dart';
 
-/// The prominent "Up Next" card highlighting the single next scheduled block —
+/// The prominent "Up Next" card highlighting the single next scheduled block -
 /// a focus anchor that answers "what do I do *right now*?".
 class UpNextBanner extends StatefulWidget {
   const UpNextBanner({super.key});

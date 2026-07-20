@@ -15,7 +15,7 @@ import '../../widgets/om_tappable.dart';
 import 'coach_voice_screen.dart';
 import 'puter_connect_screen.dart';
 
-/// "coach" — Mynd, the pocket coach. A calm chat with one-tap prompts for the
+/// "coach" - Mynd, the pocket coach. A calm chat with one-tap prompts for the
 /// moments words are hard to find ("i'm stuck", "i'm overwhelmed"…).
 ///
 /// Design is 100% unchanged from the prototype. The only difference is that

@@ -9,8 +9,8 @@ import '../../providers/nav_provider.dart';
 import '../../providers/task_provider.dart';
 
 /// Routes a "Need help" tap from Focus straight to Mynd (the AI coach), priming
-/// it with the user's live context — what they're working on, how long they've
-/// been at it, and how many alerts are tugging at their attention — and asking
+/// it with the user's live context - what they're working on, how long they've
+/// been at it, and how many alerts are tugging at their attention - and asking
 /// for a gentle, consoling, motivating nudge with one tiny next step.
 ///
 /// The coach already folds energy/tasks/focus state into its prompt; this adds

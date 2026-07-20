@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
 
-/// Replicates the prototype's `toast()` — a brief floating message.
+/// Replicates the prototype's `toast()` - a brief floating message.
 /// Implemented on top of [ScaffoldMessenger] so it respects safe areas and
 /// queues correctly.
 abstract final class Toast {

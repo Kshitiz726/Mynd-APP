@@ -1,6 +1,6 @@
 /// A single turn in the coaching conversation.
 ///
-/// [isStreaming] is true while Groq is still emitting tokens — the provider
+/// [isStreaming] is true while Groq is still emitting tokens - the provider
 /// accumulates chunks into [text] and then flips it to false. The UI uses
 /// this flag to show/hide the typing indicator and to decide whether to
 /// animate the cursor.
@@ -31,8 +31,8 @@ class ChatMessage {
   factory ChatMessage.welcome(String userName) => ChatMessage(
         id: 'welcome',
         text: userName.isNotEmpty
-            ? "hey $userName — I'm Mynd, your pocket coach. what's going on right now?"
-            : "hey — I'm Mynd, your pocket coach. what's going on right now?",
+            ? "hey $userName - I'm Mynd, your pocket coach. what's going on right now?"
+            : "hey - I'm Mynd, your pocket coach. what's going on right now?",
         fromUser: false,
       );
 }

@@ -7,7 +7,7 @@ import 'om_tappable.dart';
 
 /// Standard header for pushed detail screens (Notebook, Alarms, Reminders,
 /// Paywall): a circular back button on the top-left followed by a title +
-/// subtitle — a single, consistent chrome across the whole app.
+/// subtitle - a single, consistent chrome across the whole app.
 class OmScreenHeader extends StatelessWidget {
   const OmScreenHeader({
     super.key,

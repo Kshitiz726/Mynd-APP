@@ -7,9 +7,9 @@ import { pushNotification } from '../services/notify.js';
 /**
  * Body doubling: pair two people into a private focus room so they can work
  * "alongside" each other. Two ways in:
- *   1. Auto-match — join a queue; the moment another solo user is waiting, we
+ *   1. Auto-match - join a queue; the moment another solo user is waiting, we
  *      pair you both into a fresh private room and push `bd_matched` to each.
- *   2. Invite a friend — create the room now and notify a specific friend.
+ *   2. Invite a friend - create the room now and notify a specific friend.
  *
  * The queue is in-process (single Node instance, fine for early rollout). Each
  * waiting entry remembers the user's profile so the partner card can render

@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import '../core/theme/app_colors.dart';
 
 /// The OurMynd brand mark: a soft gradient squircle holding a minimal "focus
-/// aura" glyph — two concentric rings around a centred mind-dot, with a single
+/// aura" glyph - two concentric rings around a centred mind-dot, with a single
 /// peach accent satellite. Drawn entirely in code so it stays crisp at any size
 /// and re-tints with the theme. Used on the login screen, headers and the
 /// about/profile surfaces.
@@ -68,7 +68,7 @@ class _AuraPainter extends CustomPainter {
     canvas.drawCircle(center, s * 0.19, ringInner);
     canvas.drawCircle(center, s * 0.075, dot);
 
-    // Peach satellite on the upper-right ring — the signature spark of focus.
+    // Peach satellite on the upper-right ring - the signature spark of focus.
     const ang = -math.pi / 4; // up-right
     final sat = center + Offset(math.cos(ang), math.sin(ang)) * (s * 0.32);
     canvas.drawCircle(sat, s * 0.055, satellite);

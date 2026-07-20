@@ -15,7 +15,7 @@ import '../../widgets/om_top_bar.dart';
 import 'body_doubling_screen.dart';
 import 'focus_help.dart';
 
-/// "focus" — pick a mode (Sprint/Pomodoro/Deep Work/Flow) and optionally turn
+/// "focus" - pick a mode (Sprint/Pomodoro/Deep Work/Flow) and optionally turn
 /// on body doubling. The active timer screen lands in a later pass.
 class FocusScreen extends StatefulWidget {
   const FocusScreen({super.key});
@@ -146,7 +146,7 @@ class _CurrentTaskCard extends StatelessWidget {
                         )),
                 const SizedBox(height: 2),
                 Text(
-                  task?.title ?? 'nothing scheduled — pick a mode and just begin',
+                  task?.title ?? 'nothing scheduled - pick a mode and just begin',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -165,7 +165,7 @@ class _CurrentTaskCard extends StatelessWidget {
 
 /// A professional body-doubling control: a clean switch row (no checkmarks) and,
 /// when on, a soft explanation that we'll match the user with someone currently
-/// focusing — or keep searching in the background — plus an ambience selector.
+/// focusing - or keep searching in the background - plus an ambience selector.
 class _BodyDoublingTile extends StatelessWidget {
   const _BodyDoublingTile({
     required this.enabled,
@@ -227,7 +227,7 @@ class _BodyDoublingTile extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const SizedBox(height: AppSpacing.md),
-                      Text("we'll pair you with someone in a session — if no one's free yet, "
+                      Text("we'll pair you with someone in a session - if no one's free yet, "
                           'we keep matching quietly while your timer runs.',
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(color: c.text2)),
                       const SizedBox(height: AppSpacing.md),
@@ -262,7 +262,7 @@ class _BodyDoublingTile extends StatelessWidget {
   }
 }
 
-/// A soft selectable ambience chip — highlighted by fill/border, no checkmark.
+/// A soft selectable ambience chip - highlighted by fill/border, no checkmark.
 class _AmbientChip extends StatelessWidget {
   const _AmbientChip({required this.label, required this.icon, required this.selected, required this.onTap});
 

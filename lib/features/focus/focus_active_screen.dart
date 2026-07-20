@@ -132,7 +132,7 @@ class FocusActiveScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   Text(
-                    'brain pinging you? park it without leaving — it drops to your inbox.',
+                    'brain pinging you? park it without leaving - it drops to your inbox.',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(height: 1.4),
                   ),

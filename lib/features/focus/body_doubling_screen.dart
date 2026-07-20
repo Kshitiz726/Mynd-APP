@@ -19,8 +19,8 @@ import '../../widgets/om_button.dart';
 import '../../widgets/om_tappable.dart';
 
 /// Body doubling matchmaking. Two ways in:
-///   • Auto-match — queue up; pair with the next solo user (socket `bd_matched`).
-///   • Invite a friend — create the room now and notify a specific friend.
+///   • Auto-match - queue up; pair with the next solo user (socket `bd_matched`).
+///   • Invite a friend - create the room now and notify a specific friend.
 /// On pairing we show the partner's generated avatar + name, then drop both into
 /// a shared focus room.
 class BodyDoublingScreen extends StatefulWidget {
@@ -65,7 +65,7 @@ class _BodyDoublingScreenState extends State<BodyDoublingScreen> {
       Haptics.success();
     });
     // Kick off matchmaking immediately when launched from "start" with body
-    // doubling on — no extra tap needed.
+    // doubling on - no extra tap needed.
     if (widget.autoStart) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _startMatch();
@@ -161,7 +161,7 @@ class _BodyDoublingScreenState extends State<BodyDoublingScreen> {
         _roomId = roomId;
         _invitedName = f.name;
       });
-      Toast.show(context, 'Invited ${f.name} — they\'ll get a notification');
+      Toast.show(context, 'Invited ${f.name} - they\'ll get a notification');
     } catch (_) {
       if (mounted) Toast.show(context, "Couldn't send invite");
     }
@@ -274,7 +274,7 @@ class _BodyDoublingScreenState extends State<BodyDoublingScreen> {
     final friends = _friends ?? [];
     if (friends.isEmpty) {
       return Center(
-        child: Text('No friends yet — follow people in Community first.',
+        child: Text('No friends yet - follow people in Community first.',
             textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: c.text2)),
       );
     }
@@ -383,7 +383,7 @@ class _ModeToggle extends StatelessWidget {
   }
 }
 
-/// Concentric pulsing rings around a search glyph — the "looking…" affordance.
+/// Concentric pulsing rings around a search glyph - the "looking…" affordance.
 class _PulsingFinder extends StatefulWidget {
   const _PulsingFinder({required this.color});
   final Color color;

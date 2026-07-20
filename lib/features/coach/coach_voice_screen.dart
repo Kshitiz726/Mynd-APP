@@ -99,7 +99,7 @@ class _CoachVoiceScreenState extends State<CoachVoiceScreen> with TickerProvider
     if (mounted) {
       setState(() {
         _busy = false;
-        _status = 'Cancelled — tap to talk';
+        _status = 'Cancelled - tap to talk';
       });
     }
   }
@@ -134,7 +134,7 @@ class _CoachVoiceScreenState extends State<CoachVoiceScreen> with TickerProvider
 
     if (text.trim().isEmpty) {
       _puter.resetVoice();
-      setState(() => _status = "Didn't catch that — tap to try again");
+      setState(() => _status = "Didn't catch that - tap to try again");
       return _resetBusy();
     }
 
@@ -151,7 +151,7 @@ class _CoachVoiceScreenState extends State<CoachVoiceScreen> with TickerProvider
       if (!mounted || _cancelled) return _resetBusy();
       if (reply.trim().isEmpty) {
         _puter.resetVoice();
-        setState(() => _status = 'Mynd had trouble replying — tap to retry');
+        setState(() => _status = 'Mynd had trouble replying - tap to retry');
         return _resetBusy();
       }
       setState(() => _replyText = reply);
@@ -159,7 +159,7 @@ class _CoachVoiceScreenState extends State<CoachVoiceScreen> with TickerProvider
       await _puter.speak(reply);
     } catch (_) {
       _puter.resetVoice();
-      if (mounted) setState(() => _status = 'Something went wrong — tap to retry');
+      if (mounted) setState(() => _status = 'Something went wrong - tap to retry');
     } finally {
       _resetBusy();
     }

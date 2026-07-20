@@ -45,7 +45,7 @@ class GoalProvider extends ChangeNotifier {
   /// Overall completion fraction (0..1) across every goal's daily steps.
   double get overallProgress => totalSteps == 0 ? 0 : doneSteps / totalSteps;
 
-  /// Where the plan *should* be by today, weighted by each goal's timeline —
+  /// Where the plan *should* be by today, weighted by each goal's timeline -
   /// lets the UI say "on track" vs "behind" relative to each deadline.
   double get expectedProgress {
     final now = DateTime.now();
@@ -66,7 +66,7 @@ class GoalProvider extends ChangeNotifier {
   bool get onTrack => overallProgress + 0.001 >= expectedProgress;
 
   /// Create a goal and break it into a daily plan. [currentEnergy] is the user's
-  /// logged vibe right now — the AI uses it to pitch the first day's effort
+  /// logged vibe right now - the AI uses it to pitch the first day's effort
   /// (gentle on dead days, ambitious on high-energy ones). Returns null on
   /// success or an error message the UI can surface.
   Future<String?> addGoal({
@@ -90,7 +90,7 @@ class GoalProvider extends ChangeNotifier {
       _injectToday();
       return null;
     } catch (e) {
-      return 'Couldn’t break down the goal — please try again.';
+      return 'Couldn’t break down the goal - please try again.';
     } finally {
       _busy = false;
       notifyListeners();
@@ -103,7 +103,7 @@ class GoalProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Tick a whole goal off (or back on) from the Home list — marks every
+  /// Tick a whole goal off (or back on) from the Home list - marks every
   /// milestone done/undone and keeps the day's timeline in sync.
   void toggleGoalComplete(String id) {
     final g = _goals.firstWhere((g) => g.id == id, orElse: () => _goals.first);
@@ -122,7 +122,7 @@ class GoalProvider extends ChangeNotifier {
     NotificationService().scheduleAlarm(
       id: 'goal-due-${goal.id}'.hashCode,
       title: 'Goal due today: ${goal.title}',
-      body: 'Today is your deadline — finish strong! 💪',
+      body: 'Today is your deadline - finish strong! 💪',
       scheduledTime: due,
     );
   }
@@ -189,11 +189,11 @@ class GoalProvider extends ChangeNotifier {
 
     final energyNote = switch (currentEnergy) {
       EnergyLevel.high =>
-        "The user's energy RIGHT NOW is HIGH — make day 1 (today) the most demanding, momentum-building step while they're firing on all cylinders.",
+        "The user's energy RIGHT NOW is HIGH - make day 1 (today) the most demanding, momentum-building step while they're firing on all cylinders.",
       EnergyLevel.low =>
-        "The user's energy RIGHT NOW is LOW — keep day 1 (today) light and very achievable (a 5–15 min warm-up), and ramp up on later days.",
+        "The user's energy RIGHT NOW is LOW - keep day 1 (today) light and very achievable (a 5-15 min warm-up), and ramp up on later days.",
       EnergyLevel.dead =>
-        "The user's energy RIGHT NOW is BRAIN-DEAD — make day 1 (today) a tiny, almost-effortless step (think 2–5 minutes) so they can still win today; push the real work to later days.",
+        "The user's energy RIGHT NOW is BRAIN-DEAD - make day 1 (today) a tiny, almost-effortless step (think 2-5 minutes) so they can still win today; push the real work to later days.",
       null => 'Pace the plan naturally.',
     };
 
@@ -201,7 +201,7 @@ class GoalProvider extends ChangeNotifier {
 The user has a goal: "$title".
 They want to achieve it within $days day(s), starting today.
 $energyNote
-Produce a realistic day-by-day plan with ONE focused mini-task per day (you may skip some days for rest if the goal is long — but cover the whole stretch). Order from day 1 (today) to day $days.
+Produce a realistic day-by-day plan with ONE focused mini-task per day (you may skip some days for rest if the goal is long - but cover the whole stretch). Order from day 1 (today) to day $days.
 For each planned day output an object with:
 - "day": 1-based day number from today (1..$days)
 - "title": a short, concrete action for that day
@@ -246,7 +246,7 @@ Respond ONLY with a valid JSON array, no markdown. Example:
         ));
       }
     } catch (e) {
-      // AI unavailable / bad response — fall back so the goal is never broken.
+      // AI unavailable / bad response - fall back so the goal is never broken.
       debugPrint('goal breakdown via AI failed, using local plan: $e');
     }
 

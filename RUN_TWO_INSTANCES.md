@@ -5,7 +5,7 @@ Google account, joining the same Focus Room, muted by default, seeing each
 other live, with time spent recorded in the database.**
 
 There are two one-time credentials to create (both free): a Google **Web**
-OAuth Client ID. (Video/camera is intentionally off — "see others" = the live
+OAuth Client ID. (Video/camera is intentionally off - "see others" = the live
 presence grid; voice via LiveKit is optional and not required for this.)
 
 ---
@@ -18,7 +18,7 @@ presence grid; voice via LiveKit is optional and not required for this.)
    accounts you'll log in with (both of them).
 3. **APIs & Services → Credentials → Create Credentials → OAuth client ID**.
    - Application type: **Web application**.
-   - **Authorised JavaScript origins** — add exactly:
+   - **Authorised JavaScript origins** - add exactly:
      - `http://localhost:5000`
    - Click **Create**. Copy the **Client ID** (ends in
      `.apps.googleusercontent.com`).
@@ -28,17 +28,17 @@ presence grid; voice via LiveKit is optional and not required for this.)
 
 ## 2. Paste the Client ID in two places
 
-**a) `web/index.html`** — replace the placeholder:
+**a) `web/index.html`** - replace the placeholder:
 ```html
 <meta name="google-signin-client_id" content="YOUR_WEB_CLIENT_ID.apps.googleusercontent.com">
 ```
 
-**b) `server/.env`** — create the file (copy from `.env.example`) and set at
+**b) `server/.env`** - create the file (copy from `.env.example`) and set at
 least:
 ```
 GOOGLE_CLIENT_ID=YOUR_WEB_CLIENT_ID.apps.googleusercontent.com
 ```
-`DATABASE_URL` is **not** needed for local runs — `npm run dev:full` starts a
+`DATABASE_URL` is **not** needed for local runs - `npm run dev:full` starts a
 real embedded Postgres for you.
 
 ## 3. Start the backend (real DB, real Google verification)
@@ -71,7 +71,7 @@ flutter run -d web-server --web-port 5000 --dart-define=OURMYND_API=http://local
 You'll see:
 - Each instance **joins muted** (mic-off badge on your tile).
 - The other person's avatar tile appears live in the grid the moment they join.
-- An **elapsed** stopwatch (counts up — this is the "time spent", not a
+- An **elapsed** stopwatch (counts up - this is the "time spent", not a
   countdown).
 - On **Leave Room**, the elapsed seconds are written to the `sessions` table.
 
@@ -100,14 +100,14 @@ You'll see one row per room you left, with `completed_secs` = time spent.
 
 ## Troubleshooting
 
-- **"Login failed: No ID token returned from Google"** — the Client ID in
+- **"Login failed: No ID token returned from Google"** - the Client ID in
   `web/index.html` is missing/wrong, or `http://localhost:5000` isn't an
   authorised JavaScript origin, or you're not on port 5000.
-- **"GOOGLE_CLIENT_ID not configured on the server"** — set it in `server/.env`
+- **"GOOGLE_CLIENT_ID not configured on the server"** - set it in `server/.env`
   and restart `npm run dev:full`.
-- **`EADDRINUSE :8080` / Postgres lock on start** — an old server is still
+- **`EADDRINUSE :8080` / Postgres lock on start** - an old server is still
   running. Kill stray `node` / `postgres.exe`, then start again.
-- **Both windows show the same user** — they're sharing a Google session; use
+- **Both windows show the same user** - they're sharing a Google session; use
   an Incognito/InPrivate window for the second one and pick a different account.
 </content>
 </invoke>

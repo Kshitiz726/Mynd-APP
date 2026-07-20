@@ -18,7 +18,7 @@ class AlertsProvider extends ChangeNotifier {
   bool loading = false;
   bool _wired = false;
 
-  /// Last DM unlocked by accepting a request — the UI can pop straight into it.
+  /// Last DM unlocked by accepting a request - the UI can pop straight into it.
   String? lastUnlockedDmId;
 
   List<AppNotification> get allNotifications {
@@ -29,13 +29,13 @@ class AlertsProvider extends ChangeNotifier {
 
   /// The Alerts dashboard is intentionally narrow: only post-comment alerts.
   /// (Follow requests are surfaced separately via [requests].) Everything else
-  /// — reminders, room joins, sessions, messages — lives in the "you" tab's
+  /// - reminders, room joins, sessions, messages - lives in the "you" tab's
   /// activity history via [allNotifications].
   List<AppNotification> get commentNotifications =>
       allNotifications.where((n) => n.kind == 'post_comment').toList();
 
   /// Unread badge count for the Alerts tab: pending follow requests plus unread
-  /// comment alerts only — matching what the Alerts screen actually shows.
+  /// comment alerts only - matching what the Alerts screen actually shows.
   int get alertsUnread =>
       requests.length + commentNotifications.where((n) => !n.read).length;
 

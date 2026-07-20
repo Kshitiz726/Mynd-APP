@@ -7,7 +7,7 @@ import '../../../widgets/om_glass.dart';
 import '../../../widgets/om_mascot.dart';
 import '../../../widgets/om_tappable.dart';
 
-/// The floating bottom navigation bar — a liquid-glass capsule.
+/// The floating bottom navigation bar - a liquid-glass capsule.
 ///
 /// Every destination shows its icon over its label; the selected one is marked
 /// by a translucent "lens" that glides between slots rather than appearing in
@@ -25,7 +25,7 @@ class OmNavBar extends StatelessWidget {
   final AppTab current;
   final ValueChanged<AppTab> onSelect;
 
-  /// Unread follow-requests + comment alerts — drives the red dot on the bell.
+  /// Unread follow-requests + comment alerts - drives the red dot on the bell.
   final int alertsUnread;
 
   @override
@@ -33,7 +33,7 @@ class OmNavBar extends StatelessWidget {
     final c = context.omColors;
     final dark = context.isDark;
 
-    // IMPORTANT: a plain Container/Material — NOT a BottomAppBar (its clipper
+    // IMPORTANT: a plain Container/Material - NOT a BottomAppBar (its clipper
     // reads ScaffoldGeometry during hit-test and freezes input on desktop).
     return SafeArea(
       top: false,
@@ -258,7 +258,7 @@ class _NavIcon extends StatelessWidget {
   }
 }
 
-/// The "you" destination — the user's mascot avatar, ringed when active.
+/// The "you" destination - the user's mascot avatar, ringed when active.
 class _YouAvatar extends StatelessWidget {
   const _YouAvatar({required this.active});
 

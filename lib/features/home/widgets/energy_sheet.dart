@@ -175,7 +175,7 @@ Respond ONLY with a valid JSON array of objects. Do not wrap it in markdown. For
 
                   // Lay the steps out back-to-back from the next quarter hour.
                   // Without a startTime a task is invisible to daySchedule, so
-                  // an unscheduled breakdown never reaches the timeline at all —
+                  // an unscheduled breakdown never reaches the timeline at all -
                   // which reads as "the AI did nothing".
                   var cursor = _nextQuarterHour(DateTime.now());
 
@@ -212,13 +212,13 @@ Respond ONLY with a valid JSON array of objects. Do not wrap it in markdown. For
                     tasks.addQuickTask(text, energy);
                   }
                 } catch (e) {
-                  // Still capture the thought — offloading it is the point — but
+                  // Still capture the thought - offloading it is the point - but
                   // say what went wrong. Swallowing this made a broken API key
                   // and a malformed response look identical to "AI is off".
                   debugPrint('[brain-dump] breakdown failed: $e');
                   tasks.addQuickTask(text, energy);
                   if (context.mounted) {
-                    Toast.show(context, "Saved it, but couldn't break it down — $e");
+                    Toast.show(context, "Saved it, but couldn't break it down - $e");
                   }
                 }
               });
@@ -265,7 +265,7 @@ Respond ONLY with a valid JSON array of objects. Do not wrap it in markdown. For
               children: [
               Text('brain dump', style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 4),
-              Text("get it out of your head — we'll sort it later.",
+              Text("get it out of your head - we'll sort it later.",
                   style: Theme.of(context).textTheme.bodySmall),
               const SizedBox(height: AppSpacing.lg),
               TextField(
@@ -354,7 +354,7 @@ Respond ONLY with a valid JSON array of objects. Do not wrap it in markdown. For
   );
 }
 
-/// Selectable energy pill used in the brain-dump sheet — replaces the default
+/// Selectable energy pill used in the brain-dump sheet - replaces the default
 /// Material [ChoiceChip] with the app's softer, tappable style.
 class _EnergyPick extends StatelessWidget {
   const _EnergyPick({required this.level, required this.selected, required this.onTap});

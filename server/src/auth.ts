@@ -15,7 +15,7 @@ function colorFor(seed: string): string {
 }
 
 // Anonymous, Reddit-style display names (no "u/"): Adjective + Noun + number,
-// e.g. "MellowOtter47". Every user is anonymous — we never store/show the real
+// e.g. "MellowOtter47". Every user is anonymous - we never store/show the real
 // Google name. ~30×30×100 ≈ 90k combinations keeps collisions rare.
 const ADJECTIVES = [
   'Calm', 'Quiet', 'Brave', 'Gentle', 'Mellow', 'Cosmic', 'Velvet', 'Lucid', 'Amber', 'Hazel',
@@ -39,7 +39,7 @@ function googleAudiences(): string[] {
 }
 
 // Verify a Google ID token's signature + audience, return the user's identity
-// (email + the real Google display name). The name is stored but never shown —
+// (email + the real Google display name). The name is stored but never shown -
 // the public profile stays anonymous; see issueSessionForEmail.
 async function verifyGoogleProfile(idToken: string): Promise<{ email: string; name: string | null }> {
   const ticket = await googleClient.verifyIdToken({ idToken, audience: googleAudiences() });
@@ -54,7 +54,7 @@ async function verifyGoogleProfile(idToken: string): Promise<{ email: string; na
 //
 // Dedup is select-first (not just ON CONFLICT): an older `users` table that was
 // created before the `handle unique` constraint won't satisfy ON CONFLICT and
-// would silently insert a *new* row on every login — the "same Gmail makes a new
+// would silently insert a *new* row on every login - the "same Gmail makes a new
 // user each time" bug. Selecting the earliest row by handle guarantees one
 // stable identity per email regardless of the constraint's presence, and
 // tolerates any pre-existing duplicates (limit 1).
@@ -70,7 +70,7 @@ async function issueSessionForEmail(
   );
   if (u) {
     // Returning user: load the SAME account and refresh stored identity. This is
-    // what makes "continue with Google again" restore everything — same user id,
+    // what makes "continue with Google again" restore everything - same user id,
     // so all their posts, friends, chats, rooms and notifications come back.
     await db.none(
       `update users set last_seen_at = now(),
@@ -113,7 +113,7 @@ declare global {
 
 /**
  * Verify a JWT (Supabase Auth token or our own) and hydrate the user row.
- * The `sub` claim is the user id — Supabase puts the auth.uid() there.
+ * The `sub` claim is the user id - Supabase puts the auth.uid() there.
  */
 export async function verifyJwt(token?: string): Promise<AuthUser> {
   if (!token) throw new Error('missing token');
@@ -172,7 +172,7 @@ authRouter.post('/auth/google', async (req, res) => {
     return res.status(503).json({ error: 'GOOGLE_CLIENT_ID not configured on the server' });
   }
   if (!config.hasDb) {
-    return res.status(503).json({ error: 'DATABASE_URL not configured — run `npm run dev:full`' });
+    return res.status(503).json({ error: 'DATABASE_URL not configured - run `npm run dev:full`' });
   }
 
   let profile: { email: string; name: string | null };
@@ -202,11 +202,11 @@ authRouter.post('/auth/google/desktop', async (req, res) => {
   if (!config.googleDesktopClientId) {
     return res.status(503).json({ error: 'GOOGLE_DESKTOP_CLIENT_ID not configured on the server' });
   }
-  if (!config.hasDb) return res.status(503).json({ error: 'DATABASE_URL not configured — run `npm run dev:full`' });
+  if (!config.hasDb) return res.status(503).json({ error: 'DATABASE_URL not configured - run `npm run dev:full`' });
 
   let idToken: string;
   try {
-    // PKCE flow — the client secret is optional (modern Desktop clients are
+    // PKCE flow - the client secret is optional (modern Desktop clients are
     // PKCE-only and have none); include it only if one is configured.
     const form: Record<string, string> = {
       code,

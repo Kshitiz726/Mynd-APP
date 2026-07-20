@@ -4,12 +4,12 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import '../../core/services/puter_service.dart';
 
 /// Visible one-time Puter sign-in. The web page renders a real "Sign in to
-/// Puter" button — tapping it inside the WebView grants the user activation that
+/// Puter" button - tapping it inside the WebView grants the user activation that
 /// `puter.auth.signIn()`'s popup requires (JS-injected sign-in from the
 /// off-screen bridge is silently popup-blocked).
 ///
 /// The sign-in popup is shown **in place** (swapping this one route's body)
-/// rather than as a second pushed route — stacking two native WebViews froze
+/// rather than as a second pushed route - stacking two native WebViews froze
 /// input on Windows after teardown. On success the obtained token is handed to
 /// the off-screen bridge via [PuterService.applyToken].
 class PuterConnectScreen extends StatefulWidget {
@@ -36,7 +36,7 @@ class _PuterConnectScreenState extends State<PuterConnectScreen> {
   void initState() {
     super.initState();
     // Make sure the loopback asset server is up (and we know its port) before we
-    // point the WebView at it — otherwise the first load is a connection-refused.
+    // point the WebView at it - otherwise the first load is a connection-refused.
     PuterService.instance.ensureServer().then((_) {
       if (mounted) setState(() => _serverReady = true);
     });
@@ -72,7 +72,7 @@ class _PuterConnectScreenState extends State<PuterConnectScreen> {
           : Stack(
               children: [
                 // The connect page is the OPENER of Puter's sign-in popup. It must
-                // stay fully ACTIVE the whole time — not disposed (popup would
+                // stay fully ACTIVE the whole time - not disposed (popup would
                 // auto-close) and not Offstage (popup renders blank because a
                 // suspended opener can't drive it). So we keep it painted and just
                 // lay the popup webview on top of it.

@@ -29,7 +29,7 @@ class OmCard extends StatelessWidget {
     this.pressedScale = 0.98,
   });
 
-  /// A tinted, softly-glowing feature card — the premium look the dashboard's
+  /// A tinted, softly-glowing feature card - the premium look the dashboard's
   /// hero surfaces used to get from stacked blurs, now cheap. [tint] colours a
   /// subtle top-left→bottom-right wash and the matching border + glow.
   factory OmCard.hero({
@@ -62,7 +62,7 @@ class OmCard extends StatelessWidget {
   final EdgeInsetsGeometry padding;
   final Color? color;
 
-  /// Optional fill gradient (overrides [color]) — used by hero/feature cards.
+  /// Optional fill gradient (overrides [color]) - used by hero/feature cards.
   final Gradient? gradient;
   final double radius;
   final BoxBorder? border;

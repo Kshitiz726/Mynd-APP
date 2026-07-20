@@ -43,7 +43,7 @@ class Task {
 
   bool get isChunk => chunkOf != null;
 
-  /// True for the fixed Wake/Sleep routine blocks. Anchors are ambient — they
+  /// True for the fixed Wake/Sleep routine blocks. Anchors are ambient - they
   /// stay on the timeline all day and never fall into the backlog just because
   /// their clock time has passed.
   bool isAnchor;
@@ -82,7 +82,7 @@ class Task {
   DateTime? get endTime => startTime?.add(duration ?? const Duration(hours: 1));
 
   /// True if the scheduled time has passed and the task is not done.
-  /// Anchors (Wake/Sleep) are never "missed" — they stay pinned to the day and
+  /// Anchors (Wake/Sleep) are never "missed" - they stay pinned to the day and
   /// must not leak into the backlog when the clock rolls past them.
   bool get isMissed {
     if (done || isAnchor || endTime == null) return false;

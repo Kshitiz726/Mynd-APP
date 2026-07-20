@@ -15,7 +15,7 @@ import '../../widgets/om_tappable.dart';
 import '../../widgets/om_top_bar.dart';
 import '../community/chat_screen.dart';
 
-/// "alerts" — deliberately narrow: only the two things that need *your* reaction,
+/// "alerts" - deliberately narrow: only the two things that need *your* reaction,
 /// follow requests and comments on your posts. Everything else (reminders, room
 /// joins, sessions, messages) lives in the "you" tab's activity history.
 class NotificationsScreen extends StatefulWidget {
@@ -29,7 +29,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   @override
   void initState() {
     super.initState();
-    // Load on open, but DON'T auto-clear — unread alerts stay highlighted until
+    // Load on open, but DON'T auto-clear - unread alerts stay highlighted until
     // the user taps "mark all read" (so the badge + the button both mean something).
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<AlertsProvider>()

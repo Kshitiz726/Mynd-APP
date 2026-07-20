@@ -147,7 +147,7 @@ class CoachProvider extends ChangeNotifier {
       final stream = _ai.streamCompletion(messages);
       _streamSub = stream.listen(
         (chunk) {
-          assistantMsg.text += chunk.replaceAll('—', '-');
+          assistantMsg.text += chunk.replaceAll('-', '-');
           notifyListeners();
         },
         onError: (Object e) {

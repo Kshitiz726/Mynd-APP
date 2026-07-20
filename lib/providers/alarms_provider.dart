@@ -19,7 +19,7 @@ class AlarmsProvider extends ChangeNotifier {
       _alarms = list.map((e) => Alarm.fromJson(e as Map<String, dynamic>)).toList();
     } else {
       _alarms = [
-        Alarm(id: '1', time: '6:30', label: 'wake up', repeat: 'Mon–Fri', ringtone: 'Default'),
+        Alarm(id: '1', time: '6:30', label: 'wake up', repeat: 'Mon-Fri', ringtone: 'Default'),
         Alarm(id: '2', time: '7:15', label: 'meds + water', repeat: 'every day', ringtone: 'Chime'),
       ];
       _save();

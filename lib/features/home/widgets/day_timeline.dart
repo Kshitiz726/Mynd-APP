@@ -16,7 +16,7 @@ import '../../../widgets/om_tappable.dart';
 import '../../../models/task.dart';
 import 'edit_task_sheet.dart';
 
-/// "your day" — the time-blocked schedule.
+/// "your day" - the time-blocked schedule.
 ///
 /// Redesigned to match the prototype with a "NOW" indicator, vertical category
 /// bars, and "Available" slots between blocks.
@@ -29,11 +29,11 @@ class DayTimeline extends StatelessWidget {
 
     if (scheduled.isEmpty) {
       return const OmEmptyState(
-        message: "nothing blocked in yet — tap the calendar on a backlog task to slot it into your day.",
+        message: "nothing blocked in yet - tap the calendar on a backlog task to slot it into your day.",
       );
     }
 
-    // Gap between NOW and the first scheduled block — a fillable, locked slot.
+    // Gap between NOW and the first scheduled block - a fillable, locked slot.
     final now = DateTime.now();
     final firstStart = scheduled.first.startTime;
     Duration? leadingGap;
@@ -167,7 +167,7 @@ class _TimelineBlock extends StatelessWidget {
     final startStr = task.startTime != null ? DateFormat.jm().format(task.startTime!) : task.time.split(' ').first;
     final endStr = task.endTime != null ? DateFormat.jm().format(task.endTime!) : task.time;
 
-    // Done blocks tint toward their accent instead of staying white — finished
+    // Done blocks tint toward their accent instead of staying white - finished
     // work should read as settled at a glance, without relying on the
     // strikethrough being legible.
     final cardColor = task.done ? accent.withValues(alpha: 0.10) : c.surface;
@@ -232,7 +232,7 @@ class _TimelineBlock extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     // Time reads as metadata under the title, the way the
-                    // reference's "1 min article" line does — still tappable.
+                    // reference's "1 min article" line does - still tappable.
                     OmTappable(
                       onTap: () => _editBlockTime(context, task),
                       feedback: OmTapFeedback.none,
@@ -324,14 +324,14 @@ Future<void> _editBlockTime(BuildContext context, Task task) async {
   if (!e.isAfter(s)) e = e.add(const Duration(days: 1)); // crosses midnight
 
   final tasks = context.read<TaskProvider>();
-  // Only let a block move into a genuinely free slot — otherwise tell the user
+  // Only let a block move into a genuinely free slot - otherwise tell the user
   // exactly what it would collide with instead of silently double-booking.
   final clash = tasks.conflictFor(task, s, e);
   if (clash != null) {
     Haptics.medium();
     final cs = clash.startTime != null ? DateFormat.jm().format(clash.startTime!) : '';
     final ce = clash.endTime != null ? DateFormat.jm().format(clash.endTime!) : '';
-    Toast.show(context, 'That overlaps "${clash.title}" ($cs–$ce). Pick a free slot.');
+    Toast.show(context, 'That overlaps "${clash.title}" ($cs-$ce). Pick a free slot.');
     return;
   }
 
@@ -447,7 +447,7 @@ Future<void> _showFillSheet(BuildContext context, DateTime start, Duration gap) 
             children: [
               Text('fill this slot', style: Theme.of(sheetContext).textTheme.titleLarge),
               const SizedBox(height: 4),
-              Text('${DateFormat.jm().format(start)} · $gapStr free — pick something to slot in.',
+              Text('${DateFormat.jm().format(start)} · $gapStr free - pick something to slot in.',
                   style: Theme.of(sheetContext).textTheme.bodySmall),
               const SizedBox(height: AppSpacing.lg),
               if (items.isEmpty)

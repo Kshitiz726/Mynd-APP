@@ -26,20 +26,20 @@ import 'providers/settings_provider.dart';
 import 'providers/task_provider.dart';
 import 'widgets/puter_host.dart';
 
-/// Root navigator key — lets the app-wide [PuterHost] present Puter's one-time
+/// Root navigator key - lets the app-wide [PuterHost] present Puter's one-time
 /// sign-in popup over whatever screen is showing.
 final rootNavigatorKey = GlobalKey<NavigatorState>();
 
-/// Demo mode — enable with `--dart-define=OURMYND_DEMO=true`.
+/// Demo mode - enable with `--dart-define=OURMYND_DEMO=true`.
 ///
 /// Boots straight into the shell, skipping Google sign-in, and leaves realtime
 /// disconnected. This exists for environments where neither the backend nor an
-/// iOS OAuth client is reachable — chiefly a cloud iOS Simulator, where sign-in
+/// iOS OAuth client is reachable - chiefly a cloud iOS Simulator, where sign-in
 /// is impossible and the login screen would be a dead end.
 ///
 /// Today/goals/tasks/energy/settings are backed by `shared_preferences`, so they
 /// work fully offline. The server-backed tabs (Community, Focus rooms, Coach,
-/// Alerts) will be empty or error — that is expected here, not a bug.
+/// Alerts) will be empty or error - that is expected here, not a bug.
 ///
 /// Defaults to false, so release builds are unaffected.
 const kDemoMode = bool.fromEnvironment('OURMYND_DEMO');
@@ -94,7 +94,7 @@ class OurMyndApp extends StatelessWidget {
           create: (ctx) => GoalProvider(ctx.read<TaskProvider>()),
           update: (_, tasks, previous) => (previous ?? GoalProvider(tasks))..updateTasks(tasks),
         ),
-        // CoachProvider needs all 5 others — ProxyProvider wires them live.
+        // CoachProvider needs all 5 others - ProxyProvider wires them live.
         ChangeNotifierProxyProvider5<
             EnergyProvider,
             TaskProvider,

@@ -51,7 +51,7 @@ class TaskTile extends StatelessWidget {
                   pressedScale: 0.985,
                   onTap: () {
                     if (!task.hasSteps) {
-                      Toast.show(context, 'no breakdown yet — dump it again with + to auto-split it.');
+                      Toast.show(context, 'no breakdown yet - dump it again with + to auto-split it.');
                       return;
                     }
                     tasks.toggleExpanded(task);

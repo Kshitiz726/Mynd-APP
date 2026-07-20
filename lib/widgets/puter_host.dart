@@ -6,7 +6,7 @@ import '../core/services/puter_service.dart';
 /// Invisible, app-lifetime WebView that hosts Puter.js for [PuterService].
 ///
 /// Mounted once (in `main.dart`'s MaterialApp builder) so the JS bridge stays
-/// alive across all routes. Kept 1×1 and off-screen — it never shows UI except
+/// alive across all routes. Kept 1×1 and off-screen - it never shows UI except
 /// the one-time Puter sign-in popup, which is presented full-screen via
 /// [navigatorKey] when `puter.auth` opens a window.
 class PuterHost extends StatefulWidget {
@@ -30,7 +30,7 @@ class _PuterHostState extends State<PuterHost> {
     transparentBackground: true,
   );
 
-  // The bridge is served over http://localhost — a SECURE CONTEXT, required for
+  // The bridge is served over http://localhost - a SECURE CONTEXT, required for
   // navigator.mediaDevices.getUserMedia (mic). The server itself is owned by the
   // app-lifetime [PuterService] (on an ephemeral port) so it survives this
   // widget rebuilding/disposing and never collides across two app instances.
@@ -54,13 +54,13 @@ class _PuterHostState extends State<PuterHost> {
 
   @override
   void dispose() {
-    // The asset server is app-lifetime (owned by PuterService) — don't close it.
+    // The asset server is app-lifetime (owned by PuterService) - don't close it.
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Off-screen 1×1 — present but never seen or touchable.
+    // Off-screen 1×1 - present but never seen or touchable.
     return Positioned(
       left: -2,
       top: -2,
@@ -86,7 +86,7 @@ class _PuterHostState extends State<PuterHost> {
     );
   }
 
-  /// Puter's first-time sign-in opens a window — present it full-screen so the
+  /// Puter's first-time sign-in opens a window - present it full-screen so the
   /// user can authenticate once (token is cached by the WebView afterwards).
   /// Returns `true` SYNCHRONOUSLY so the native WebView doesn't stall waiting on
   /// the dialog lifecycle (awaiting the push froze the bridge on Windows).

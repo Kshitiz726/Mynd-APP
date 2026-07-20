@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 
 import '../models/community/chat_models.dart';
 import '../models/energy_level.dart';
+import '../models/habit.dart';
 import '../models/task.dart';
 import '../services/notification_service.dart';
 import 'alerts_provider.dart';
@@ -27,7 +28,7 @@ extension BacklogFilterX on BacklogFilter {
 }
 
 /// Owns the task list and all task business logic. The UI never mutates a
-/// [Task] directly — it calls these methods so rebuilds stay correct.
+/// [Task] directly - it calls these methods so rebuilds stay correct.
 class TaskProvider extends ChangeNotifier {
   TaskProvider() : _tasks = _seed();
 
@@ -41,15 +42,44 @@ class TaskProvider extends ChangeNotifier {
   int get doneCount => _tasks.where((t) => !t.isChunk && !t.isAnchor && t.done).length;
   int get goalsOnTheGo => 0;
 
-  List<Task> get daySchedule {
-    final list = _tasks.where((t) => t.scheduled && !t.isMissed && t.startTime != null && !t.done).toList();
+  /// The day the timeline is showing. Defaults to today; the week strip moves it.
+  DateTime _selectedDate = DateTime.now();
+  DateTime get selectedDate => _selectedDate;
+  bool get viewingToday => _isSameDay(_selectedDate, DateTime.now());
+
+  void selectDate(DateTime day) {
+    if (_isSameDay(day, _selectedDate)) return;
+    _selectedDate = day;
+    notifyListeners();
+  }
+
+  static bool _isSameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
+  /// Blocks scheduled on [day], in time order.
+  List<Task> scheduleOn(DateTime day) {
+    final list = _tasks
+        .where((t) =>
+            t.scheduled &&
+            !t.isMissed &&
+            t.startTime != null &&
+            !t.done &&
+            _isSameDay(t.startTime!, day))
+        .toList();
     list.sort((a, b) => a.startTime!.compareTo(b.startTime!));
     return list;
   }
 
+  /// What the timeline renders: the selected day, not necessarily today.
+  List<Task> get daySchedule => scheduleOn(_selectedDate);
+
+  /// Today specifically. Packing, conflict checks and "up next" must not follow
+  /// the user's browsing around the week.
+  List<Task> get todaySchedule => scheduleOn(DateTime.now());
+
   Task? get upNext {
     final now = DateTime.now();
-    for (final t in daySchedule) {
+    for (final t in todaySchedule) {
       if (t.endTime != null && t.endTime!.isAfter(now)) {
         return t;
       }
@@ -166,7 +196,7 @@ class TaskProvider extends ChangeNotifier {
       searchStart = DateTime(searchStart.year, searchStart.month, searchStart.day, startHour, 0);
     }
     
-    final schedule = daySchedule; 
+    final schedule = todaySchedule;
     DateTime proposedStart = searchStart;
     
     for (final t in schedule) {
@@ -202,28 +232,43 @@ class TaskProvider extends ChangeNotifier {
   }
 
   /// Auto-fills the day starting from **NOW** (or the wake time if we haven't
-  /// reached it yet), packing un-done tasks — including goal-derived ones — into
+  /// reached it yet), packing un-done tasks - including goal-derived ones - into
   /// the remaining time before wind-down. Past blocks are left in the backlog,
   /// and any heavy task is broken into focus-sized chunks so it still fits.
-  void autoScheduleDay(TimeOfDay wakeUp, TimeOfDay sleep, AlertsProvider alerts, String ringtone) {
+  void autoScheduleDay(
+    TimeOfDay wakeUp,
+    TimeOfDay sleep,
+    AlertsProvider alerts,
+    String ringtone, {
+    List<HabitBoard> habitBoards = const [],
+    DateTime? day,
+  }) {
     final now = DateTime.now();
+    // Which day we are packing. Scheduling a future day must not be limited by
+    // the current clock, so "is it too late for this block" is measured against
+    // the start of that day instead of NOW.
+    final target = day ?? now;
+    final packingToday = _isSameDay(target, now);
+    final floor = packingToday ? now : DateTime(target.year, target.month, target.day);
 
     NotificationService().cancelAll();
 
-    // Drop previous anchors + any chunk blocks from a prior run so re-running is
-    // idempotent (no "(1/2) (1/2)" stacking).
-    _tasks.removeWhere((t) => t.id == 'wake_anchor' || t.id == 'sleep_anchor' || t.isChunk);
+    // Drop previous anchors, habit blocks and chunks from a prior run on this
+    // day so re-running is idempotent (no "(1/2) (1/2)" stacking).
+    _tasks.removeWhere((t) =>
+        (t.id == 'wake_anchor' || t.id == 'sleep_anchor' || t.id.startsWith('habit-') || t.isChunk) &&
+        (t.startTime == null || _isSameDay(t.startTime!, target)));
 
-    // Unschedule all non-done tasks so we can repack from the current time.
+    // Unschedule this day's non-done tasks so we can repack them.
     for (final t in _tasks) {
-      if (!t.done) {
+      if (!t.done && (t.startTime == null || _isSameDay(t.startTime!, target))) {
         t.scheduled = false;
         t.startTime = null;
       }
     }
 
-    DateTime wakeTime = DateTime(now.year, now.month, now.day, wakeUp.hour, wakeUp.minute);
-    DateTime sleepTimeFull = DateTime(now.year, now.month, now.day, sleep.hour, sleep.minute);
+    DateTime wakeTime = DateTime(target.year, target.month, target.day, wakeUp.hour, wakeUp.minute);
+    DateTime sleepTimeFull = DateTime(target.year, target.month, target.day, sleep.hour, sleep.minute);
     if (!sleepTimeFull.isAfter(wakeTime)) {
       sleepTimeFull = sleepTimeFull.add(const Duration(days: 1));
     }
@@ -231,7 +276,7 @@ class TaskProvider extends ChangeNotifier {
 
     // Wake routine only matters if the day hasn't started yet; otherwise it's in
     // the past and would clutter a NOW-anchored timeline.
-    if (wakeTime.isAfter(now)) {
+    if (wakeTime.isAfter(floor)) {
       _tasks.add(Task(id: 'wake_anchor', title: 'Wake Up Routine', time: 'Morning', energy: EnergyLevel.high, isAnchor: true)
         ..scheduled = true
         ..startTime = wakeTime
@@ -242,7 +287,7 @@ class TaskProvider extends ChangeNotifier {
       ));
     }
 
-    if (windDown.isAfter(now)) {
+    if (windDown.isAfter(floor)) {
       _tasks.add(Task(id: 'sleep_anchor', title: 'Wind Down / Sleep', time: 'Night', energy: EnergyLevel.dead, isAnchor: true)
         ..scheduled = true
         ..startTime = windDown
@@ -260,7 +305,12 @@ class TaskProvider extends ChangeNotifier {
     toSchedule.sort((a, b) => a.energy.index.compareTo(b.energy.index));
 
     // Begin packing from NOW (rounded), or wake time if we're still pre-wake.
-    DateTime cursor = now.isBefore(wakeTime) ? wakeTime : _roundUpToFive(now);
+    DateTime cursor = floor.isBefore(wakeTime) ? wakeTime : _roundUpToFive(floor);
+
+    // Habits are the day's scaffolding, so they are laid before tasks: the
+    // morning board straight after waking, every other board in the evening
+    // ahead of the wind-down. Tasks then fill whatever is left between them.
+    cursor = _layHabits(habitBoards, cursor, windDown, ringtone, alerts);
     final chunkBlocks = <Task>[];
 
     for (final t in toSchedule) {
@@ -271,7 +321,7 @@ class TaskProvider extends ChangeNotifier {
       for (var i = 0; i < pieces.length; i++) {
         final dur = pieces[i];
         if (cursor.add(dur).isAfter(windDown)) {
-          // Out of room — leave the rest in the backlog.
+          // Out of room - leave the rest in the backlog.
           break;
         }
 
@@ -311,6 +361,76 @@ class TaskProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Places every habit on the day as a short block and returns the cursor to
+  /// carry on packing tasks from.
+  ///
+  /// Habits are routine, not work: they are deliberately given the edges of the
+  /// day (morning board on waking, the rest before wind-down) so the productive
+  /// middle stays free for actual tasks.
+  DateTime _layHabits(
+    List<HabitBoard> boards,
+    DateTime cursor,
+    DateTime windDown,
+    String ringtone,
+    AlertsProvider alerts,
+  ) {
+    if (boards.isEmpty) return cursor;
+
+    final morning = boards.where((b) => b.name.toLowerCase().contains('morning'));
+    final rest = boards.where((b) => !b.name.toLowerCase().contains('morning'));
+
+    // Evening habits are laid backwards from the wind-down so they always sit at
+    // the end of the day, whatever the task load turns out to be.
+    var eveningCursor = windDown;
+    for (final board in rest.toList().reversed) {
+      for (final habit in board.items.reversed) {
+        final dur = Duration(minutes: habit.minutes ?? 15);
+        final start = eveningCursor.subtract(dur);
+        if (!start.isAfter(cursor)) break; // No room left before the day's work.
+        _addHabitBlock(habit, board, start, dur, ringtone, alerts);
+        eveningCursor = start;
+      }
+    }
+
+    for (final board in morning) {
+      for (final habit in board.items) {
+        final dur = Duration(minutes: habit.minutes ?? 15);
+        if (cursor.add(dur).isAfter(eveningCursor)) break;
+        _addHabitBlock(habit, board, cursor, dur, ringtone, alerts);
+        cursor = cursor.add(dur);
+      }
+    }
+
+    return cursor;
+  }
+
+  void _addHabitBlock(
+    Habit habit,
+    HabitBoard board,
+    DateTime start,
+    Duration dur,
+    String ringtone,
+    AlertsProvider alerts,
+  ) {
+    final block = Task(
+      id: 'habit-${habit.id}-${start.millisecondsSinceEpoch}',
+      title: habit.name,
+      time: board.name.toLowerCase(),
+      // Habits should never be split into focus chunks.
+      energy: EnergyLevel.low,
+      isAnchor: true,
+    )
+      ..scheduled = true
+      ..startTime = start
+      ..duration = dur;
+    _tasks.add(block);
+    _scheduleAlarm(block, start, ringtone);
+    alerts.addLocalReminder(AppNotification(
+      id: 'rem-${block.id}', kind: 'reminder', read: false,
+      payload: {'title': habit.name, 'time': DateFormat.jm().format(start)},
+    ));
+  }
+
   /// Returns the per-block durations a task should occupy. A task at or under
   /// [_chunkThreshold] is one block; a longer one is split into [_chunkLength]
   /// pieces (the last one carrying the remainder).
@@ -337,8 +457,8 @@ class TaskProvider extends ChangeNotifier {
     );
   }
 
-  /// Repack a manually reordered timeline. Available slots stay put — only the
-  /// task blocks move — so packing starts at the first block's existing start
+  /// Repack a manually reordered timeline. Available slots stay put - only the
+  /// task blocks move - so packing starts at the first block's existing start
   /// (clamped to NOW) and lays the reordered blocks back-to-back from there.
   void recalculateSchedule(List<Task> reordered, TimeOfDay wakeUp, String ringtone) {
     if (reordered.isEmpty) return;
@@ -385,11 +505,11 @@ class TaskProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Returns the first already-scheduled block that [start]–[end] would overlap
+  /// Returns the first already-scheduled block that [start]-[end] would overlap
   /// (ignoring [task] itself), or null when the window is free. Used to guard
   /// manual time edits so a block can only land in an actually-empty slot.
   Task? conflictFor(Task task, DateTime start, DateTime end) {
-    for (final t in daySchedule) {
+    for (final t in scheduleOn(start)) {
       if (t.id == task.id) continue;
       final ts = t.startTime, te = t.endTime;
       if (ts == null || te == null) continue;
@@ -447,7 +567,7 @@ class TaskProvider extends ChangeNotifier {
     return null;
   }
 
-  /// Finds the next free slot (08:00–21:00) for [task] and pins it — the core of
+  /// Finds the next free slot (08:00-21:00) for [task] and pins it - the core of
   /// [schedule] without the extra notify, for batch use.
   void _place(Task task) {
     final now = DateTime.now();
@@ -462,7 +582,7 @@ class TaskProvider extends ChangeNotifier {
       searchStart = DateTime(searchStart.year, searchStart.month, searchStart.day, startHour, 0);
     }
 
-    final occupied = daySchedule;
+    final occupied = todaySchedule;
     DateTime proposedStart = searchStart;
     for (final t in occupied) {
       if (!proposedStart.add(task.duration!).isAfter(t.startTime!)) break;

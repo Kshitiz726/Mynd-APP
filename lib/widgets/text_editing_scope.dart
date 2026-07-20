@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 /// Sheets must not create a controller, `await showModalBottomSheet(...)`, then
 /// dispose it: that future completes when the pop *begins*, not when the sheet
 /// has finished animating out. The field is still mounted and still rebuilding
-/// — the closing keyboard changes the view insets every frame — so the next
+/// - the closing keyboard changes the view insets every frame - so the next
 /// rebuild reaches a controller that no longer exists and throws
 /// "A TextEditingController was used after being disposed", taking the whole
 /// screen down with it.

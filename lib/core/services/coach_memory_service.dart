@@ -95,7 +95,7 @@ class CoachMemoryService {
                 'produce a concise, warm, 2-3 paragraph summary of what the user '
                 'and their coach discussed. Focus on emotional themes, any '
                 'breakthroughs, patterns noticed, and any action items the user '
-                'mentioned they would try. Write in plain prose — no bullet '
+                'mentioned they would try. Write in plain prose - no bullet '
                 'points. Keep it under 250 words. Write in third person about '
                 'the user (e.g. "they talked about…").',
       },
@@ -112,7 +112,7 @@ class CoachMemoryService {
       _memorySummary = newSummary.trim();
       await _persistSummary();
     } catch (_) {
-      // If summarisation fails, silently skip — don't crash the app.
+      // If summarisation fails, silently skip - don't crash the app.
     }
   }
 
@@ -127,7 +127,7 @@ class CoachMemoryService {
   }
 
   /// Returns only the last [maxHistoryTurns] turn pairs from [allTurns]
-  /// (Groq-format Map list). Legacy helper — prefer [trimMessages].
+  /// (Groq-format Map list). Legacy helper - prefer [trimMessages].
   List<Map<String, String>> trimHistory(List<Map<String, String>> allTurns) {
     final maxMessages = maxHistoryTurns * 2;
     if (allTurns.length <= maxMessages) return allTurns;

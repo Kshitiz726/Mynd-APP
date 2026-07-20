@@ -78,7 +78,7 @@ Future<void> showAddGoalSheet(BuildContext context) async {
                   Toast.show(context, err);
                 } else {
                   Haptics.success();
-                  Toast.show(context, 'Goal plan ready — today’s step is on your timeline');
+                  Toast.show(context, 'Goal plan ready - today’s step is on your timeline');
                 }
               });
             }
@@ -89,7 +89,7 @@ Future<void> showAddGoalSheet(BuildContext context) async {
               children: [
                 Text('new goal', style: Theme.of(context).textTheme.titleLarge),
                 const SizedBox(height: 4),
-                Text("the big thing — we'll break it into daily steps.",
+                Text("the big thing - we'll break it into daily steps.",
                     style: Theme.of(context).textTheme.bodySmall),
                 const SizedBox(height: AppSpacing.lg),
                 TextField(

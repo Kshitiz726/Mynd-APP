@@ -92,7 +92,7 @@ class LowStimBanner extends StatelessWidget {
           Icon(OmIcons.byName('battery'), size: 18, color: c.energyDead),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
-            child: Text("low-stimulation mode — we've calmed things down.",
+            child: Text("low-stimulation mode - we've calmed things down.",
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(color: c.text)),
           ),
           TextButton(

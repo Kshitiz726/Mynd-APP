@@ -65,7 +65,7 @@ class RealtimeService {
   }
 
   /// Resolves true once the socket is live. Bounded so a caller never hangs
-  /// forever on a socket that can't connect — it returns the current state
+  /// forever on a socket that can't connect - it returns the current state
   /// after [timeout] and lets the caller surface a failure instead.
   Future<bool> ensureConnected({Duration timeout = const Duration(seconds: 8)}) async {
     connect();
@@ -97,7 +97,7 @@ class RealtimeService {
   Future<Map<String, dynamic>> emitAck(String event, Map<String, dynamic> payload) async {
     final ok = await ensureConnected();
     if (!ok || _socket == null) {
-      debugPrint('[rt] emitAck "$event" skipped — not connected');
+      debugPrint('[rt] emitAck "$event" skipped - not connected');
       return {'ok': false, 'error': 'not connected'};
     }
     final c = Completer<Map<String, dynamic>>();

@@ -47,7 +47,7 @@ class _AlarmWakeScreenState extends State<AlarmWakeScreen> {
     AlarmService.instance.stop();
     Haptics.success();
     Navigator.of(context).maybePop();
-    Toast.show(context, 'Alarm off — good morning.');
+    Toast.show(context, 'Alarm off - good morning.');
   }
 
   void _snooze() {

@@ -30,7 +30,7 @@ class _Hit {
   final VoidCallback onTap;
 }
 
-/// One category of results — a labelled group, Android-Settings-search style.
+/// One category of results - a labelled group, Android-Settings-search style.
 class _Group {
   _Group({required this.label, required this.icon, required this.color, required this.hits});
   final String label;
@@ -39,7 +39,7 @@ class _Group {
   final List<_Hit> hits;
 }
 
-/// Global, in-app search — one box that looks across the whole app: tasks &
+/// Global, in-app search - one box that looks across the whole app: tasks &
 /// backlog, goals & their daily steps, notes, reminders, people & chats,
 /// community posts and notifications. Results are grouped by category (like the
 /// search inside Android Settings) so a single query surfaces everything.
@@ -425,7 +425,7 @@ class _Hint extends StatelessWidget {
             Text('Search across everything',
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 6),
-            Text('tasks, goals, notes, reminders, chats & community — all in one place',
+            Text('tasks, goals, notes, reminders, chats & community - all in one place',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodySmall),
           ],

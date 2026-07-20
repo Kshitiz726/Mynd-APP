@@ -133,7 +133,7 @@ class _FocusRoomScreenState extends State<FocusRoomScreen> {
     
     final isNeedHelp = me?.state == ParticipantState.needHelp;
 
-    // Timer text — the true elapsed time, fully independent of the ring.
+    // Timer text - the true elapsed time, fully independent of the ring.
     final secs = fr.myElapsedSecs;
     final m = secs ~/ 60;
     final s = secs % 60;
@@ -146,7 +146,7 @@ class _FocusRoomScreenState extends State<FocusRoomScreen> {
       backgroundColor: c.bg,
       body: Stack(
         children: [
-          // Vibrant ambience wash — always present (and the only backdrop on
+          // Vibrant ambience wash - always present (and the only backdrop on
           // desktop where video isn't supported). Crossfades when the ambience
           // is switched so cafe → rain → … actually changes the room's mood.
           AnimatedContainer(

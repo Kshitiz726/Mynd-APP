@@ -7,10 +7,10 @@ import '../core/theme/app_colors.dart';
 /// A reusable iOS-style frosted-glass surface.
 ///
 /// Lays a real gaussian backdrop blur behind a translucent fill with a soft
-/// hairline highlight — the "vibrancy" look used by floating chrome (the bottom
+/// hairline highlight - the "vibrancy" look used by floating chrome (the bottom
 /// nav, sticky headers, sheets). Content scrolling underneath blurs through it.
 ///
-/// Wrap it in a [Container] with a `boxShadow` if you want a drop shadow — the
+/// Wrap it in a [Container] with a `boxShadow` if you want a drop shadow - the
 /// blur is clipped, so the shadow must live on an outer (unclipped) box.
 class OmGlass extends StatelessWidget {
   const OmGlass({

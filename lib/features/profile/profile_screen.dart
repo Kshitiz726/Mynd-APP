@@ -23,7 +23,7 @@ import '../../widgets/om_tappable.dart';
 import 'about_screen.dart';
 import 'activity_history_screen.dart';
 
-/// "you" — profile, vault links, and the sensory/accessibility toggles that
+/// "you" - profile, vault links, and the sensory/accessibility toggles that
 /// drive the app's global behavior. The toggles are wired straight to
 /// [SettingsProvider], so flipping them changes the whole app live.
 class ProfileScreen extends StatelessWidget {

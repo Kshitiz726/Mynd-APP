@@ -49,7 +49,7 @@ class Group {
       );
 }
 
-/// A row in the Chats tab — a group chat or a 1:1 DM.
+/// A row in the Chats tab - a group chat or a 1:1 DM.
 class ChatConversation {
   ChatConversation({
     required this.id,
@@ -104,7 +104,7 @@ class ChatConversation {
       iconName: j['group_icon'] as String?,
       iconColor: j['group_color'] as String?,
       lastMessage: preview,
-      // Postgres count(*) comes back as a bigint string — coerce safely.
+      // Postgres count(*) comes back as a bigint string - coerce safely.
       unread: int.tryParse('${j['unread'] ?? 0}') ?? 0,
       peerId: j['peer_id'] as String?,
       peerInitial: j['peer_initial'] as String?,
@@ -295,7 +295,7 @@ class AppNotification {
       );
 }
 
-/// A member of a conversation/group — public identity only (no email).
+/// A member of a conversation/group - public identity only (no email).
 class ConversationMember {
   ConversationMember({
     required this.id,

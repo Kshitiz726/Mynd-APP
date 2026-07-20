@@ -35,13 +35,13 @@ app.get('/health', (_req, res) =>
 if (!config.isProd) app.use('/api', devRoutes);
 
 // In dev mode (no DATABASE_URL) the persistence-backed REST routes can't serve
-// real data — return a clear 503 instead of hanging on a dead DB connection.
+// real data - return a clear 503 instead of hanging on a dead DB connection.
 // The realtime layer (sockets) runs fully in-memory and is unaffected.
 app.use('/api', (req, res, next) => {
   if (!config.hasDb) {
     return res
       .status(503)
-      .json({ error: 'DATABASE_URL not set — REST persistence is disabled in dev mode' });
+      .json({ error: 'DATABASE_URL not set - REST persistence is disabled in dev mode' });
   }
   next();
 });

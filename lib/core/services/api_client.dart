@@ -100,7 +100,7 @@ class ApiClient {
       ..handle = null;
   }
 
-  /// Fetches a dev JWT for a seeded user and wires [ApiConfig]. Dev only — in
+  /// Fetches a dev JWT for a seeded user and wires [ApiConfig]. Dev only - in
   /// production this is replaced by the real Supabase Auth sign-in.
   Future<void> devSignIn({String user = 'sam'}) async {
     final j = await _get('/api/dev/token?user=$user');
@@ -198,7 +198,7 @@ class ApiClient {
 
   // ── Body doubling ──
   /// Join the matchmaking queue. Either pairs immediately (matched=true with a
-  /// room + partner) or queues you (matched=false) — `bd_matched` arrives over
+  /// room + partner) or queues you (matched=false) - `bd_matched` arrives over
   /// the socket when a partner shows up.
   Future<BdMatch> bodyDoublingMatch() async {
     final j = await _post('/api/body-doubling/match', {});
@@ -218,13 +218,13 @@ class ApiClient {
   }
 
   // ── Groups ──
-  /// Exactly N (default 5) unjoined groups — the "Groups for you" rail.
+  /// Exactly N (default 5) unjoined groups - the "Groups for you" rail.
   Future<List<Group>> fetchSuggestedGroups({int limit = 5}) async {
     final j = await _get('/api/groups/suggested?limit=$limit');
     return (j['groups'] as List).map((g) => Group.fromJson((g as Map).cast())).toList();
   }
 
-  /// Groups the user has joined — "Your groups".
+  /// Groups the user has joined - "Your groups".
   Future<List<Group>> fetchMyGroups() async {
     final j = await _get('/api/groups/mine');
     return (j['groups'] as List).map((g) => Group.fromJson((g as Map).cast())).toList();
@@ -272,7 +272,7 @@ class ApiClient {
     return (j['messages'] as List).map((m) => ChatMsg.fromJson((m as Map).cast())).toList();
   }
 
-  /// Members of a conversation (group roster) — public identity only, no email.
+  /// Members of a conversation (group roster) - public identity only, no email.
   Future<List<ConversationMember>> fetchConversationMembers(String conversationId) async {
     final j = await _get('/api/conversations/$conversationId/members');
     return (j['members'] as List)

@@ -43,8 +43,8 @@ class AlarmService {
         if (!_triggeredIds.contains(triggerId)) {
           _triggeredIds.add(triggerId);
           // The wake screen is a translucent route pushed over live UI. Pushing
-          // straight from this timer can land mid-frame — while a sheet is
-          // dismissing or the keyboard is animating — and rearranging the tree
+          // straight from this timer can land mid-frame - while a sheet is
+          // dismissing or the keyboard is animating - and rearranging the tree
           // during teardown crashes. Wait for the frame to finish.
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!ctx.mounted) return;

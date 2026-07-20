@@ -39,7 +39,7 @@ class _Reminder {
   bool enabled;
 }
 
-/// "reminders" — gentle, categorised nudges with a clear cadence badge.
+/// "reminders" - gentle, categorised nudges with a clear cadence badge.
 /// Mirrors the prototype's `#screen-reminders`.
 class RemindersScreen extends StatefulWidget {
   const RemindersScreen({super.key});

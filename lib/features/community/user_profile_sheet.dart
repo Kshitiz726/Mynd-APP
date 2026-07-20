@@ -115,7 +115,7 @@ class _UserProfileSheetState extends State<UserProfileSheet> {
           ),
           const SizedBox(height: 14),
           Text(name, style: Theme.of(context).textTheme.titleLarge),
-          // Only show a handle if it's a real public handle — never an email
+          // Only show a handle if it's a real public handle - never an email
           // (defence-in-depth; the server already withholds the email).
           if (p?.handle != null && !p!.handle!.contains('@')) ...[
             const SizedBox(height: 2),

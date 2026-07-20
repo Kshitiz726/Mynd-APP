@@ -1,6 +1,6 @@
 /**
  * Grace-period eviction timers. When a socket drops we don't remove the user
- * from the room immediately — we hold a timer so a 5-second subway-tunnel drop
+ * from the room immediately - we hold a timer so a 5-second subway-tunnel drop
  * doesn't flicker the participant grid. A reconnect cancels it.
  *
  * These live in-process. That's fine: the Redis TTL on the participant hash

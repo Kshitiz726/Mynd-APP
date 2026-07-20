@@ -2,7 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Maps the prototype's named icons (`data-icon="..."`) to the **Lucide** icon
-/// set — the same clean, consistent line-icon family used in the prototype.
+/// set - the same clean, consistent line-icon family used in the prototype.
 ///
 /// Lucide is preferred over Material's built-ins because its 1.5px geometric
 /// strokes read as calm and "designed" rather than utilitarian, which suits

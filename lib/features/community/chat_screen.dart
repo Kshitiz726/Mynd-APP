@@ -13,7 +13,7 @@ import '../../widgets/om_tappable.dart';
 import 'group_members_sheet.dart';
 import 'user_profile_sheet.dart';
 
-/// A single conversation — group chat or 1:1 DM. Realtime text + media via
+/// A single conversation - group chat or 1:1 DM. Realtime text + media via
 /// [ChatProvider]: optimistic sends, live typing indicators, instant history.
 class ChatScreen extends StatefulWidget {
   const ChatScreen({
@@ -32,7 +32,7 @@ class ChatScreen extends StatefulWidget {
   final bool isGroup;
 
   /// Open a conversation as a full-screen route (the reliable pattern on
-  /// Windows — an in-tab overlay nested under the IndexedStack + the always-on
+  /// Windows - an in-tab overlay nested under the IndexedStack + the always-on
   /// Puter WebView could freeze input). Wires the provider, then pushes.
   static void open(
     BuildContext context, {
@@ -80,7 +80,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
-    // exitConversation() notifies, and AppShell watches ChatProvider — notifying
+    // exitConversation() notifies, and AppShell watches ChatProvider - notifying
     // here would rebuild the shell while this route is still deactivating, which
     // strands the inherited-widget dependents below it. Defer past the frame.
     // Guard on the id: the user may already have opened another conversation by
@@ -126,7 +126,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final c = context.omColors;
     final chat = context.watch<ChatProvider>();
     final msgs = chat.messages;
-    // Only auto-scroll when the message count actually changes — calling
+    // Only auto-scroll when the message count actually changes - calling
     // animateTo on every rebuild (incl. typing pings) caused jank/freezes.
     if (msgs.length != _lastMsgCount) {
       _lastMsgCount = msgs.length;
@@ -371,7 +371,7 @@ class _Bubble extends StatelessWidget {
                   children: [
                     Icon(OmIcons.byName('refresh'), size: 12, color: c.error),
                     const SizedBox(width: 3),
-                    Text('Failed — tap to retry',
+                    Text('Failed - tap to retry',
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(color: c.error)),
                   ],
                 ),

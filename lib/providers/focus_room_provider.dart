@@ -61,7 +61,7 @@ class FocusRoomProvider extends ChangeNotifier {
   }
 
   /// Subscribe to live room-list updates: new public rooms appear, ended rooms
-  /// disappear, and counts/global update — all without a refresh (Discord-style
+  /// disappear, and counts/global update - all without a refresh (Discord-style
   /// channel list). Safe to call repeatedly.
   void bindLobby() {
     if (_lobbyBound) return;

@@ -2,7 +2,7 @@
  * Tiny in-memory stand-in for the subset of ioredis commands that presence.ts
  * uses. Lets the server boot and run the realtime layer (presence, timers,
  * room counts) with no Redis instance, for single-node local dev. Not for prod
- * — it holds no cross-node state and clears on restart.
+ * - it holds no cross-node state and clears on restart.
  */
 type Timer = ReturnType<typeof setTimeout>;
 
