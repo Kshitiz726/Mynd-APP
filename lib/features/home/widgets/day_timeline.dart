@@ -95,6 +95,7 @@ class DayTimeline extends StatelessWidget {
                 task: current,
                 gapAfter: gapAfter,
                 gapStart: gapStart,
+                isLast: sleep == null && index == movable.length - 1,
               ),
             );
           },
@@ -121,10 +122,62 @@ class DayTimeline extends StatelessWidget {
                 );
           },
         ),
-        if (sleep != null) _TimelineBlock(task: sleep, pinned: true),
+        if (sleep != null) _TimelineBlock(task: sleep, pinned: true, isLast: true),
       ],
     );
   }
+}
+
+/// Soft card tints, cycled by task id so a block keeps its colour.
+const _blockTints = [
+  Color(0xFFF3F0FF), // lavender
+  Color(0xFFFFF1E8), // peach
+  Color(0xFFEAF7EF), // mint
+  Color(0xFFFFF6DC), // butter
+  Color(0xFFEAF2FF), // sky
+  Color(0xFFFDECF2), // blush
+];
+
+Color _blockTint(Task task, BuildContext context) {
+  final c = context.omColors;
+  // Done blocks drop out of the palette: finished work should recede.
+  if (task.done) return c.surfaceAlt;
+  if (context.isDark) return c.surfaceAlt;
+  return _blockTints[task.id.hashCode.abs() % _blockTints.length];
+}
+
+/// The dashed thread joining one block to the next.
+class _DashedRail extends StatelessWidget {
+  const _DashedRail({required this.color});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) =>
+      CustomPaint(painter: _DashedRailPainter(color), size: const Size(2, double.infinity));
+}
+
+class _DashedRailPainter extends CustomPainter {
+  const _DashedRailPainter(this.color);
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 1.6
+      ..strokeCap = StrokeCap.round;
+    const dash = 4.0, gap = 5.0;
+    var y = 0.0;
+    while (y < size.height) {
+      canvas.drawLine(Offset(size.width / 2, y), Offset(size.width / 2, (y + dash).clamp(0, size.height)), paint);
+      y += dash + gap;
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DashedRailPainter old) => old.color != color;
 }
 
 /// A finished day: what actually happened, with no way to edit it.
@@ -178,7 +231,8 @@ class _PastDay extends StatelessWidget {
         if (done.isEmpty)
           const OmEmptyState(message: "nothing was ticked off that day. that is allowed.")
         else
-          for (final t in done) _TimelineBlock(task: t, pinned: true),
+          for (var i = 0; i < done.length; i++)
+            _TimelineBlock(task: done[i], pinned: true, isLast: i == done.length - 1),
       ],
     );
   }
@@ -277,6 +331,7 @@ class _TimelineBlock extends StatelessWidget {
     this.gapAfter,
     this.gapStart,
     this.pinned = false,
+    this.isLast = false,
   });
 
   final Task task;
@@ -286,6 +341,10 @@ class _TimelineBlock extends StatelessWidget {
   /// Fixed blocks (wake, sleep, and everything on a past day): no editing, no
   /// dragging, and visually quieter so they read as the frame of the day.
   final bool pinned;
+
+  /// The thread stops at the last block; trailing off into empty space reads as
+  /// an unfinished list.
+  final bool isLast;
 
   @override
   Widget build(BuildContext context) {
@@ -298,53 +357,29 @@ class _TimelineBlock extends StatelessWidget {
     final startStr = task.startTime != null ? DateFormat.jm().format(task.startTime!) : task.time.split(' ').first;
     final endStr = task.endTime != null ? DateFormat.jm().format(task.endTime!) : task.time;
 
-    // Done blocks tint toward their accent instead of staying white - finished
-    // work should read as settled at a glance, without relying on the
-    // strikethrough being legible.
-    final cardColor = task.done ? accent.withValues(alpha: 0.10) : c.surface;
+    // Each block takes a soft tint from a fixed palette, keyed off its id, so a
+    // task keeps its colour between rebuilds and the day reads as a sequence of
+    // distinct things rather than a wall of white cards.
+    final tint = _blockTint(task, context);
 
-    Widget block = Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-      child: OmTappable(
-        // Long-press belongs to the drag gesture: an onLongPress here won the
-        // arena first, so press-and-hold opened the edit sheet instead of
-        // picking the block up. Editing moved to a plain tap.
-        onLongPress: null,
-        feedback: OmTapFeedback.none,
-        pressedScale: pinned ? 1.0 : 0.99,
-        onTap: pinned ? null : () => showEditTaskSheet(context, task),
-        child: Container(
-          decoration: BoxDecoration(
-            color: cardColor,
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(
-              color: task.done ? accent.withValues(alpha: 0.18) : c.border,
-            ),
-            boxShadow: task.done
-                ? null
-                : [
-                    BoxShadow(
-                      color: c.shadow.withValues(alpha: 0.06),
-                      blurRadius: 18,
-                      offset: const Offset(0, 6),
-                    ),
-                  ],
-          ),
-          padding: const EdgeInsets.fromLTRB(14, 16, 16, 16),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // The check leads the card, so completing is the nearest action.
-              // A pinned block cannot be completed, so it shows its glyph there.
-              Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: pinned && !task.done
+    Widget block = IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // The rail: a check per block, joined by a dashed line so the day
+          // reads as one continuous thread.
+          SizedBox(
+            width: 34,
+            child: Column(
+              children: [
+                const SizedBox(height: 18),
+                pinned && !task.done
                     ? Container(
                         width: 24,
                         height: 24,
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
-                          color: accent.withValues(alpha: 0.12),
+                          color: accent.withValues(alpha: 0.14),
                           shape: BoxShape.circle,
                         ),
                         child: Icon(taskIcon(task.title), size: 13, color: accent),
@@ -360,85 +395,85 @@ class _TimelineBlock extends StatelessWidget {
                           }
                         },
                       ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        if (!pinned) ...[
-                          Icon(taskIcon(task.title), size: 16, color: accent),
-                          const SizedBox(width: 7),
-                        ],
-                        Expanded(
-                          child: Text(
-                      task.title,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontSize: 17,
-                            height: 1.25,
-                            fontWeight: FontWeight.w800,
-                            color: task.done ? c.text2 : c.text,
-                            decoration: task.done ? TextDecoration.lineThrough : null,
-                          ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    // Time reads as metadata under the title, the way the
-                    // reference's "1 min article" line does - still tappable.
-                    OmTappable(
-                      onTap: pinned ? null : () => _editBlockTime(context, task),
-                      feedback: OmTapFeedback.none,
-                      pressedScale: 0.97,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(OmIcons.byName('clock'), size: 13, color: c.text2),
-                          const SizedBox(width: 5),
-                          Text(
-                            '$startStr - $endStr',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: c.text2,
-                                ),
-                          ),
-                          const SizedBox(width: 8),
-                          // Energy / goal provenance, demoted to a quiet dot-tag.
-                          Container(
-                            width: 5,
-                            height: 5,
-                            decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
-                          ),
-                          const SizedBox(width: 5),
-                          Flexible(
-                            child: Text(
-                              task.isGoalTask
-                                  ? (task.goalTitle ?? 'goal')
-                                  : task.isChunk
-                                      ? '${task.energy.label} · part ${task.chunkIndex}/${task.chunkCount}'
-                                      : task.energy.label,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                    color: accent,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
+                const SizedBox(height: 6),
+                if (!isLast) Expanded(child: _DashedRail(color: c.border)),
+              ],
+            ),
+          ),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+              child: OmTappable(
+                // Long-press belongs to the drag gesture, so editing is a tap.
+                onLongPress: null,
+                feedback: OmTapFeedback.none,
+                pressedScale: pinned ? 1.0 : 0.99,
+                onTap: pinned ? null : () => showEditTaskSheet(context, task),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: tint,
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  padding: const EdgeInsets.fromLTRB(18, 16, 14, 16),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              task.title,
+                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    fontSize: 17,
+                                    height: 1.25,
+                                    fontWeight: FontWeight.w800,
+                                    color: task.done ? c.text2 : c.text,
+                                    decoration: task.done ? TextDecoration.lineThrough : null,
                                   ),
                             ),
-                          ),
-                        ],
+                            const SizedBox(height: 8),
+                            OmTappable(
+                              onTap: pinned ? null : () => _editBlockTime(context, task),
+                              feedback: OmTapFeedback.none,
+                              pressedScale: 0.97,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(OmIcons.byName('clock'), size: 13, color: c.text2),
+                                  const SizedBox(width: 5),
+                                  Text(
+                                    '$startStr - $endStr',
+                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: c.text2,
+                                        ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 10),
+                      // The glyph sits opposite the title, the way the reference
+                      // puts an illustration on the right of every card.
+                      Container(
+                        width: 46,
+                        height: 46,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.55),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(taskIcon(task.title), size: 22, color: accent),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
 

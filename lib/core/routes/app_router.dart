@@ -27,7 +27,7 @@ abstract final class AppRouter {
       AppRoutes.reminders => (_) => const RemindersScreen(),
       AppRoutes.focusActive => (_) => const FocusActiveScreen(),
       AppRoutes.focus => (_) => const RouteHost(child: FocusTabShell()),
-      AppRoutes.coach => (_) => const RouteHost(child: CoachScreen()),
+      AppRoutes.coach => (_) => const RouteHost(showBack: false, child: CoachScreen()),
       _ => (_) => const AppShell(),
     };
 

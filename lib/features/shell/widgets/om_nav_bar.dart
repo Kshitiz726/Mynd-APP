@@ -75,7 +75,7 @@ class OmNavBar extends StatelessWidget {
                 ),
               ),
               child: SizedBox(
-                height: 66,
+                height: 60,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
                   child: LayoutBuilder(
@@ -233,30 +233,8 @@ class _NavItem extends StatelessWidget {
       onTap: onTap,
       feedback: OmTapFeedback.none, // bar fires its own select haptic
       pressedScale: 0.9,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          _NavIcon(tab: tab, color: color, showDot: showDot),
-          const SizedBox(height: 3),
-          // Labels never wrap or ellipsize: the slot is sized for the longest
-          // one, and shrinking beats clipping if a translation runs long.
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 2),
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: AnimatedDefaultTextStyle(
-                duration: const Duration(milliseconds: 220),
-                style: Theme.of(context).textTheme.labelMedium!.copyWith(
-                      color: color,
-                      fontSize: 10,
-                      letterSpacing: -0.1,
-                      fontWeight: active ? FontWeight.w800 : FontWeight.w600,
-                    ),
-                child: Text(tab.label, maxLines: 1, softWrap: false),
-              ),
-            ),
-          ),
-        ],
+      child: Center(
+        child: _NavIcon(tab: tab, color: color, active: active, showDot: showDot),
       ),
     );
   }
@@ -266,11 +244,13 @@ class _NavIcon extends StatelessWidget {
   const _NavIcon({
     required this.tab,
     required this.color,
+    required this.active,
     required this.showDot,
   });
 
   final AppTab tab;
   final Color color;
+  final bool active;
   final bool showDot;
 
   @override
@@ -281,10 +261,21 @@ class _NavIcon extends StatelessWidget {
       children: [
         // Colour animates rather than the glyph swapping, so the icon never
         // pops between states.
-        TweenAnimationBuilder<Color?>(
-          duration: const Duration(milliseconds: 240),
-          tween: ColorTween(end: color),
-          builder: (context, value, _) => Icon(tab.icon, color: value, size: 21),
+        // Without labels the icon has to carry the destination on its own, so
+        // it is large, and the active one grows a touch further.
+        TweenAnimationBuilder<double>(
+          duration: const Duration(milliseconds: 260),
+          curve: Curves.easeOutBack,
+          tween: Tween(end: active ? 1.0 : 0.0),
+          builder: (context, t, _) => TweenAnimationBuilder<Color?>(
+            duration: const Duration(milliseconds: 240),
+            tween: ColorTween(end: color),
+            builder: (context, value, _) => Icon(
+              tab.icon,
+              color: value,
+              size: 25 + (t * 2),
+            ),
+          ),
         ),
         if (showDot)
           Positioned(

@@ -8,7 +8,6 @@ import '../../core/utils/haptics.dart';
 import '../../core/utils/om_icons.dart';
 import '../../models/chat_message.dart';
 import '../../providers/coach_provider.dart';
-import '../../providers/nav_provider.dart';
 import '../../widgets/om_back_button.dart';
 import '../../widgets/om_mascot.dart';
 import '../../widgets/om_tappable.dart';
@@ -91,7 +90,7 @@ class _CoachScreenState extends State<CoachScreen> {
               padding: const EdgeInsets.fromLTRB(8, AppSpacing.screenTop, AppSpacing.screenH, 8),
               child: Row(
                 children: [
-                  OmBackButton(onTap: () => context.read<NavProvider>().back()),
+                  OmBackButton(onTap: () => Navigator.of(context).maybePop()),
                   const SizedBox(width: 4),
                   Stack(
                     children: [

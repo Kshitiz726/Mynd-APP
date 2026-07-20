@@ -10,9 +10,13 @@ import '../../widgets/om_back_button.dart';
 /// transparent sheet with Home showing through, and there is no way back.
 /// This supplies both: an opaque surface and a leading back control.
 class RouteHost extends StatelessWidget {
-  const RouteHost({super.key, required this.child});
+  const RouteHost({super.key, required this.child, this.showBack = true});
 
   final Widget child;
+
+  /// Some screens (the coach) already draw their own back control; a second one
+  /// stacked above it reads as a bug.
+  final bool showBack;
 
   @override
   Widget build(BuildContext context) {
@@ -24,10 +28,11 @@ class RouteHost extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
-              child: OmBackButton(onTap: () => Navigator.of(context).maybePop()),
-            ),
+            if (showBack)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
+                child: OmBackButton(onTap: () => Navigator.of(context).maybePop()),
+              ),
             Expanded(child: child),
           ],
         ),
