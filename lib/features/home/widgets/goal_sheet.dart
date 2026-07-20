@@ -11,6 +11,7 @@ import '../../../providers/energy_provider.dart';
 import '../../../providers/goal_provider.dart';
 import '../../../widgets/om_button.dart';
 import '../../../widgets/om_tappable.dart';
+import '../../../widgets/text_editing_scope.dart';
 
 /// "New goal" sheet: capture a title and a target date ("achieve this by"),
 /// then hand off to [GoalProvider] which breaks the goal into a day-by-day plan
@@ -18,7 +19,6 @@ import '../../../widgets/om_tappable.dart';
 Future<void> showAddGoalSheet(BuildContext context) async {
   final goals = context.read<GoalProvider>();
   final energy = context.read<EnergyProvider>().current;
-  final controller = TextEditingController();
   DateTime? targetDate;
 
   await showModalBottomSheet<void>(
@@ -27,7 +27,8 @@ Future<void> showAddGoalSheet(BuildContext context) async {
     showDragHandle: true,
     builder: (sheetContext) {
       final colors = sheetContext.omColors;
-      return Padding(
+      return TextEditingScope(
+        builder: (scopeContext, controller) => Padding(
         padding: EdgeInsets.only(
           left: 20,
           right: 20,
@@ -158,8 +159,8 @@ Future<void> showAddGoalSheet(BuildContext context) async {
             );
           },
         ),
+      ),
       );
     },
   );
-  controller.dispose();
 }

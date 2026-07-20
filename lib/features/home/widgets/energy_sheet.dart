@@ -17,6 +17,7 @@ import '../../../providers/settings_provider.dart';
 import '../../../providers/task_provider.dart';
 import '../../../widgets/om_button.dart';
 import '../../../widgets/om_tappable.dart';
+import '../../../widgets/text_editing_scope.dart';
 
 /// Bottom sheet for logging current energy ("how's the vibe?"). Logging
 /// "brain-dead" can auto-enable low-stim mode.
@@ -108,7 +109,6 @@ class _EnergyRow extends StatelessWidget {
 /// Quick "brain dump" sheet to add a task with an energy tag.
 Future<void> showQuickAddTask(BuildContext context) async {
   final tasks = context.read<TaskProvider>();
-  final controller = TextEditingController();
   var energy = EnergyLevel.high;
   var recording = false;
   var transcribing = false;
@@ -119,7 +119,8 @@ Future<void> showQuickAddTask(BuildContext context) async {
     showDragHandle: true,
     builder: (sheetContext) {
       final colors = sheetContext.omColors;
-      return Padding(
+      return TextEditingScope(
+        builder: (scopeContext, controller) => Padding(
         padding: EdgeInsets.only(
           left: 20,
           right: 20,
@@ -316,10 +317,10 @@ Respond ONLY with a valid JSON array of objects. Do not wrap it in markdown. For
             );
           },
         ),
+      ),
       );
     },
   );
-  controller.dispose();
 }
 
 /// Selectable energy pill used in the brain-dump sheet — replaces the default
