@@ -10,6 +10,7 @@ import '../../models/chat_message.dart';
 import '../../providers/coach_provider.dart';
 import '../../widgets/om_back_button.dart';
 import '../../widgets/om_mascot.dart';
+import '../../widgets/om_glass.dart';
 import '../../widgets/om_tappable.dart';
 import 'coach_voice_screen.dart';
 import 'puter_connect_screen.dart';
@@ -139,9 +140,17 @@ class _CoachScreenState extends State<CoachScreen> {
                   AppSpacing.screenH,
                   AppSpacing.md,
                 ),
+                // Before the first exchange the screen is mostly empty, so it
+                // leads with the orb and the question instead of one lonely
+                // bubble in the corner.
                 itemCount: coach.messages.length +
-                    (coach.isLoading && !coach.isStreaming ? 1 : 0),
+                    (coach.isLoading && !coach.isStreaming ? 1 : 0) +
+                    (coach.messages.length <= 1 ? 1 : 0),
                 itemBuilder: (context, i) {
+                  if (coach.messages.length <= 1) {
+                    if (i == 0) return const _CoachHero();
+                    i -= 1;
+                  }
                   if (i == coach.messages.length) {
                     return const _TypingBubble();
                   }
@@ -285,30 +294,112 @@ class _ChatBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.omColors;
     final mine = message.fromUser;
+    final radius = BorderRadius.only(
+      topLeft: const Radius.circular(20),
+      topRight: const Radius.circular(20),
+      bottomLeft: Radius.circular(mine ? 20 : 7),
+      bottomRight: Radius.circular(mine ? 7 : 20),
+    );
+
+    final text = Text(
+      message.text.isEmpty && message.isStreaming ? '…' : message.text,
+      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: mine ? Colors.white : c.text,
+            height: 1.45,
+            fontWeight: mine ? FontWeight.w500 : FontWeight.w400,
+          ),
+    );
+
     return Align(
       alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
         margin: const EdgeInsets.only(bottom: 10),
-        constraints:
-            BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.8),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
-        decoration: BoxDecoration(
-          color: mine ? c.primary : c.surfaceAlt,
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(18),
-            topRight: const Radius.circular(18),
-            bottomLeft: Radius.circular(mine ? 18 : 6),
-            bottomRight: Radius.circular(mine ? 6 : 18),
-          ),
-        ),
-        child: Text(
-          message.text.isEmpty && message.isStreaming ? '…' : message.text,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: mine ? Colors.white : c.text,
-                fontWeight: mine ? FontWeight.w500 : FontWeight.w400,
+        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.8),
+        child: mine
+            ? Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  gradient: c.brandGradient,
+                  borderRadius: radius,
+                  boxShadow: [
+                    BoxShadow(
+                      color: c.primary.withValues(alpha: 0.28),
+                      blurRadius: 16,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: text,
+              )
+            // Mynd's replies are glass: they sit on the surface rather than
+            // competing with the user's own words.
+            : ClipRRect(
+                borderRadius: radius,
+                child: OmGlass(
+                  borderRadius: 20,
+                  blur: 22,
+                  opacity: context.isDark ? 0.42 : 0.8,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: text,
+                ),
               ),
-        ),
+      ),
+    );
+  }
+}
+
+/// The opening state: an orb, a greeting, and nothing else to read.
+class _CoachHero extends StatelessWidget {
+  const _CoachHero();
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.omColors;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 26),
+      child: Column(
+        children: [
+          Container(
+            width: 108,
+            height: 108,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                center: const Alignment(-0.3, -0.4),
+                colors: [
+                  Color.lerp(c.primary, Colors.white, 0.55)!,
+                  c.primary,
+                  Color.lerp(c.primary, Colors.black, 0.25)!,
+                ],
+                stops: const [0.0, 0.55, 1.0],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: c.primary.withValues(alpha: 0.38),
+                  blurRadius: 34,
+                  spreadRadius: -2,
+                  offset: const Offset(0, 14),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            'how can I help you today?',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontSize: 21,
+                  fontWeight: FontWeight.w700,
+                  height: 1.3,
+                ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'think out loud - I will keep up',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: c.text2),
+          ),
+        ],
       ),
     );
   }
@@ -399,19 +490,22 @@ class _CoachInput extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.omColors;
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 6, 6, 6),
       decoration: BoxDecoration(
-        color: c.surface,
         borderRadius: BorderRadius.circular(AppRadius.pill),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 14,
-            offset: const Offset(0, 4),
+            color: c.shadow.withValues(alpha: context.isDark ? 0.45 : 0.10),
+            blurRadius: 20,
+            offset: const Offset(0, 6),
           )
         ],
       ),
-      child: Row(
+      child: OmGlass(
+        borderRadius: AppRadius.pill,
+        blur: 26,
+        opacity: context.isDark ? 0.45 : 0.86,
+        padding: const EdgeInsets.fromLTRB(16, 6, 6, 6),
+        child: Row(
         children: [
           Expanded(
             child: TextField(
@@ -462,6 +556,7 @@ class _CoachInput extends StatelessWidget {
             ),
           ),
         ],
+        ),
       ),
     );
   }

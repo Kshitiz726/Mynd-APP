@@ -25,9 +25,42 @@ class FocusScreen extends StatefulWidget {
 }
 
 class _FocusScreenState extends State<FocusScreen> {
-  FocusMode _selected = FocusMode.presets[1]; // Pomodoro
+  /// Minute options the dial snaps through: fine-grained where short sessions
+  /// live, coarser once you are past an hour.
+  static const _steps = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 60, 75, 90, 105, 120];
+
+  late final PageController _dial = PageController(
+    // Pomodoro's 25 minutes is the sane default to open on.
+    initialPage: _steps.indexOf(25),
+    viewportFraction: 0.26,
+  );
+
+  int _minutes = 25;
+  String _label = 'Pomodoro';
   bool _bodyDoubling = false;
   String _ambient = 'Café';
+
+  @override
+  void dispose() {
+    _dial.dispose();
+    super.dispose();
+  }
+
+  /// The mode actually started: a preset when the dial still matches one,
+  /// otherwise a custom session at whatever the dial says.
+  FocusMode get _mode {
+    for (final preset in FocusMode.presets) {
+      if (preset.minutes == _minutes) return preset;
+    }
+    return FocusMode(name: 'Focus', minutes: _minutes, iconName: 'timer', when: 'your call');
+  }
+
+  void _selectMinutes(int minutes) {
+    final index = _steps.indexOf(minutes);
+    if (index == -1) return;
+    Haptics.select();
+    _dial.animateToPage(index, duration: const Duration(milliseconds: 320), curve: Curves.easeOutCubic);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -39,27 +72,99 @@ class _FocusScreenState extends State<FocusScreen> {
       children: [
         const OmTopBar(title: 'focus', subtitle: "what's the vibe right now?"),
         const _CurrentTaskCard(),
+        const SizedBox(height: AppSpacing.xl),
+
+        Center(
+          child: Text(
+            'focus time in mins',
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(color: c.text2),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+
+        // The dial: the duration is the decision, so it gets the largest type on
+        // the screen and a gesture of its own.
+        SizedBox(
+          height: 116,
+          child: PageView.builder(
+            controller: _dial,
+            itemCount: _steps.length,
+            physics: const BouncingScrollPhysics(),
+            onPageChanged: (i) {
+              Haptics.light();
+              setState(() {
+                _minutes = _steps[i];
+                _label = FocusMode.presets
+                        .where((m) => m.minutes == _steps[i])
+                        .map((m) => m.name)
+                        .firstOrNull ??
+                    'Custom';
+              });
+            },
+            itemBuilder: (context, i) {
+              final value = _steps[i];
+              final selected = value == _minutes;
+              return Center(
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 240),
+                  curve: Curves.easeOutCubic,
+                  width: selected ? 96 : 66,
+                  height: selected ? 96 : 66,
+                  decoration: BoxDecoration(
+                    gradient: selected ? c.brandGradient : null,
+                    color: selected ? null : c.surfaceAlt,
+                    borderRadius: BorderRadius.circular(selected ? 28 : 20),
+                    boxShadow: selected
+                        ? [
+                            BoxShadow(
+                              color: c.primary.withValues(alpha: 0.34),
+                              blurRadius: 22,
+                              offset: const Offset(0, 10),
+                            ),
+                          ]
+                        : null,
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    '$value',
+                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                          color: selected ? Colors.white : c.text2,
+                          fontSize: selected ? 34 : 22,
+                          fontWeight: FontWeight.w800,
+                        ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Center(
+          child: Text(
+            _label.toLowerCase(),
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(color: c.primary),
+          ),
+        ),
         const SizedBox(height: AppSpacing.lg),
-        GridView.count(
-          crossAxisCount: 2,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          mainAxisSpacing: AppSpacing.md,
-          crossAxisSpacing: AppSpacing.md,
-          childAspectRatio: 1.25,
+
+        // Presets stay: they are the "how do I feel" shortcut into the dial.
+        Row(
           children: [
             for (final mode in FocusMode.presets)
-              _ModeCard(
-                mode: mode,
-                selected: _selected == mode,
-                onTap: () {
-                  Haptics.select();
-                  setState(() => _selected = mode);
-                },
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: _PresetChip(
+                    mode: mode,
+                    selected: _minutes == mode.minutes,
+                    onTap: () => _selectMinutes(mode.minutes),
+                  ),
+                ),
               ),
           ],
         ),
         const SizedBox(height: AppSpacing.lg),
+
         _BodyDoublingTile(
           enabled: _bodyDoubling,
           ambient: _ambient,
@@ -68,15 +173,16 @@ class _FocusScreenState extends State<FocusScreen> {
         ),
         const SizedBox(height: AppSpacing.xl),
         OmButton(
-          label: 'start ${_selected.name.toLowerCase()} · ${_selected.minutes}m',
+          label: 'start ${_label.toLowerCase()} · ${_minutes}m',
           onPressed: () {
             Haptics.medium();
+            final mode = _mode;
             if (_bodyDoubling) {
               Navigator.of(context, rootNavigator: true).push(
-                MaterialPageRoute(builder: (_) => BodyDoublingScreen(autoStart: true, mode: _selected)),
+                MaterialPageRoute(builder: (_) => BodyDoublingScreen(autoStart: true, mode: mode)),
               );
             } else {
-              context.read<FocusProvider>().start(_selected, false);
+              context.read<FocusProvider>().start(mode, false);
             }
           },
         ),
@@ -104,6 +210,61 @@ class _FocusScreenState extends State<FocusScreen> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// A preset shortcut: the minutes lead, the feeling explains.
+class _PresetChip extends StatelessWidget {
+  const _PresetChip({required this.mode, required this.selected, required this.onTap});
+
+  final FocusMode mode;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.omColors;
+    return OmTappable(
+      onTap: onTap,
+      feedback: OmTapFeedback.none,
+      pressedScale: 0.94,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
+        decoration: BoxDecoration(
+          color: selected ? c.primaryTint : c.surface,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: selected ? c.primary.withValues(alpha: 0.5) : c.border),
+        ),
+        child: Column(
+          children: [
+            Icon(
+              OmIcons.byName(mode.iconName),
+              size: 18,
+              color: selected ? c.primary : c.text2,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '${mode.minutes}',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: selected ? c.primary : c.text,
+                  ),
+            ),
+            Text(
+              mode.name.toLowerCase(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    fontSize: 10,
+                    color: selected ? c.primary : c.text2,
+                  ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -302,58 +463,3 @@ class _AmbientChip extends StatelessWidget {
   }
 }
 
-class _ModeCard extends StatelessWidget {
-  const _ModeCard({required this.mode, required this.selected, required this.onTap});
-
-  final FocusMode mode;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.omColors;
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
-        decoration: BoxDecoration(
-          color: selected ? c.primaryTint.withValues(alpha: 0.5) : c.surfaceAlt,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(
-            color: selected ? c.primary : Colors.transparent,
-            width: 2,
-          ),
-        ),
-        child: Stack(
-          children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              mainAxisSize: MainAxisSize.max,
-              children: [
-                Icon(OmIcons.byName(mode.iconName), color: c.text, size: 24),
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(mode.name,
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(color: c.text, fontSize: 16, fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 1),
-                    Text('${mode.minutes} min',
-                        style: Theme.of(context).textTheme.bodySmall
-                            ?.copyWith(color: c.text, fontWeight: FontWeight.w600, fontSize: 12)),
-                    Text(mode.when,
-                        style: Theme.of(context).textTheme.bodySmall
-                            ?.copyWith(color: c.text2, fontSize: 10.5)),
-                  ],
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
