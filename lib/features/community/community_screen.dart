@@ -17,6 +17,7 @@ import '../../providers/chat_provider.dart';
 import '../../providers/focus_room_provider.dart';
 import '../../widgets/om_avatar.dart';
 import '../../widgets/om_card.dart';
+import '../../widgets/om_glass.dart';
 import '../../widgets/om_tappable.dart';
 import '../../widgets/om_top_bar.dart';
 import 'chat_screen.dart';
@@ -86,7 +87,27 @@ class _CommunityScreenState extends State<CommunityScreen> {
   Widget build(BuildContext context) {
     final c = context.omColors;
 
-    return RefreshIndicator(
+    return Stack(
+      children: [
+        // The glass cards need something to refract: a soft brand wash, warm at
+        // the top and cooling into the surface.
+        Positioned.fill(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color.lerp(c.primary, c.surface, 0.82)!,
+                  Color.lerp(const Color(0xFFFFE6D0), c.surface, 0.72)!,
+                  c.surface,
+                ],
+                stops: const [0.0, 0.38, 0.85],
+              ),
+            ),
+          ),
+        ),
+        RefreshIndicator(
           onRefresh: _refresh,
           color: c.primary,
           child: ListView(
@@ -132,7 +153,9 @@ class _CommunityScreenState extends State<CommunityScreen> {
             ),
             ],
           ),
-        );
+        ),
+      ],
+    );
   }
 }
 
@@ -214,7 +237,7 @@ class _CmTabs extends StatelessWidget {
   final ValueChanged<_CmTab> onChanged;
 
   static const _labels = {
-    _CmTab.feed: 'Feed',
+    _CmTab.feed: 'Latest',
     _CmTab.rooms: 'Focus rooms',
     // _CmTab.groups: 'Groups', _CmTab.chats: 'Chats',
   };
@@ -222,37 +245,48 @@ class _CmTabs extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.omColors;
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(color: c.surface, borderRadius: BorderRadius.circular(16)),
-      child: Row(
-        children: [
-          for (final t in _CmTab.values)
-            Expanded(
-              child: GestureDetector(
-                onTap: () {
-                  Haptics.select();
-                  onChanged(t);
-                },
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  decoration: BoxDecoration(
-                    color: t == current ? c.bg : Colors.transparent,
-                    borderRadius: BorderRadius.circular(12),
+    // Underlined text rather than a boxed segment: the reference leads with the
+    // words and marks the active one with a short brand rule beneath it.
+    return Row(
+      children: [
+        for (final t in _CmTab.values)
+          Padding(
+            padding: const EdgeInsets.only(right: 20),
+            child: OmTappable(
+              onTap: () {
+                Haptics.select();
+                onChanged(t);
+              },
+              feedback: OmTapFeedback.none,
+              pressedScale: 0.96,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AnimatedDefaultTextStyle(
+                    duration: const Duration(milliseconds: 200),
+                    style: Theme.of(context).textTheme.titleMedium!.copyWith(
+                          color: t == current ? c.text : c.text2,
+                          fontSize: 16,
+                          fontWeight: t == current ? FontWeight.w800 : FontWeight.w600,
+                        ),
+                    child: Text(_labels[t]!),
                   ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    _labels[t]!,
-                    textAlign: TextAlign.center,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(color: t == current ? c.text : c.text2, fontSize: 12.5),
+                  const SizedBox(height: 6),
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeOutCubic,
+                    height: 3,
+                    width: t == current ? 22 : 0,
+                    decoration: BoxDecoration(
+                      gradient: c.brandGradient,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
                   ),
-                ),
+                ],
               ),
             ),
-        ],
-      ),
+          ),
+      ],
     );
   }
 }
@@ -571,105 +605,202 @@ class _PostCard extends StatelessWidget {
     final c = context.omColors;
     final mood = post.mood;
     final moodColor = mood?.color(context) ?? c.text2;
+    final reactions = _order.fold<int>(0, (sum, k) => sum + post.countOf(k));
 
-    return OmCard(
-      padding: const EdgeInsets.all(16),
-      radius: 20,
-      onTap: () => PostCommentsSheet.show(context, post),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              OmAvatar(
-                userId: post.authorName,
-                fallbackInitial: post.initial,
-                fallbackColor: _hex(post.avatarColor),
-                size: 44,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: OmTappable(
+        onTap: () => PostCommentsSheet.show(context, post),
+        feedback: OmTapFeedback.none,
+        pressedScale: 0.995,
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(26),
+            boxShadow: [
+              BoxShadow(
+                color: c.shadow.withValues(alpha: context.isDark ? 0.4 : 0.08),
+                blurRadius: 26,
+                offset: const Offset(0, 10),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+            ],
+          ),
+          child: OmGlass(
+            borderRadius: 26,
+            blur: 26,
+            opacity: context.isDark ? 0.4 : 0.78,
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                    Text(post.authorName, style: Theme.of(context).textTheme.labelLarge?.copyWith(fontSize: 15)),
-                    Text(_ago(post.createdAt), style: Theme.of(context).textTheme.bodySmall),
+                    OmAvatar(
+                      userId: post.authorName,
+                      fallbackInitial: post.initial,
+                      fallbackColor: _hex(post.avatarColor),
+                      size: 42,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  post.authorName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.labelLarge?.copyWith(fontSize: 15),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                _ago(post.createdAt),
+                                style: Theme.of(context).textTheme.bodySmall?.copyWith(fontSize: 11.5),
+                              ),
+                            ],
+                          ),
+                          Text(
+                            _stamp(post.createdAt),
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  fontSize: 11.5,
+                                  color: c.text2,
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (mood != null)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: moodColor.withValues(alpha: 0.16),
+                          borderRadius: BorderRadius.circular(AppRadius.pill),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(mood.icon, size: 12, color: moodColor),
+                            const SizedBox(width: 4),
+                            Text(
+                              _moodLabel(mood),
+                              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                    color: moodColor,
+                                    fontSize: 10.5,
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
                   ],
                 ),
-              ),
-              if (mood != null)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(color: moodColor.withValues(alpha: 0.16), borderRadius: BorderRadius.circular(AppRadius.pill)),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
+                const SizedBox(height: 12),
+                _PostBody(body: post.body),
+                if (post.tags.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
                     children: [
-                      Icon(mood.icon, size: 12, color: moodColor),
-                      const SizedBox(width: 4),
-                      Text(_moodLabel(mood), style: Theme.of(context).textTheme.labelSmall?.copyWith(color: moodColor, fontSize: 10.5)),
+                      for (final t in post.tags)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: c.primaryTint,
+                            borderRadius: BorderRadius.circular(9),
+                          ),
+                          child: Text(
+                            '#$t',
+                            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                  color: c.primary,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                          ),
+                        ),
                     ],
                   ),
+                ],
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    // The reference's "+23K likes" line: the weight of the room,
+                    // stated before the buttons to press.
+                    if (reactions > 0) ...[
+                      Icon(OmIcons.byName('heart'), size: 14, color: c.primary),
+                      const SizedBox(width: 5),
+                      Text(
+                        '$reactions',
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                              color: c.text2,
+                              fontWeight: FontWeight.w700,
+                            ),
+                      ),
+                    ],
+                    const Spacer(),
+                    for (final kind in _order)
+                      _IconAction(
+                        iconName: kind.iconName,
+                        count: post.countOf(kind),
+                        active: post.isActive(kind),
+                        onTap: () => context.read<CommunityProvider>().toggleReaction(post.id, kind),
+                      ),
+                    _IconAction(
+                      iconName: 'message',
+                      count: post.commentCount,
+                      active: false,
+                      onTap: () => PostCommentsSheet.show(context, post),
+                    ),
+                  ],
                 ),
-            ],
+              ],
+            ),
           ),
-          const SizedBox(height: 12),
-          Text(post.body,
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontSize: 15.5, height: 1.4)),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: [
-              for (final t in post.tags)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(color: c.primaryTint, borderRadius: BorderRadius.circular(8)),
-                  child: Text('#$t', style: Theme.of(context).textTheme.labelSmall?.copyWith(color: c.primary, fontWeight: FontWeight.w700)),
-                ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Container(height: 1, color: c.border),
-          const SizedBox(height: 6),
-          // Facebook-style action bar: equal-width reaction buttons + a comment
-          // button that opens the full comment thread.
-          Row(
-            children: [
-              for (final kind in _order)
-                Expanded(
-                  child: _ReactButton(
-                    iconName: kind.iconName,
-                    label: post.countOf(kind) > 0 ? '${post.countOf(kind)}' : kind.label,
-                    active: post.isActive(kind),
-                    onTap: () => context.read<CommunityProvider>().toggleReaction(post.id, kind),
-                  ),
-                ),
-              Expanded(
-                child: _ReactButton(
-                  iconName: 'message',
-                  label: post.commentCount > 0 ? '${post.commentCount}' : 'comment',
-                  active: false,
-                  onTap: () => PostCommentsSheet.show(context, post),
-                ),
-              ),
-            ],
-          ),
-        ],
+        ),
       ),
     );
   }
 }
 
-class _ReactButton extends StatelessWidget {
-  const _ReactButton({
+/// Post text with @mentions picked out in the brand colour, as the reference does.
+class _PostBody extends StatelessWidget {
+  const _PostBody({required this.body});
+
+  final String body;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.omColors;
+    final base = Theme.of(context).textTheme.bodyLarge?.copyWith(fontSize: 15.5, height: 1.45);
+    final spans = <TextSpan>[];
+    final pattern = RegExp(r'(@[A-Za-z0-9_.]+)');
+    var index = 0;
+    for (final m in pattern.allMatches(body)) {
+      if (m.start > index) spans.add(TextSpan(text: body.substring(index, m.start)));
+      spans.add(TextSpan(
+        text: m.group(0),
+        style: base?.copyWith(color: c.primary, fontWeight: FontWeight.w700),
+      ));
+      index = m.end;
+    }
+    if (index < body.length) spans.add(TextSpan(text: body.substring(index)));
+
+    return RichText(text: TextSpan(style: base, children: spans));
+  }
+}
+
+/// A compact icon + count, replacing the old equal-width button row.
+class _IconAction extends StatelessWidget {
+  const _IconAction({
     required this.iconName,
-    required this.label,
+    required this.count,
     required this.active,
     required this.onTap,
   });
 
   final String iconName;
-  final String label;
+  final int count;
   final bool active;
   final VoidCallback onTap;
 
@@ -677,29 +808,29 @@ class _ReactButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.omColors;
     final color = active ? c.primary : c.text2;
-    return GestureDetector(
+    return OmTappable(
       onTap: () {
-        Haptics.select();
+        Haptics.light();
         onTap();
       },
-      behavior: HitTestBehavior.opaque,
+      feedback: OmTapFeedback.none,
+      pressedScale: 0.85,
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 9),
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
         child: Row(
           mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(OmIcons.byName(iconName), size: 16, color: color),
-            const SizedBox(width: 6),
-            Flexible(
-              child: Text(label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: color,
-                        fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-                      )),
-            ),
+            Icon(OmIcons.byName(iconName), size: 18, color: color),
+            if (count > 0) ...[
+              const SizedBox(width: 4),
+              Text(
+                '$count',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: color,
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+            ],
           ],
         ),
       ),
@@ -707,7 +838,15 @@ class _ReactButton extends StatelessWidget {
   }
 }
 
-/// ===== FOCUS ROOMS =====
+/// "Today 8:59AM" - the reference stamps the exact time under the relative one.
+String _stamp(DateTime t) {
+  final now = DateTime.now();
+  final sameDay = t.year == now.year && t.month == now.month && t.day == now.day;
+  final h = t.hour % 12 == 0 ? 12 : t.hour % 12;
+  final m = t.minute.toString().padLeft(2, '0');
+  final ampm = t.hour < 12 ? 'AM' : 'PM';
+  return sameDay ? 'Today $h:$m$ampm' : '${t.day}/${t.month} $h:$m$ampm';
+}
 
 class _RoomsTab extends StatelessWidget {
   const _RoomsTab();
@@ -779,71 +918,192 @@ class _RoomTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.omColors;
     final iconColor = _hex(room.iconColor);
+    final live = room.liveCount > 0;
+
     return OmTappable(
-      pressedScale: 0.98,
+      pressedScale: 0.985,
       feedback: OmTapFeedback.light,
       onTap: () => _join(context),
       child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(color: c.surface, borderRadius: BorderRadius.circular(18)),
-        child: Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(color: iconColor.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(14)),
-              alignment: Alignment.center,
-              child: Icon(OmIcons.byName(room.iconName), size: 22, color: iconColor),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: c.shadow.withValues(alpha: context.isDark ? 0.4 : 0.08),
+              blurRadius: 24,
+              offset: const Offset(0, 8),
             ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          ],
+        ),
+        child: OmGlass(
+          borderRadius: 24,
+          blur: 26,
+          opacity: context.isDark ? 0.4 : 0.78,
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
                 children: [
-                  Text(room.title, style: Theme.of(context).textTheme.labelLarge?.copyWith(fontSize: 16)),
-                  const SizedBox(height: 4),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(OmIcons.byName('users'), size: 14, color: c.text2),
-                      const SizedBox(width: 4),
-                      Text(room.label, style: Theme.of(context).textTheme.bodySmall),
-                    ],
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: iconColor.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(OmIcons.byName(room.iconName), size: 21, color: iconColor),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          room.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.labelLarge?.copyWith(fontSize: 16),
+                        ),
+                        const SizedBox(height: 3),
+                        // The reference leads with presence: a live dot and a
+                        // count, because an empty room is worth knowing about
+                        // before you tap.
+                        Row(
+                          children: [
+                            Container(
+                              width: 7,
+                              height: 7,
+                              decoration: BoxDecoration(
+                                color: live ? const Color(0xFF22C55E) : c.text2.withValues(alpha: 0.5),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              live ? '${room.liveCount} focusing' : 'quiet right now',
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: live ? c.text : c.text2,
+                                  ),
+                            ),
+                            if (!room.isPublic) ...[
+                              const SizedBox(width: 8),
+                              Icon(OmIcons.byName('lock'), size: 12, color: c.text2),
+                            ],
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  // The enter affordance: a filled brand disc, as in the reference.
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      gradient: joined ? null : c.brandGradient,
+                      color: joined ? c.primaryTint : null,
+                      shape: BoxShape.circle,
+                      boxShadow: joined
+                          ? null
+                          : [
+                              BoxShadow(
+                                color: c.primary.withValues(alpha: 0.35),
+                                blurRadius: 12,
+                                offset: const Offset(0, 5),
+                              ),
+                            ],
+                    ),
+                    child: Icon(
+                      joined ? OmIcons.byName('check') : Icons.arrow_outward_rounded,
+                      size: 19,
+                      color: joined ? c.primary : Colors.white,
+                    ),
                   ),
                 ],
               ),
-            ),
-            OmTappable(
-              pressedScale: 0.92,
-              feedback: OmTapFeedback.none,
-              onTap: () => _join(context),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 220),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: joined ? c.success : c.primary,
-                  borderRadius: BorderRadius.circular(AppRadius.pill),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (joined) ...[
-                      Icon(OmIcons.byName('check'), size: 13, color: Colors.white),
-                      const SizedBox(width: 4),
-                    ],
-                    Text(joined ? 'Joined' : 'Join',
-                        style: Theme.of(context).textTheme.labelMedium?.copyWith(color: Colors.white, fontSize: 13)),
-                  ],
-                ),
-              ),
-            ),
-          ],
+              if (live) ...[
+                const SizedBox(height: 14),
+                _PresenceStack(count: room.liveCount, seed: room.id),
+              ],
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
+/// The overlapping faces from the reference. The room API returns a count, not
+/// a member list, so these are deterministic stand-ins keyed off the room id:
+/// consistent between builds, never implying a specific person is present.
+class _PresenceStack extends StatelessWidget {
+  const _PresenceStack({required this.count, required this.seed});
+
+  final int count;
+  final String seed;
+
+  static const _tints = [
+    Color(0xFF6366F1),
+    Color(0xFF10B981),
+    Color(0xFFEC4899),
+    Color(0xFFF59E0B),
+    Color(0xFF06B6D4),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.omColors;
+    final shown = count.clamp(0, 5);
+    return SizedBox(
+      height: 28,
+      child: Stack(
+        children: [
+          for (var i = 0; i < shown; i++)
+            Positioned(
+              left: i * 19.0,
+              child: Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: _tints[(seed.hashCode + i).abs() % _tints.length],
+                  shape: BoxShape.circle,
+                  border: Border.all(color: c.surface, width: 2),
+                ),
+              ),
+            ),
+          if (count > shown)
+            Positioned(
+              left: shown * 19.0,
+              child: Container(
+                height: 28,
+                padding: const EdgeInsets.symmetric(horizontal: 9),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: c.primaryTint,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: c.surface, width: 2),
+                ),
+                child: Text(
+                  '+${count - shown}',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: c.primary,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 10.5,
+                      ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Opens the create-room sheet, scoped to the live [FocusRoomProvider] so the
+/// new room appears in everyone's list over the socket.
 void _openCreateRoom(BuildContext context) {
   final fr = context.read<FocusRoomProvider>();
   showModalBottomSheet<void>(
@@ -854,8 +1114,6 @@ void _openCreateRoom(BuildContext context) {
   );
 }
 
-/// Create a focus room (Discord-style voice channel). Public rooms appear in
-/// everyone's list instantly via the `room_created` socket broadcast.
 class _CreateRoomSheet extends StatefulWidget {
   const _CreateRoomSheet();
 
