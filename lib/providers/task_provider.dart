@@ -86,6 +86,28 @@ class TaskProvider extends ChangeNotifier {
     return null;
   }
 
+  /// The block the clock is actually inside right now. Anchors are excluded:
+  /// "wake up" and "sleep" are the shape of the day, not work you focus on.
+  Task? get nowBlock {
+    final now = DateTime.now();
+    for (final t in todaySchedule) {
+      if (t.isAnchor) continue;
+      final end = t.endTime;
+      if (end != null && !t.startTime!.isAfter(now) && end.isAfter(now)) return t;
+    }
+    return null;
+  }
+
+  /// The next real block still to come today, for the gap between blocks.
+  Task? get nextBlock {
+    final now = DateTime.now();
+    for (final t in todaySchedule) {
+      if (t.isAnchor) continue;
+      if (t.startTime!.isAfter(now)) return t;
+    }
+    return null;
+  }
+
   /// Ids of parent tasks that currently have chunk blocks on the timeline, so we
   /// can keep the parent itself out of the backlog while its chunks are live.
   Set<String> get _chunkedParentIds =>

@@ -18,7 +18,9 @@ class FocusActiveScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final focus = context.watch<FocusProvider>();
-    final currentTask = context.watch<TaskProvider>().upNext?.title;
+    // What the session was started for wins over "up next": if you tapped
+    // "focus on this task", that task is what you are locked in on.
+    final currentTask = focus.activeTaskTitle ?? context.watch<TaskProvider>().upNext?.title;
 
     // Scrollable + min-height so the layout breathes on tall screens but never
     // overflows / blocks scrolling on short ones.
@@ -67,9 +69,7 @@ class FocusActiveScreen extends StatelessWidget {
                   const Spacer(),
                   const SizedBox(height: AppSpacing.xl),
                   _TimerCircle(
-                    progress: 1 -
-                        (focus.secondsRemaining /
-                            ((focus.activeMode?.minutes ?? 1) * 60)),
+                    progress: 1 - (focus.secondsRemaining / focus.totalSeconds),
                     time: focus.timeString,
                     running: focus.isRunning,
                   ),
@@ -237,7 +237,12 @@ class _TimerCircle extends StatelessWidget {
               style: Theme.of(context)
                   .textTheme
                   .headlineLarge
-                  ?.copyWith(fontSize: 48, fontWeight: FontWeight.w800, letterSpacing: -1),
+                  // Hour-long sessions read as "1:59:40", which needs the smaller size.
+                  ?.copyWith(
+                    fontSize: time.length > 5 ? 40 : 48,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -1,
+                  ),
             ),
             Text('remaining',
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(

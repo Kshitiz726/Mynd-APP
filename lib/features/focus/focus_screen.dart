@@ -1,22 +1,31 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/constants/app_spacing.dart';
+import '../../core/services/api_config.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/haptics.dart';
 import '../../core/utils/om_icons.dart';
+import '../../core/utils/task_icon.dart';
+import '../../core/utils/toast.dart';
 import '../../models/focus_mode.dart';
+import '../../models/saved_focus.dart';
+import '../../models/task.dart';
 import '../../providers/focus_provider.dart';
 import '../../providers/task_provider.dart';
 import '../../widgets/om_button.dart';
+import '../../widgets/om_glass.dart';
 import '../../widgets/om_switch.dart';
 import '../../widgets/om_tappable.dart';
-import '../../widgets/om_top_bar.dart';
+import '../../widgets/text_editing_scope.dart';
 import 'body_doubling_screen.dart';
 import 'focus_help.dart';
 
-/// "focus" - pick a mode (Sprint/Pomodoro/Deep Work/Flow) and optionally turn
-/// on body doubling. The active timer screen lands in a later pass.
+/// "focus" - opens on who you are and what is happening right now, then offers
+/// the ways in: the block you are already in, a focus you saved, or a fresh
+/// session off the dial.
 class FocusScreen extends StatefulWidget {
   const FocusScreen({super.key});
 
@@ -40,8 +49,20 @@ class _FocusScreenState extends State<FocusScreen> {
   bool _bodyDoubling = false;
   String _ambient = 'Café';
 
+  /// The "now" card counts down between rebuilds, so it needs its own pulse.
+  Timer? _clock;
+
+  @override
+  void initState() {
+    super.initState();
+    _clock = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
   @override
   void dispose() {
+    _clock?.cancel();
     _dial.dispose();
     super.dispose();
   }
@@ -62,16 +83,114 @@ class _FocusScreenState extends State<FocusScreen> {
     _dial.animateToPage(index, duration: const Duration(milliseconds: 320), curve: Curves.easeOutCubic);
   }
 
+  /// Start a session, honouring body doubling either way.
+  void _startSession(FocusMode mode, {String? taskTitle, int? seconds}) {
+    Haptics.medium();
+    if (_bodyDoubling) {
+      Navigator.of(context, rootNavigator: true).push(
+        MaterialPageRoute(builder: (_) => BodyDoublingScreen(autoStart: true, mode: mode)),
+      );
+      return;
+    }
+    context.read<FocusProvider>().start(mode, false, taskTitle: taskTitle, seconds: seconds);
+  }
+
+  /// "Focus on this task": the timer runs the block's *remaining* time, so a
+  /// two-hour block entered forty minutes late starts at 1:20:00, not 2:00:00.
+  void _focusOnTask(Task task) {
+    final now = DateTime.now();
+    final end = task.endTime;
+    final start = task.startTime;
+    var remaining = end != null && end.isAfter(now) && start != null && !start.isAfter(now)
+        ? end.difference(now)
+        : (task.duration ?? const Duration(minutes: 25));
+    if (remaining < const Duration(minutes: 1)) remaining = const Duration(minutes: 1);
+
+    _startSession(
+      FocusMode(
+        name: task.title,
+        minutes: (remaining.inSeconds / 60).ceil(),
+        iconName: 'target',
+        when: 'from your schedule',
+      ),
+      taskTitle: task.title,
+      seconds: remaining.inSeconds,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = context.omColors;
+    final tasks = context.watch<TaskProvider>();
+    final current = tasks.nowBlock;
+    final next = current == null ? tasks.nextBlock : null;
+    final saved = context.watch<FocusProvider>().savedFocuses;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(
           AppSpacing.screenH, AppSpacing.screenTop, AppSpacing.screenH, AppSpacing.screenBottom),
       children: [
-        const OmTopBar(title: 'focus', subtitle: "what's the vibe right now?"),
-        const _CurrentTaskCard(),
+        const _FocusGreeting(),
+        const SizedBox(height: AppSpacing.lg),
+
+        _NowCard(
+          task: current ?? next,
+          isNow: current != null,
+          onFocus: () => _focusOnTask((current ?? next)!),
+        ),
+        const SizedBox(height: AppSpacing.xl),
+
+        // Saved focuses: the named things you keep coming back to.
+        Row(
+          children: [
+            Text('your focuses', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontSize: 16)),
+            const Spacer(),
+            if (saved.isNotEmpty)
+              Text('hold to remove',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(color: c.text2)),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        SizedBox(
+          height: 150,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            children: [
+              for (final focus in saved)
+                Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: _SavedFocusCard(
+                    focus: focus,
+                    onTap: () => _startSession(
+                      FocusMode(
+                        name: focus.name,
+                        minutes: focus.minutes,
+                        iconName: focus.iconName,
+                        when: 'saved by you',
+                      ),
+                      taskTitle: focus.name,
+                    ),
+                    onRemove: () {
+                      Haptics.medium();
+                      context.read<FocusProvider>().removeSavedFocus(focus.id);
+                      Toast.show(context, 'Removed "${focus.name}"');
+                    },
+                  ),
+                ),
+              _NewFocusCard(
+                onTap: () => showNewFocusSheet(
+                  context,
+                  initialMinutes: _minutes,
+                  onStart: (name, minutes) => _startSession(
+                    FocusMode(name: name, minutes: minutes, iconName: 'target', when: 'saved by you'),
+                    taskTitle: name,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
         const SizedBox(height: AppSpacing.xl),
 
         Center(
@@ -174,17 +293,7 @@ class _FocusScreenState extends State<FocusScreen> {
         const SizedBox(height: AppSpacing.xl),
         OmButton(
           label: 'start ${_label.toLowerCase()} · ${_minutes}m',
-          onPressed: () {
-            Haptics.medium();
-            final mode = _mode;
-            if (_bodyDoubling) {
-              Navigator.of(context, rootNavigator: true).push(
-                MaterialPageRoute(builder: (_) => BodyDoublingScreen(autoStart: true, mode: mode)),
-              );
-            } else {
-              context.read<FocusProvider>().start(mode, false);
-            }
-          },
+          onPressed: () => _startSession(_mode),
         ),
         const SizedBox(height: AppSpacing.md),
         Center(
@@ -212,6 +321,530 @@ class _FocusScreenState extends State<FocusScreen> {
       ],
     );
   }
+}
+
+/// "good morning, <you>" over a soft brand wash, with the day's real numbers
+/// underneath - nothing invented, just what the schedule already knows.
+class _FocusGreeting extends StatelessWidget {
+  const _FocusGreeting();
+
+  static String _greetingFor(int hour) {
+    if (hour < 12) return 'good morning,';
+    if (hour < 17) return 'good afternoon,';
+    return 'good evening,';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.omColors;
+    final name = ApiConfig.instance.displayName ?? 'friend';
+    final stats = context.watch<TaskProvider>().statsFor(DateTime.now());
+    final focused = stats.focused;
+    final focusedLabel = focused.inMinutes >= 60
+        ? '${focused.inHours}h ${focused.inMinutes % 60}m focused'
+        : '${focused.inMinutes}m focused';
+
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: c.primary.withValues(alpha: context.isDark ? 0.28 : 0.16),
+            blurRadius: 28,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(28),
+        child: Stack(
+          children: [
+            // A brand glow in the corner, the way the reference lights its card.
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: RadialGradient(
+                    center: const Alignment(1.1, -1.0),
+                    radius: 1.4,
+                    colors: [
+                      c.primary.withValues(alpha: context.isDark ? 0.42 : 0.26),
+                      c.primary.withValues(alpha: 0.0),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            OmGlass(
+              borderRadius: 28,
+              blur: 26,
+              opacity: context.isDark ? 0.34 : 0.62,
+              padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _greetingFor(DateTime.now().hour),
+                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                          fontSize: 26,
+                          fontWeight: FontWeight.w500,
+                          color: c.text2,
+                          letterSpacing: -0.4,
+                        ),
+                  ),
+                  Text(
+                    name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                          fontSize: 28,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.6,
+                        ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Icon(OmIcons.byName('sparkles'), size: 14, color: c.primary),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          '${stats.done} done today · $focusedLabel',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                color: c.text2,
+                              ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// What is on the clock right now (or next), with the one button that matters.
+class _NowCard extends StatelessWidget {
+  const _NowCard({required this.task, required this.isNow, required this.onFocus});
+
+  final Task? task;
+  final bool isNow;
+  final VoidCallback onFocus;
+
+  static String _clock(DateTime t) {
+    final h = t.hour % 12 == 0 ? 12 : t.hour % 12;
+    final m = t.minute.toString().padLeft(2, '0');
+    return '$h:$m ${t.hour < 12 ? 'am' : 'pm'}';
+  }
+
+  static String _left(Duration d) {
+    if (d.inMinutes >= 60) return '${d.inHours}h ${d.inMinutes % 60}m left';
+    return '${d.inMinutes < 1 ? 1 : d.inMinutes}m left';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.omColors;
+    final t = task;
+
+    if (t == null) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+        decoration: BoxDecoration(
+          color: c.surfaceAlt,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: c.border),
+        ),
+        child: Row(
+          children: [
+            Icon(OmIcons.byName('calendar'), size: 18, color: c.text2),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'nothing scheduled right now - pick a length below and just begin',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: c.text2),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final now = DateTime.now();
+    final end = t.endTime;
+    final remaining = isNow && end != null ? end.difference(now) : (t.duration ?? const Duration(minutes: 25));
+
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: c.shadow.withValues(alpha: context.isDark ? 0.4 : 0.09),
+            blurRadius: 24,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: OmGlass(
+        borderRadius: 24,
+        blur: 24,
+        opacity: context.isDark ? 0.4 : 0.8,
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: c.primaryTint,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(taskIcon(t.title), size: 20, color: c.primary),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          if (isNow) ...[
+                            Container(
+                              width: 7,
+                              height: 7,
+                              decoration: const BoxDecoration(
+                                color: Color(0xFF22C55E),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                          ],
+                          Text(
+                            isNow ? 'HAPPENING NOW' : 'UP NEXT',
+                            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                  color: isNow ? c.primary : c.text2,
+                                  fontSize: 9,
+                                  letterSpacing: 1,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        t.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontSize: 16.5,
+                              fontWeight: FontWeight.w700,
+                            ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        t.startTime == null || end == null
+                            ? _left(remaining)
+                            : '${_clock(t.startTime!)} - ${_clock(end)} · ${_left(remaining)}',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(color: c.text2),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            OmButton(
+              label: isNow ? 'focus on this task' : 'start this early',
+              onPressed: onFocus,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A saved focus: minutes lead, the name says what it is, the disc says "go".
+class _SavedFocusCard extends StatelessWidget {
+  const _SavedFocusCard({required this.focus, required this.onTap, required this.onRemove});
+
+  final SavedFocus focus;
+  final VoidCallback onTap;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.omColors;
+    return OmTappable(
+      onTap: onTap,
+      onLongPress: onRemove,
+      feedback: OmTapFeedback.light,
+      pressedScale: 0.96,
+      child: Container(
+        width: 156,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: c.surface,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: c.border),
+          boxShadow: [
+            BoxShadow(
+              color: c.shadow.withValues(alpha: context.isDark ? 0.35 : 0.07),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                // Three-digit lengths and large text scales must not push the
+                // "go" disc off the card, so the number gives way first.
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${focus.minutes}',
+                          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                                fontSize: 34,
+                                fontWeight: FontWeight.w800,
+                                color: c.primary,
+                                height: 1.05,
+                              ),
+                        ),
+                        const SizedBox(width: 3),
+                        Padding(
+                          padding: const EdgeInsets.only(top: 12),
+                          child: Text('min',
+                              style: Theme.of(context).textTheme.labelSmall?.copyWith(color: c.text2)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Container(
+                  width: 30,
+                  height: 30,
+                  decoration: BoxDecoration(color: c.primaryTint, shape: BoxShape.circle),
+                  child: Icon(Icons.arrow_outward_rounded, size: 15, color: c.primary),
+                ),
+              ],
+            ),
+            const Spacer(),
+            Icon(taskIcon(focus.name), size: 15, color: c.text2),
+            const SizedBox(height: 6),
+            Text(
+              focus.name,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(fontSize: 13.5, height: 1.25),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The dashed "+ new focus" tile that closes the row.
+class _NewFocusCard extends StatelessWidget {
+  const _NewFocusCard({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.omColors;
+    return OmTappable(
+      onTap: onTap,
+      feedback: OmTapFeedback.light,
+      pressedScale: 0.96,
+      child: Container(
+        width: 132,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: c.primaryTint.withValues(alpha: 0.5),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: c.primary.withValues(alpha: 0.35)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(gradient: c.brandGradient, shape: BoxShape.circle),
+              child: const Icon(Icons.add_rounded, size: 20, color: Colors.white),
+            ),
+            const SizedBox(height: 12),
+            Text('new focus',
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(fontSize: 14)),
+            const SizedBox(height: 2),
+            Text('name it, keep it',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(color: c.text2)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// "New focus": name the thing, choose how long, keep it for next time.
+Future<void> showNewFocusSheet(
+  BuildContext context, {
+  required int initialMinutes,
+  required void Function(String name, int minutes) onStart,
+}) async {
+  const options = [10, 15, 20, 25, 30, 45, 60, 75, 90, 120];
+  var minutes = options.contains(initialMinutes) ? initialMinutes : 25;
+  final focus = context.read<FocusProvider>();
+
+  await showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder: (sheetContext) {
+      final c = sheetContext.omColors;
+      return TextEditingScope(
+        builder: (scopeContext, controller) => Padding(
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 4,
+            bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 24,
+          ),
+          child: StatefulBuilder(
+            builder: (builderContext, setSheetState) {
+              void save({required bool startNow}) {
+                final name = controller.text.trim();
+                if (name.isEmpty) {
+                  Toast.show(context, 'Give this focus a name first');
+                  return;
+                }
+                focus.addSavedFocus(name: name, minutes: minutes);
+                FocusManager.instance.primaryFocus?.unfocus();
+                Navigator.of(sheetContext).pop();
+                Haptics.success();
+                if (startNow) {
+                  onStart(name, minutes);
+                } else {
+                  Toast.show(context, 'Saved "$name"');
+                }
+              }
+
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('new focus',
+                      style: Theme.of(builderContext).textTheme.headlineMedium?.copyWith(fontSize: 24)),
+                  const SizedBox(height: 4),
+                  Text('what are you sitting down to do?',
+                      style: Theme.of(builderContext).textTheme.bodySmall?.copyWith(color: c.text2)),
+                  const SizedBox(height: AppSpacing.lg),
+                  TextField(
+                    controller: controller,
+                    autofocus: true,
+                    textCapitalization: TextCapitalization.sentences,
+                    style: Theme.of(builderContext).textTheme.titleMedium?.copyWith(fontSize: 17),
+                    decoration: InputDecoration(
+                      hintText: 'e.g. read atomic habits',
+                      filled: true,
+                      fillColor: c.surfaceAlt,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  Text('FOCUS TIME IN MINS',
+                      style: Theme.of(builderContext).textTheme.labelSmall?.copyWith(
+                            color: c.text2,
+                            fontSize: 9,
+                            letterSpacing: 1,
+                            fontWeight: FontWeight.w800,
+                          )),
+                  const SizedBox(height: AppSpacing.sm),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final m in options)
+                        OmTappable(
+                          onTap: () {
+                            Haptics.select();
+                            setSheetState(() => minutes = m);
+                          },
+                          feedback: OmTapFeedback.none,
+                          pressedScale: 0.94,
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 180),
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                            decoration: BoxDecoration(
+                              gradient: m == minutes ? c.brandGradient : null,
+                              color: m == minutes ? null : c.surfaceAlt,
+                              borderRadius: BorderRadius.circular(AppRadius.pill),
+                              border: Border.all(color: m == minutes ? Colors.transparent : c.border),
+                            ),
+                            child: Text(
+                              '$m',
+                              style: Theme.of(builderContext).textTheme.labelLarge?.copyWith(
+                                    color: m == minutes ? Colors.white : c.text,
+                                    fontSize: 15,
+                                  ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+                  OmButton(label: 'save and start', onPressed: () => save(startNow: true)),
+                  const SizedBox(height: AppSpacing.sm),
+                  Center(
+                    child: OmTappable(
+                      onTap: () => save(startNow: false),
+                      feedback: OmTapFeedback.light,
+                      pressedScale: 0.96,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+                        child: Text('just save it for later',
+                            style: Theme.of(builderContext).textTheme.labelMedium?.copyWith(
+                                  color: c.text2,
+                                  fontWeight: FontWeight.w700,
+                                )),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      );
+    },
+  );
 }
 
 /// A preset shortcut: the minutes lead, the feeling explains.
@@ -264,61 +897,6 @@ class _PresetChip extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-/// Live "current task" pulled from the schedule (the next un-done block), so the
-/// focus screen reflects what's actually up rather than a placeholder.
-class _CurrentTaskCard extends StatelessWidget {
-  const _CurrentTaskCard();
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.omColors;
-    final task = context.watch<TaskProvider>().upNext;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: c.surfaceAlt,
-        borderRadius: BorderRadius.circular(AppRadius.control),
-        border: Border.all(color: c.border.withValues(alpha: 0.8)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(color: c.primaryTint, borderRadius: BorderRadius.circular(12)),
-            child: Icon(OmIcons.byName('target'), size: 18, color: c.primary),
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('CURRENT TASK',
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: c.text2,
-                          fontSize: 9,
-                          letterSpacing: 1,
-                          fontWeight: FontWeight.w800,
-                        )),
-                const SizedBox(height: 2),
-                Text(
-                  task?.title ?? 'nothing scheduled - pick a mode and just begin',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                      ),
-                ),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -462,4 +1040,3 @@ class _AmbientChip extends StatelessWidget {
     );
   }
 }
-

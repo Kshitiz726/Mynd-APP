@@ -1,14 +1,23 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/services/api_client.dart';
 import '../core/services/realtime_service.dart';
 import '../models/focus_mode.dart';
+import '../models/saved_focus.dart';
 
 class FocusProvider extends ChangeNotifier {
+  FocusProvider() {
+    _loadSaved();
+  }
+
   FocusMode? _activeMode;
+  String? _activeTaskTitle;
   int _secondsRemaining = 0;
+  int _totalSeconds = 0;
   bool _isRunning = false;
   bool _bodyDoubling = false;
   Timer? _timer;
@@ -23,7 +32,15 @@ class FocusProvider extends ChangeNotifier {
   bool _bdWired = false;
 
   FocusMode? get activeMode => _activeMode;
+
+  /// What this session is *for*, when it was started from a schedule block or a
+  /// saved focus. Null for a plain "just start a timer" session.
+  String? get activeTaskTitle => _activeTaskTitle;
   int get secondsRemaining => _secondsRemaining;
+
+  /// How long this session started out as, so progress rings stay honest when
+  /// the length came from a task rather than the mode.
+  int get totalSeconds => _totalSeconds == 0 ? 1 : _totalSeconds;
   bool get isRunning => _isRunning;
   bool get bodyDoubling => _bodyDoubling;
   bool get isActive => _activeMode != null;
@@ -35,14 +52,32 @@ class FocusProvider extends ChangeNotifier {
   String? get partnerName => _partnerName;
 
   String get timeString {
-    final m = (_secondsRemaining ~/ 60).toString().padLeft(2, '0');
     final s = (_secondsRemaining % 60).toString().padLeft(2, '0');
-    return '$m:$s';
+    final totalMinutes = _secondsRemaining ~/ 60;
+    // A two-hour task block reads as 1:59:40, not 119:40.
+    if (totalMinutes >= 60) {
+      final h = totalMinutes ~/ 60;
+      final m = (totalMinutes % 60).toString().padLeft(2, '0');
+      return '$h:$m:$s';
+    }
+    return '${totalMinutes.toString().padLeft(2, '0')}:$s';
   }
 
-  void start(FocusMode mode, bool bodyDoubling, {String? preMatchedRoomId, String? preMatchedPartnerName}) {
+  /// Start a session. [seconds] overrides the mode's length, which is how
+  /// "focus on this task" runs out exactly the block's remaining time rather
+  /// than a rounded-down number of whole minutes.
+  void start(
+    FocusMode mode,
+    bool bodyDoubling, {
+    String? preMatchedRoomId,
+    String? preMatchedPartnerName,
+    String? taskTitle,
+    int? seconds,
+  }) {
     _activeMode = mode;
-    _secondsRemaining = mode.minutes * 60;
+    _activeTaskTitle = taskTitle;
+    _secondsRemaining = seconds ?? mode.minutes * 60;
+    _totalSeconds = _secondsRemaining;
     _bodyDoubling = bodyDoubling;
     _isRunning = true;
     _startTimer();
@@ -140,10 +175,57 @@ class FocusProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ─────────────────── Saved focuses ───────────────────
+
+  List<SavedFocus> _saved = [];
+  List<SavedFocus> get savedFocuses => List.unmodifiable(_saved);
+
+  static const _kSaved = 'om_saved_focuses';
+
+  Future<void> _loadSaved() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      final raw = p.getString(_kSaved);
+      if (raw == null) return;
+      _saved = (jsonDecode(raw) as List)
+          .map((e) => SavedFocus.fromJson((e as Map).cast<String, dynamic>()))
+          .toList();
+      notifyListeners();
+    } catch (e) {
+      debugPrint('[focus] saved focuses failed to load: $e');
+    }
+  }
+
+  Future<void> _persistSaved() async {
+    final p = await SharedPreferences.getInstance();
+    await p.setString(_kSaved, jsonEncode(_saved.map((f) => f.toJson()).toList()));
+  }
+
+  SavedFocus addSavedFocus({required String name, required int minutes, String iconName = 'target'}) {
+    final focus = SavedFocus(
+      id: DateTime.now().microsecondsSinceEpoch.toString(),
+      name: name,
+      minutes: minutes,
+      iconName: iconName,
+    );
+    // Newest first: the thing you just made is the thing you are about to do.
+    _saved.insert(0, focus);
+    _persistSaved();
+    notifyListeners();
+    return focus;
+  }
+
+  void removeSavedFocus(String id) {
+    _saved.removeWhere((f) => f.id == id);
+    _persistSaved();
+    notifyListeners();
+  }
+
   void end() {
     _timer?.cancel();
     _endBodyDoubling();
     _activeMode = null;
+    _activeTaskTitle = null;
     _isRunning = false;
     _secondsRemaining = 0;
     _bodyDoubling = false;
