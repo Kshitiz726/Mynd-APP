@@ -42,7 +42,10 @@ Color _hex(String s, [Color fallback = const Color(0xFF6366F1)]) {
   return v == null ? fallback : Color(v);
 }
 
-enum _CmTab { feed, rooms, groups, chats }
+// Groups and DMs are parked while the core loop is built out; the tabs, their
+// bodies and the provider wiring all still exist below, commented, so bringing
+// them back is a one-line change rather than a rewrite.
+enum _CmTab { feed, rooms /*, groups, chats */ }
 
 /// "community" - a calm feed, focus rooms, interest groups and DMs. Mirrors
 /// the prototype's `#screen-community` (hero card → tabs → per-tab content).
@@ -122,8 +125,8 @@ class _CommunityScreenState extends State<CommunityScreen> {
                 child: switch (_tab) {
                   _CmTab.feed => const _FeedTab(),
                   _CmTab.rooms => const _RoomsTab(),
-                  _CmTab.groups => const _GroupsTab(),
-                  _CmTab.chats => const _ChatsTab(),
+                  // _CmTab.groups => const _GroupsTab(),
+                  // _CmTab.chats => const _ChatsTab(),
                 },
               ),
             ),
@@ -210,7 +213,11 @@ class _CmTabs extends StatelessWidget {
   final _CmTab current;
   final ValueChanged<_CmTab> onChanged;
 
-  static const _labels = {_CmTab.feed: 'Feed', _CmTab.rooms: 'Focus rooms', _CmTab.groups: 'Groups', _CmTab.chats: 'Chats'};
+  static const _labels = {
+    _CmTab.feed: 'Feed',
+    _CmTab.rooms: 'Focus rooms',
+    // _CmTab.groups: 'Groups', _CmTab.chats: 'Chats',
+  };
 
   @override
   Widget build(BuildContext context) {

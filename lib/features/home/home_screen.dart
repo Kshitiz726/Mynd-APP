@@ -46,8 +46,6 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final energy = context.watch<EnergyProvider>().current;
-    final tasks = context.watch<TaskProvider>();
-
     final c = context.omColors;
 
     return Stack(
@@ -94,17 +92,6 @@ class _HomeScreenState extends State<HomeScreen> {
             const OmSectionHeader('do this now'),
             const QuickActions(),
 
-            const OmSectionHeader('your day', trailing: 'view all'),
-            const _SleepScheduleBar(),
-            const SizedBox(height: AppSpacing.sm),
-            const WeekStrip(),
-            const SizedBox(height: AppSpacing.md),
-            const DayTimeline(),
-
-            const OmSectionHeader('backlog'),
-            _BacklogFilters(),
-            const SizedBox(height: AppSpacing.lg),
-            _Backlog(tasks: tasks),
           ],
         ),
       ],
@@ -112,7 +99,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-class _BacklogFilters extends StatelessWidget {
+class BacklogFiltersX extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tasks = context.watch<TaskProvider>();
@@ -138,8 +125,8 @@ class _BacklogFilters extends StatelessWidget {
   }
 }
 
-class _Backlog extends StatelessWidget {
-  const _Backlog({required this.tasks});
+class BacklogX extends StatelessWidget {
+  const BacklogX({required this.tasks});
 
   final TaskProvider tasks;
 
@@ -160,7 +147,7 @@ class _Backlog extends StatelessWidget {
     return Column(
       children: [
         for (final t in visible) TaskTile(task: t),
-        if (hidden > 0) _ShowMore(count: hidden, items: items, cap: cap),
+        if (hidden > 0) ShowMoreX(count: hidden, items: items, cap: cap),
       ],
     );
   }
@@ -168,18 +155,18 @@ class _Backlog extends StatelessWidget {
 
 /// Reveals the capped-off tasks. Kept as a small stateful widget so the cap is
 /// a soft default, not a hard wall.
-class _ShowMore extends StatefulWidget {
-  const _ShowMore({required this.count, required this.items, required this.cap});
+class ShowMoreX extends StatefulWidget {
+  const ShowMoreX({required this.count, required this.items, required this.cap});
 
   final int count;
   final List<Task> items;
   final int cap;
 
   @override
-  State<_ShowMore> createState() => _ShowMoreState();
+  State<ShowMoreX> createState() => ShowMoreStateX();
 }
 
-class _ShowMoreState extends State<_ShowMore> {
+class ShowMoreStateX extends State<ShowMoreX> {
   bool _expanded = false;
 
   @override
@@ -198,8 +185,8 @@ class _ShowMoreState extends State<_ShowMore> {
   }
 }
 
-class _SleepScheduleBar extends StatelessWidget {
-  const _SleepScheduleBar();
+class SleepScheduleBarX extends StatelessWidget {
+  const SleepScheduleBarX();
 
   Future<void> _pickTime(BuildContext context, TimeOfDay current, ValueChanged<TimeOfDay> onChanged) async {
     final t = await showTimePicker(context: context, initialTime: current);
@@ -216,7 +203,7 @@ class _SleepScheduleBar extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: _TimePill(
+            child: TimePillX(
               icon: 'sun',
               label: 'Wake',
               value: settings.wakeUpTime.format(context),
@@ -225,7 +212,7 @@ class _SleepScheduleBar extends StatelessWidget {
           ),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
-            child: _TimePill(
+            child: TimePillX(
               icon: 'moon',
               label: 'Sleep',
               value: settings.sleepTime.format(context),
@@ -288,8 +275,8 @@ class _SleepScheduleBar extends StatelessWidget {
 
 /// A compact tappable pill showing a labelled time (Wake / Sleep) on the day
 /// header. Opens a time picker on tap.
-class _TimePill extends StatelessWidget {
-  const _TimePill({
+class TimePillX extends StatelessWidget {
+  const TimePillX({
     required this.icon,
     required this.label,
     required this.value,

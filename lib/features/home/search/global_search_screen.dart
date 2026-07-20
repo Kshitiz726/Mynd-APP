@@ -178,7 +178,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
         title: '${req.displayName} wants to follow you',
         subtitle: 'follow request',
         icon: 'userPlus',
-        onTap: () => _go(() => nav.select(AppTab.alerts)),
+        onTap: () => _go(() => nav.select(AppTab.today)),
       ));
     }
     for (final n in alerts.allNotifications.where((n) {
@@ -189,7 +189,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
         title: (n.payload['name'] ?? n.payload['body'] ?? n.kind).toString(),
         subtitle: 'notification',
         icon: 'bell',
-        onTap: () => _go(() => nav.select(AppTab.alerts)),
+        onTap: () => _go(() => nav.select(AppTab.today)),
       ));
     }
     if (notifHits.isNotEmpty) {

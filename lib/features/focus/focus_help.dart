@@ -1,4 +1,5 @@
 import 'package:flutter/widgets.dart';
+import '../../core/routes/app_routes.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/utils/haptics.dart';
@@ -43,6 +44,6 @@ void askMyndForHelp(BuildContext context) {
       'Please be gentle and consoling, hype me up a little, and give me one tiny next step I can do right now.');
 
   Haptics.medium();
-  nav.select(AppTab.coach);
+  Navigator.of(context).pushNamed(AppRoutes.coach);
   coach.send(buf.toString());
 }

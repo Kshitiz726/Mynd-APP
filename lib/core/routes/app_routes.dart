@@ -8,4 +8,7 @@ abstract final class AppRoutes {
   static const String notes = '/notes';
   static const String reminders = '/reminders';
   static const String focusActive = '/focus/active';
+  /// Focus and coach are started from the nav bar's (+), not browsed to.
+  static const String focus = '/focus';
+  static const String coach = '/coach';
 }

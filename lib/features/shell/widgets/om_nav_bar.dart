@@ -4,7 +4,6 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../providers/nav_provider.dart';
 import '../../../widgets/om_glass.dart';
-import '../../../widgets/om_mascot.dart';
 import '../../../widgets/om_tappable.dart';
 
 /// The floating bottom navigation bar - a liquid-glass capsule.
@@ -19,11 +18,15 @@ class OmNavBar extends StatelessWidget {
     super.key,
     required this.current,
     required this.onSelect,
+    required this.onCreate,
     this.alertsUnread = 0,
   });
 
   final AppTab current;
   final ValueChanged<AppTab> onSelect;
+
+  /// Opens the create sheet: start a focus session, or talk to the coach.
+  final VoidCallback onCreate;
 
   /// Unread follow-requests + comment alerts - drives the red dot on the bell.
   final int alertsUnread;
@@ -78,8 +81,12 @@ class OmNavBar extends StatelessWidget {
                   child: LayoutBuilder(
                     builder: (context, constraints) {
                       const tabs = AppTab.values;
-                      final slot = constraints.maxWidth / tabs.length;
-                      final index = tabs.indexOf(current);
+                      // Five slots: the four destinations, with (+) sitting in
+                      // the middle where the thumb naturally rests.
+                      final slot = constraints.maxWidth / (tabs.length + 1);
+                      final rawIndex = tabs.indexOf(current);
+                      // Destinations after the centre button shift one slot right.
+                      final index = rawIndex >= 2 ? rawIndex + 1 : rawIndex;
 
                       return Stack(
                         children: [
@@ -95,19 +102,22 @@ class OmNavBar extends StatelessWidget {
                           ),
                           Row(
                             children: [
-                              for (final tab in tabs)
+                              for (var i = 0; i < tabs.length; i++) ...[
+                                if (i == 2)
+                                  SizedBox(width: slot, child: _CreateButton(onTap: onCreate)),
                                 SizedBox(
                                   width: slot,
                                   child: _NavItem(
-                                    tab: tab,
-                                    active: tab == current,
-                                    showDot: tab == AppTab.alerts && alertsUnread > 0,
+                                    tab: tabs[i],
+                                    active: tabs[i] == current,
+                                    showDot: false,
                                     onTap: () {
-                                      if (tab != current) Haptics.select();
-                                      onSelect(tab);
+                                      if (tabs[i] != current) Haptics.select();
+                                      onSelect(tabs[i]);
                                     },
                                   ),
                                 ),
+                              ],
                             ],
                           ),
                         ],
@@ -118,6 +128,45 @@ class OmNavBar extends StatelessWidget {
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The centre (+): starts something rather than navigating somewhere, so it is
+/// a solid, raised affordance instead of another flat destination.
+class _CreateButton extends StatelessWidget {
+  const _CreateButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.omColors;
+    return Center(
+      child: OmTappable(
+        onTap: () {
+          Haptics.medium();
+          onTap();
+        },
+        feedback: OmTapFeedback.none,
+        pressedScale: 0.88,
+        child: Container(
+          width: 46,
+          height: 46,
+          decoration: BoxDecoration(
+            gradient: c.brandGradient,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: c.primary.withValues(alpha: 0.42),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: const Icon(Icons.add_rounded, color: Colors.white, size: 26),
         ),
       ),
     );
@@ -187,9 +236,7 @@ class _NavItem extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          tab == AppTab.you
-              ? _YouAvatar(active: active)
-              : _NavIcon(tab: tab, color: color, showDot: showDot),
+          _NavIcon(tab: tab, color: color, showDot: showDot),
           const SizedBox(height: 3),
           // Labels never wrap or ellipsize: the slot is sized for the longest
           // one, and shrinking beats clipping if a translation runs long.
@@ -254,31 +301,6 @@ class _NavIcon extends StatelessWidget {
             ),
           ),
       ],
-    );
-  }
-}
-
-/// The "you" destination - the user's mascot avatar, ringed when active.
-class _YouAvatar extends StatelessWidget {
-  const _YouAvatar({required this.active});
-
-  final bool active;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.omColors;
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 260),
-      curve: Curves.easeOut,
-      padding: const EdgeInsets.all(1.5),
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: active ? c.primary : Colors.transparent,
-          width: 2,
-        ),
-      ),
-      child: const OmMascot(size: 18),
     );
   }
 }

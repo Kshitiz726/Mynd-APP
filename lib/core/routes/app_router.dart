@@ -6,6 +6,7 @@ import '../../features/notes/notes_screen.dart';
 import '../../features/paywall/paywall_screen.dart';
 import '../../features/profile/profile_screen.dart';
 import '../../features/reminders/reminders_screen.dart';
+import '../../features/coach/coach_screen.dart';
 import '../../features/shell/app_shell.dart';
 import '../../features/auth/login_screen.dart';
 import '../../providers/settings_provider.dart';
@@ -24,6 +25,8 @@ abstract final class AppRouter {
       AppRoutes.notes => (_) => const NotesScreen(),
       AppRoutes.reminders => (_) => const RemindersScreen(),
       AppRoutes.focusActive => (_) => const FocusActiveScreen(),
+      AppRoutes.focus => (_) => const FocusTabShell(),
+      AppRoutes.coach => (_) => const CoachScreen(),
       _ => (_) => const AppShell(),
     };
 

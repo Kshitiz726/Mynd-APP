@@ -2,19 +2,20 @@ import 'package:flutter/widgets.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// The primary bottom-navigation destinations, mirroring the prototype's
-/// `.navbar` buttons: today · focus · community · alerts · coach · you.
+/// `.navbar` buttons: home · schedule · (+) · community · settings.
+///
+/// Focus and the coach are no longer destinations: they are things you *start*,
+/// so they live behind the centre (+) and open as full-screen routes.
 ///
 /// Icons come from **Lucide** - the one icon family used everywhere else in the
 /// app - so the tab bar matches the rest of the UI. The selected tab is
 /// distinguished by the nav bar's tinted "expanding pill" (icon + label), not by
 /// swapping to a filled glyph, so [activeIcon] mirrors [icon].
 enum AppTab {
-  today(label: 'today', icon: LucideIcons.house),
-  focus(label: 'focus', icon: LucideIcons.timer),
+  today(label: 'home', icon: LucideIcons.house),
+  schedule(label: 'schedule', icon: LucideIcons.calendarDays),
   community(label: 'community', icon: LucideIcons.users),
-  alerts(label: 'alerts', icon: LucideIcons.bell),
-  coach(label: 'coach', icon: LucideIcons.messageCircle),
-  you(label: 'you', icon: LucideIcons.user);
+  settings(label: 'settings', icon: LucideIcons.settings);
 
   const AppTab({required this.label, required this.icon});
 

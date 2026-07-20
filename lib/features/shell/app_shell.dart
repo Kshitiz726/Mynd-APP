@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/alerts_provider.dart';
@@ -7,15 +8,16 @@ import '../../providers/settings_provider.dart';
 import 'widgets/animated_index_stack.dart';
 import '../../providers/focus_provider.dart';
 import '../../providers/nav_provider.dart';
+import '../../core/theme/app_colors.dart';
 import '../../widgets/low_stim_filter.dart';
-import '../coach/coach_screen.dart';
 import '../community/community_screen.dart';
 import '../focus/focus_active_screen.dart';
 import '../focus/focus_room_screen.dart';
 import '../focus/focus_screen.dart';
+import '../schedule/schedule_screen.dart';
+import '../../core/routes/app_routes.dart';
 import '../../providers/focus_room_provider.dart';
 import '../home/home_screen.dart';
-import '../notifications/notifications_screen.dart';
 import '../profile/profile_screen.dart';
 import 'widgets/live_focus_pill.dart';
 import 'widgets/om_nav_bar.dart';
@@ -32,10 +34,8 @@ class _AppShellState extends State<AppShell> {
   /// Tab order must match [AppTab.values].
   static const List<Widget> _tabs = [
     HomeScreen(),
-    FocusTabShell(),
+    ScheduleScreen(),
     CommunityScreen(),
-    NotificationsScreen(),
-    CoachScreen(),
     ProfileScreen(),
   ];
 
@@ -60,18 +60,15 @@ class _AppShellState extends State<AppShell> {
   Widget build(BuildContext context) {
     final nav = context.watch<NavProvider>();
     final focus = context.watch<FocusProvider>();
-    final showLivePill = focus.isActive && nav.tab != AppTab.focus;
+    // Focus is a route now, so the live pill is always worth showing in the shell.
+    final showLivePill = focus.isActive;
 
     // Immersive surfaces hide the bottom nav so they read full-screen: a live
     // focus room, an open DM / group chat, and the keyboard being up.
     final inFocusRoom = context.watch<FocusRoomProvider>().activeRoomId != null;
     final inChat = context.watch<ChatProvider>().activeConversationId != null;
     final keyboardUp = MediaQuery.of(context).viewInsets.bottom != 0;
-    final hideNav = inFocusRoom ||
-        inChat ||
-        keyboardUp ||
-        nav.tab == AppTab.coach || // Coach is a focused Messenger-style view
-        (focus.isActive && nav.tab == AppTab.focus);
+    final hideNav = inFocusRoom || inChat || keyboardUp;
 
     return LowStimFilter(
       child: Scaffold(
@@ -105,7 +102,7 @@ class _AppShellState extends State<AppShell> {
                       child: LiveFocusPill(
                         time: focus.timeString,
                         modeName: focus.activeMode!.name,
-                        onTap: () => nav.select(AppTab.focus),
+                        onTap: () => Navigator.of(context).pushNamed(AppRoutes.focus),
                       ),
                     ),
                   ),
@@ -118,11 +115,68 @@ class _AppShellState extends State<AppShell> {
             : OmNavBar(
                 current: nav.tab,
                 onSelect: nav.select,
+                onCreate: () => _showCreateSheet(context),
                 alertsUnread: context.watch<AlertsProvider>().alertsUnread,
               ),
       ),
     );
   }
+}
+
+/// The (+) sheet: the two things you *start* rather than browse to.
+void _showCreateSheet(BuildContext context) {
+  showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    builder: (sheetContext) {
+      final c = sheetContext.omColors;
+      Widget option({
+        required IconData icon,
+        required String title,
+        required String subtitle,
+        required String route,
+      }) {
+        return ListTile(
+          leading: Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: c.primary.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(icon, color: c.primary),
+          ),
+          title: Text(title, style: Theme.of(sheetContext).textTheme.titleMedium),
+          subtitle: Text(subtitle, style: Theme.of(sheetContext).textTheme.bodySmall),
+          onTap: () {
+            Navigator.of(sheetContext).pop();
+            Navigator.of(context).pushNamed(route);
+          },
+        );
+      }
+
+      return SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            option(
+              icon: LucideIcons.timer,
+              title: 'focus session',
+              subtitle: 'sprint, pomodoro, deep work or flow',
+              route: AppRoutes.focus,
+            ),
+            option(
+              icon: LucideIcons.messageCircle,
+              title: 'talk to your coach',
+              subtitle: 'think out loud, get unstuck',
+              route: AppRoutes.coach,
+            ),
+            const SizedBox(height: 12),
+          ],
+        ),
+      );
+    },
+  );
 }
 
 /// A wrapper for the Focus tab to switch between the setup and active timer.

@@ -306,10 +306,13 @@ class _TimelineBlock extends StatelessWidget {
     Widget block = Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
       child: OmTappable(
-        onLongPress: pinned ? null : () => showEditTaskSheet(context, task),
+        // Long-press belongs to the drag gesture: an onLongPress here won the
+        // arena first, so press-and-hold opened the edit sheet instead of
+        // picking the block up. Editing moved to a plain tap.
+        onLongPress: null,
         feedback: OmTapFeedback.none,
         pressedScale: pinned ? 1.0 : 0.99,
-        onTap: null, // Just for long press right now
+        onTap: pinned ? null : () => showEditTaskSheet(context, task),
         child: Container(
           decoration: BoxDecoration(
             color: cardColor,
