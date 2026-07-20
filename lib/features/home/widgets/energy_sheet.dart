@@ -107,6 +107,14 @@ class _EnergyRow extends StatelessWidget {
 }
 
 /// Quick "brain dump" sheet to add a task with an energy tag.
+/// Rounds up to the next :00/:15/:30/:45 so generated blocks start on a clean
+/// slot instead of an arbitrary 10:37.
+DateTime _nextQuarterHour(DateTime t) {
+  final base = DateTime(t.year, t.month, t.day, t.hour, t.minute);
+  final add = 15 - (base.minute % 15);
+  return base.add(Duration(minutes: add == 15 ? 0 : add));
+}
+
 Future<void> showQuickAddTask(BuildContext context) async {
   final tasks = context.read<TaskProvider>();
   var energy = EnergyLevel.high;
@@ -144,12 +152,14 @@ Future<void> showQuickAddTask(BuildContext context) async {
                 try {
                   final prompt = '''
 You are an ADHD task assistant. The user provided a brain dump: "$text".
-Break this down into concise, actionable tasks. For each task, provide a title, an energy level (high, low, dead), and optionally a list of micro-steps.
+Break this down into concise, actionable tasks. For each task, provide a title, an energy level (high, low, dead), an estimated duration in minutes, and optionally a list of micro-steps.
+Keep durations realistic and ADHD-friendly: 15-45 minutes each.
 Respond ONLY with a valid JSON array of objects. Do not wrap it in markdown. Format:
 [
   {
     "title": "Task title",
     "energy": "high",
+    "minutes": 30,
     "steps": ["Step 1", "Step 2"]
   }
 ]
@@ -162,24 +172,39 @@ Respond ONLY with a valid JSON array of objects. Do not wrap it in markdown. For
                   final cleaned = response.replaceAll('```json', '').replaceAll('```', '').trim();
                   final jsonArray = jsonDecode(cleaned) as List;
                   final newTasks = <Task>[];
+
+                  // Lay the steps out back-to-back from the next quarter hour.
+                  // Without a startTime a task is invisible to daySchedule, so
+                  // an unscheduled breakdown never reaches the timeline at all —
+                  // which reads as "the AI did nothing".
+                  var cursor = _nextQuarterHour(DateTime.now());
+
                   for (final item in jsonArray) {
                     final map = item as Map<String, dynamic>;
                     final eStr = map['energy']?.toString().toLowerCase() ?? '';
                     final en = eStr.contains('high') ? EnergyLevel.high :
                                eStr.contains('low') ? EnergyLevel.low : EnergyLevel.dead;
-                    
+
                     final stepsJson = map['steps'] as List?;
                     final steps = stepsJson?.map((s) => MicroStep(text: s.toString())).toList();
-                    
+
+                    final mins = (map['minutes'] as num?)?.clamp(5, 120).toInt() ?? 30;
+
                     newTasks.add(Task(
                       id: 'ai-${DateTime.now().microsecondsSinceEpoch}-${newTasks.length}',
                       title: map['title']?.toString() ?? 'Untitled',
                       time: 'today',
                       energy: en,
                       steps: steps,
+                      scheduled: true,
+                      startTime: cursor,
+                      duration: Duration(minutes: mins),
                     ));
+
+                    // A short breather between blocks, rounded to a clean slot.
+                    cursor = _nextQuarterHour(cursor.add(Duration(minutes: mins + 5)));
                   }
-                  
+
                   if (newTasks.isNotEmpty) {
                     tasks.addTasks(newTasks);
                     Haptics.success();
@@ -187,8 +212,14 @@ Respond ONLY with a valid JSON array of objects. Do not wrap it in markdown. For
                     tasks.addQuickTask(text, energy);
                   }
                 } catch (e) {
-                  // Fallback to basic quick task if AI fails
+                  // Still capture the thought — offloading it is the point — but
+                  // say what went wrong. Swallowing this made a broken API key
+                  // and a malformed response look identical to "AI is off".
+                  debugPrint('[brain-dump] breakdown failed: $e');
                   tasks.addQuickTask(text, energy);
+                  if (context.mounted) {
+                    Toast.show(context, "Saved it, but couldn't break it down — $e");
+                  }
                 }
               });
             }

@@ -150,7 +150,7 @@ class _NowIndicatorState extends State<_NowIndicator> {
 }
 
 class _TimelineBlock extends StatelessWidget {
-  const _TimelineBlock({super.key, required this.task, this.gapAfter, this.gapStart});
+  const _TimelineBlock({required this.task, this.gapAfter, this.gapStart});
 
   final Task task;
   final Duration? gapAfter;
@@ -167,123 +167,122 @@ class _TimelineBlock extends StatelessWidget {
     final startStr = task.startTime != null ? DateFormat.jm().format(task.startTime!) : task.time.split(' ').first;
     final endStr = task.endTime != null ? DateFormat.jm().format(task.endTime!) : task.time;
 
+    // Done blocks tint toward their accent instead of staying white — finished
+    // work should read as settled at a glance, without relying on the
+    // strikethrough being legible.
+    final cardColor = task.done ? accent.withValues(alpha: 0.10) : c.surface;
+
     Widget block = Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 55,
-            child: Padding(
-              padding: const EdgeInsets.only(top: 16),
-              child: Text(startStr, style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                fontWeight: FontWeight.w700,
-                color: c.text,
-                fontSize: 11,
-              )),
+      child: OmTappable(
+        onLongPress: () => showEditTaskSheet(context, task),
+        feedback: OmTapFeedback.none,
+        pressedScale: 0.99,
+        onTap: null, // Just for long press right now
+        child: Container(
+          decoration: BoxDecoration(
+            color: cardColor,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(
+              color: task.done ? accent.withValues(alpha: 0.18) : c.border,
             ),
+            boxShadow: task.done
+                ? null
+                : [
+                    BoxShadow(
+                      color: c.shadow.withValues(alpha: 0.06),
+                      blurRadius: 18,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
           ),
-          Expanded(
-            child: OmTappable(
-              onLongPress: () => showEditTaskSheet(context, task),
-              feedback: OmTapFeedback.none,
-              pressedScale: 0.99,
-              onTap: null, // Just for long press right now
-              child: Container(
-                decoration: BoxDecoration(
-                  color: accent.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(20),
-                child: IntrinsicHeight(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Container(width: 5, color: accent),
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  if (task.isGoalTask)
-                                    Icon(OmIcons.byName('activity'), size: 11, color: accent),
-                                  if (task.isGoalTask) const SizedBox(width: 4),
-                                  Flexible(
-                                    child: Text(
-                                      task.isGoalTask
-                                          ? 'GOAL · ${task.goalTitle?.toUpperCase() ?? ''}'
-                                          : task.isChunk
-                                              ? '${task.energy.label.toUpperCase()} · PART ${task.chunkIndex}/${task.chunkCount}'
-                                              : task.energy.label.toUpperCase(),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                        color: accent,
-                                        fontSize: 9,
-                                        fontWeight: FontWeight.w900,
-                                        letterSpacing: 1.0,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 6),
-                              Text(task.title, style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w700,
-                                decoration: task.done ? TextDecoration.lineThrough : null,
-                              )),
-                              const SizedBox(height: 4),
-                              // Tap the time range to edit start/end.
-                              OmTappable(
-                                onTap: () => _editBlockTime(context, task),
-                                feedback: OmTapFeedback.none,
-                                pressedScale: 0.97,
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text('$startStr - $endStr', style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w500,
-                                      color: c.text2,
-                                    )),
-                                    const SizedBox(width: 5),
-                                    Icon(OmIcons.byName('edit'), size: 12, color: c.text2),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: Center(
-                          child: _CheckCircle(
-                            done: task.done,
-                            color: c.border.withValues(alpha: 0.8),
-                            onTap: () {
-                              Haptics.medium();
-                              context.read<TaskProvider>().toggleDone(task);
-                              if (task.isGoalTask) {
-                                context.read<GoalProvider>().markMilestoneDone(task.id, task.done);
-                              }
-                            },
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+          padding: const EdgeInsets.fromLTRB(14, 16, 16, 16),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // The check leads the card, so completing is the nearest action.
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: _CheckCircle(
+                  done: task.done,
+                  color: task.done ? accent : c.border.withValues(alpha: 0.9),
+                  onTap: () {
+                    Haptics.medium();
+                    context.read<TaskProvider>().toggleDone(task);
+                    if (task.isGoalTask) {
+                      context.read<GoalProvider>().markMilestoneDone(task.id, task.done);
+                    }
+                  },
                 ),
               ),
-            ),
-            ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      task.title,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontSize: 17,
+                            height: 1.25,
+                            fontWeight: FontWeight.w800,
+                            color: task.done ? c.text2 : c.text,
+                            decoration: task.done ? TextDecoration.lineThrough : null,
+                          ),
+                    ),
+                    const SizedBox(height: 8),
+                    // Time reads as metadata under the title, the way the
+                    // reference's "1 min article" line does — still tappable.
+                    OmTappable(
+                      onTap: () => _editBlockTime(context, task),
+                      feedback: OmTapFeedback.none,
+                      pressedScale: 0.97,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(OmIcons.byName('clock'), size: 13, color: c.text2),
+                          const SizedBox(width: 5),
+                          Text(
+                            '$startStr - $endStr',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: c.text2,
+                                ),
+                          ),
+                          const SizedBox(width: 8),
+                          // Energy / goal provenance, demoted to a quiet dot-tag.
+                          Container(
+                            width: 5,
+                            height: 5,
+                            decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
+                          ),
+                          const SizedBox(width: 5),
+                          Flexible(
+                            child: Text(
+                              task.isGoalTask
+                                  ? (task.goalTitle ?? 'goal')
+                                  : task.isChunk
+                                      ? '${task.energy.label} · part ${task.chunkIndex}/${task.chunkCount}'
+                                      : task.energy.label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                    color: accent,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
 
