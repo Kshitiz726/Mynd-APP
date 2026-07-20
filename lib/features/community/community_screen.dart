@@ -89,8 +89,8 @@ class _CommunityScreenState extends State<CommunityScreen> {
 
     return Stack(
       children: [
-        // The glass cards need something to refract: a soft brand wash, warm at
-        // the top and cooling into the surface.
+        // The glass cards need something to refract: peach at the top cooling
+        // into brand lilac, so every card sits on colour rather than on grey.
         Positioned.fill(
           child: DecoratedBox(
             decoration: BoxDecoration(
@@ -98,11 +98,12 @@ class _CommunityScreenState extends State<CommunityScreen> {
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  Color.lerp(c.primary, c.surface, 0.82)!,
-                  Color.lerp(const Color(0xFFFFE6D0), c.surface, 0.72)!,
+                  Color.lerp(const Color(0xFFFFD9BE), c.surface, context.isDark ? 0.84 : 0.42)!,
+                  Color.lerp(const Color(0xFFFFC9D6), c.surface, context.isDark ? 0.86 : 0.58)!,
+                  Color.lerp(c.primary, c.surface, context.isDark ? 0.88 : 0.72)!,
                   c.surface,
                 ],
-                stops: const [0.0, 0.38, 0.85],
+                stops: const [0.0, 0.26, 0.62, 1.0],
               ),
             ),
           ),
@@ -171,13 +172,22 @@ class _HeroCard extends StatelessWidget {
     return GestureDetector(
       onTap: () => Toast.show(context, 'Opens focus room pre-join'),
       child: Container(
-        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: c.surface,
-          border: Border.all(color: c.border, width: 2),
           borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: c.shadow.withValues(alpha: context.isDark ? 0.4 : 0.08),
+              blurRadius: 22,
+              offset: const Offset(0, 8),
+            ),
+          ],
         ),
-        child: Row(
+        child: OmGlass(
+          borderRadius: 24,
+          blur: 26,
+          opacity: context.isDark ? 0.38 : 0.8,
+          padding: const EdgeInsets.all(16),
+          child: Row(
           children: [
             SizedBox(
               width: 88,
@@ -224,6 +234,7 @@ class _HeroCard extends StatelessWidget {
               ],
             ),
           ],
+          ),
         ),
       ),
     );
@@ -324,12 +335,9 @@ class _FeedTab extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenH),
             child: Column(
-              children: [
-                for (final post in posts) ...[
-                  _PostCard(post: post),
-                  if (post != posts.last) const SizedBox(height: AppSpacing.lg),
-                ],
-              ],
+              // No gap between cards: each one already reserves the space its
+              // avatar hangs into.
+              children: [for (final post in posts) _PostCard(post: post)],
             ),
           ),
       ],
@@ -361,13 +369,22 @@ class _Composer extends StatelessWidget {
     final initial = name.isNotEmpty ? name[0].toUpperCase() : 'Y';
 
     return Container(
-      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))],
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: c.shadow.withValues(alpha: context.isDark ? 0.4 : 0.09),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
-      child: Column(
+      child: OmGlass(
+        borderRadius: 24,
+        blur: 26,
+        opacity: context.isDark ? 0.38 : 0.82,
+        padding: const EdgeInsets.all(14),
+        child: Column(
         children: [
           Row(
             children: [
@@ -407,6 +424,7 @@ class _Composer extends StatelessWidget {
             ],
           ),
         ],
+        ),
       ),
     );
   }
@@ -608,155 +626,173 @@ class _PostCard extends StatelessWidget {
     final reactions = _order.fold<int>(0, (sum, k) => sum + post.countOf(k));
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
+      // Room for the avatar to hang above the card without being clipped.
+      padding: const EdgeInsets.only(bottom: 20),
       child: OmTappable(
         onTap: () => PostCommentsSheet.show(context, post),
         feedback: OmTapFeedback.none,
         pressedScale: 0.995,
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(26),
-            boxShadow: [
-              BoxShadow(
-                color: c.shadow.withValues(alpha: context.isDark ? 0.4 : 0.08),
-                blurRadius: 26,
-                offset: const Offset(0, 10),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              // The card starts below the avatar's centre line, so the face
+              // overlaps the corner exactly as the reference does.
+              margin: const EdgeInsets.only(top: 26),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(28),
+                boxShadow: [
+                  BoxShadow(
+                    color: c.shadow.withValues(alpha: context.isDark ? 0.42 : 0.10),
+                    blurRadius: 30,
+                    offset: const Offset(0, 12),
+                  ),
+                ],
               ),
-            ],
-          ),
-          child: OmGlass(
-            borderRadius: 26,
-            blur: 26,
-            opacity: context.isDark ? 0.4 : 0.78,
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+              child: OmGlass(
+                borderRadius: 28,
+                blur: 28,
+                opacity: context.isDark ? 0.38 : 0.82,
+                padding: const EdgeInsets.fromLTRB(20, 34, 18, 14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    OmAvatar(
-                      userId: post.authorName,
-                      fallbackInitial: post.initial,
-                      fallbackColor: _hex(post.avatarColor),
-                      size: 42,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Flexible(
-                                child: Text(
-                                  post.authorName,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.labelLarge?.copyWith(fontSize: 15),
-                                ),
-                              ),
-                              const SizedBox(width: 6),
                               Text(
-                                _ago(post.createdAt),
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(fontSize: 11.5),
+                                post.authorName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.labelLarge?.copyWith(fontSize: 16),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '${_stamp(post.createdAt)} · ${_ago(post.createdAt)}',
+                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      fontSize: 11.5,
+                                      color: c.text2,
+                                    ),
                               ),
                             ],
                           ),
-                          Text(
-                            _stamp(post.createdAt),
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  fontSize: 11.5,
-                                  color: c.text2,
+                        ),
+                        if (mood != null)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: moodColor.withValues(alpha: 0.16),
+                              borderRadius: BorderRadius.circular(AppRadius.pill),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(mood.icon, size: 12, color: moodColor),
+                                const SizedBox(width: 4),
+                                Text(
+                                  _moodLabel(mood),
+                                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                        color: moodColor,
+                                        fontSize: 10.5,
+                                      ),
                                 ),
+                              ],
+                            ),
                           ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    _PostBody(body: post.body),
+                    if (post.tags.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          for (final t in post.tags)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: c.primaryTint,
+                                borderRadius: BorderRadius.circular(9),
+                              ),
+                              child: Text(
+                                '#$t',
+                                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                      color: c.primary,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                              ),
+                            ),
                         ],
                       ),
-                    ),
-                    if (mood != null)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-                        decoration: BoxDecoration(
-                          color: moodColor.withValues(alpha: 0.16),
-                          borderRadius: BorderRadius.circular(AppRadius.pill),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(mood.icon, size: 12, color: moodColor),
-                            const SizedBox(width: 4),
-                            Text(
-                              _moodLabel(mood),
-                              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                    color: moodColor,
-                                    fontSize: 10.5,
-                                  ),
-                            ),
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                _PostBody(body: post.body),
-                if (post.tags.isNotEmpty) ...[
-                  const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: [
-                      for (final t in post.tags)
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: c.primaryTint,
-                            borderRadius: BorderRadius.circular(9),
-                          ),
-                          child: Text(
-                            '#$t',
-                            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                  color: c.primary,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                          ),
-                        ),
                     ],
-                  ),
-                ],
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    // The reference's "+23K likes" line: the weight of the room,
-                    // stated before the buttons to press.
-                    if (reactions > 0) ...[
-                      Icon(OmIcons.byName('heart'), size: 14, color: c.primary),
-                      const SizedBox(width: 5),
-                      Text(
-                        '$reactions',
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                              color: c.text2,
-                              fontWeight: FontWeight.w700,
+                    const SizedBox(height: 14),
+                    // A hairline before the actions: the reference separates
+                    // what was said from what you can do about it.
+                    Container(height: 1, color: c.border.withValues(alpha: 0.6)),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        for (final kind in _order)
+                          _IconAction(
+                            iconName: kind.iconName,
+                            count: post.countOf(kind),
+                            active: post.isActive(kind),
+                            onTap: () => context.read<CommunityProvider>().toggleReaction(post.id, kind),
+                          ),
+                        const Spacer(),
+                        if (reactions > 0)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 4),
+                            child: Text(
+                              '$reactions ${reactions == 1 ? 'reaction' : 'reactions'}',
+                              style: Theme.of(context).textTheme.labelSmall?.copyWith(color: c.text2),
                             ),
-                      ),
-                    ],
-                    const Spacer(),
-                    for (final kind in _order)
-                      _IconAction(
-                        iconName: kind.iconName,
-                        count: post.countOf(kind),
-                        active: post.isActive(kind),
-                        onTap: () => context.read<CommunityProvider>().toggleReaction(post.id, kind),
-                      ),
-                    _IconAction(
-                      iconName: 'message',
-                      count: post.commentCount,
-                      active: false,
-                      onTap: () => PostCommentsSheet.show(context, post),
+                          ),
+                        _IconAction(
+                          iconName: 'message',
+                          count: post.commentCount,
+                          active: false,
+                          onTap: () => PostCommentsSheet.show(context, post),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-              ],
+              ),
             ),
-          ),
+            // The face hangs off the card's top-left corner, ringed so it reads
+            // as sitting above the glass rather than inside it.
+            Positioned(
+              left: 18,
+              top: 0,
+              child: Container(
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: c.surface,
+                  boxShadow: [
+                    BoxShadow(
+                      color: c.shadow.withValues(alpha: context.isDark ? 0.5 : 0.14),
+                      blurRadius: 14,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
+                ),
+                child: OmAvatar(
+                  userId: post.authorName,
+                  fallbackInitial: post.initial,
+                  fallbackColor: _hex(post.avatarColor),
+                  size: 46,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
