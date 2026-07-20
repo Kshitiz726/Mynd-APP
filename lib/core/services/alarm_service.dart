@@ -5,8 +5,6 @@ import 'package:flutter/material.dart';
 import '../../features/alarms/alarm_wake_screen.dart';
 import '../../main.dart';
 import '../../providers/alarms_provider.dart';
-import '../../providers/settings_provider.dart';
-import '../../providers/task_provider.dart';
 import 'package:provider/provider.dart';
 class AlarmService {
   AlarmService._();
@@ -34,31 +32,26 @@ class AlarmService {
     final timeStr = '$hour:$minute';
     final minuteKey = '${now.year}${now.month}${now.day}_$timeStr';
 
-    // 1. Check Alarms
+    // Only alarms the user explicitly set ring. Scheduled tasks deliberately do
+    // NOT: a task having a start time is a plan, not a request to be interrupted,
+    // and taking over the screen mid-sentence is exactly the kind of jolt this
+    // app exists to avoid.
     final alarms = ctx.read<AlarmsProvider>().alarms;
     for (final a in alarms) {
       if (a.enabled && a.time == timeStr) {
         final triggerId = 'alarm_${a.id}_$minuteKey';
         if (!_triggeredIds.contains(triggerId)) {
           _triggeredIds.add(triggerId);
-          AlarmWakeScreen.open(ctx, a.time, a.ringtone);
+          // The wake screen is a translucent route pushed over live UI. Pushing
+          // straight from this timer can land mid-frame — while a sheet is
+          // dismissing or the keyboard is animating — and rearranging the tree
+          // during teardown crashes. Wait for the frame to finish.
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!ctx.mounted) return;
+            AlarmWakeScreen.open(ctx, a.time, a.ringtone);
+          });
           if (a.repeat == 'once') {
             ctx.read<AlarmsProvider>().toggleEnabled(a.id, false);
-          }
-        }
-      }
-    }
-
-    // 2. Check Reminders (Tasks)
-    final tasks = ctx.read<TaskProvider>().daySchedule;
-    for (final t in tasks) {
-      if (t.startTime != null && !t.done) {
-        final st = t.startTime!;
-        if (st.hour == now.hour && st.minute == now.minute) {
-          final triggerId = 'task_${t.id}_$minuteKey';
-          if (!_triggeredIds.contains(triggerId)) {
-            _triggeredIds.add(triggerId);
-            AlarmWakeScreen.open(ctx, t.title, 'Chime');
           }
         }
       }
