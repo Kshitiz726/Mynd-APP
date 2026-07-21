@@ -49,13 +49,20 @@ const _benefits = [
 ];
 
 /// The palette is fixed rather than themed: this screen stays the same deep
-/// blue in light mode and dark, because a paywall that restyles itself reads as
-/// a different app at exactly the moment you are asking someone to trust you
+/// indigo in light mode and dark, because a paywall that restyles itself reads
+/// as a different app at exactly the moment you are asking someone to trust you
 /// with money.
-const _bgTop = Color(0xFF12243A);
-const _bgBottom = Color(0xFF0B1724);
-const _cyan = Color(0xFF4FD1E5);
-const _cyanDeep = Color(0xFF35B6D6);
+///
+/// Fixed, but not foreign. These are OurMynd's own brand violets darkened into
+/// a night version of the app, not a borrowed cyan - the moment you ask for
+/// money is the worst possible moment to look like somebody else's product.
+const _bgTop = Color(0xFF231F45);
+const _bgBottom = Color(0xFF15132B);
+const _brand = Color(0xFF9D93F0);
+
+/// The CTA runs a shade deeper than [_brand] so white sits on it legibly.
+const _ctaTop = Color(0xFF7C72DF);
+const _ctaBottom = Color(0xFF5A5FC2);
 
 class _PaywallScreenState extends State<PaywallScreen> {
   String _selected = 'yearly';
@@ -124,7 +131,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
                         padding: const EdgeInsets.only(bottom: 14),
                         child: Row(
                           children: [
-                            const Icon(Icons.check_circle_rounded, size: 20, color: _cyan),
+                            const Icon(Icons.check_circle_rounded, size: 20, color: _brand),
                             const SizedBox(width: 12),
                             Text(
                               b,
@@ -286,7 +293,7 @@ class _TrialExplainer extends StatelessWidget {
                           child: Text(
                             'View All Plans',
                             style: TextStyle(
-                              color: _cyan,
+                              color: _brand,
                               fontSize: 14.5,
                               fontWeight: FontWeight.w700,
                             ),
@@ -401,7 +408,7 @@ class _PlanCard extends StatelessWidget {
           color: Colors.white.withValues(alpha: selected ? 0.10 : 0.05),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: selected ? _cyan : Colors.white.withValues(alpha: 0.12),
+            color: selected ? _brand : Colors.white.withValues(alpha: 0.12),
             width: selected ? 1.6 : 1,
           ),
         ),
@@ -410,7 +417,7 @@ class _PlanCard extends StatelessWidget {
             Icon(
               selected ? Icons.check_circle_rounded : Icons.circle_outlined,
               size: 22,
-              color: selected ? _cyan : Colors.white.withValues(alpha: 0.35),
+              color: selected ? _brand : Colors.white.withValues(alpha: 0.35),
             ),
             const SizedBox(width: 12),
             Text(
@@ -426,13 +433,13 @@ class _PlanCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: _cyan.withValues(alpha: 0.20),
+                  color: _brand.withValues(alpha: 0.20),
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
                   plan.badge!,
                   style: const TextStyle(
-                    color: _cyan,
+                    color: _brand,
                     fontSize: 11,
                     fontWeight: FontWeight.w800,
                   ),
@@ -471,11 +478,15 @@ class _CtaButton extends StatelessWidget {
         height: 54,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          gradient: const LinearGradient(colors: [_cyan, _cyanDeep]),
+          // The CTA is the app's own primary button, white on violet, so the
+          // one control that takes money looks like every other control the
+          // person has already learned to trust. Dark-on-bright was a holdover
+          // from the cyan reference and read as a disabled button here.
+          gradient: const LinearGradient(colors: [_ctaTop, _ctaBottom]),
           borderRadius: BorderRadius.circular(AppRadius.pill),
           boxShadow: [
             BoxShadow(
-              color: _cyan.withValues(alpha: 0.30),
+              color: _ctaBottom.withValues(alpha: 0.45),
               blurRadius: 20,
               offset: const Offset(0, 8),
             ),
@@ -484,7 +495,7 @@ class _CtaButton extends StatelessWidget {
         child: Text(
           label,
           style: const TextStyle(
-            color: Color(0xFF0B1724),
+            color: Colors.white,
             fontSize: 16,
             fontWeight: FontWeight.w800,
           ),
