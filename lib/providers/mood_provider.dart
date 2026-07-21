@@ -146,10 +146,16 @@ class MoodProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Fired when a check-in is logged, so the streak can record today. Saying
+  /// how the day is going counts as showing up, which is the point: on the days
+  /// you have nothing in you, saying so should be enough to keep the streak.
+  VoidCallback? onCheckIn;
+
   /// Log (or change) today's mood. Re-checking in replaces the entry rather
   /// than adding a second one: a day has one mood in this model, and letting
   /// them correct it costs nothing.
   Future<void> checkIn(Mood mood, {String? note}) async {
+    onCheckIn?.call();
     final now = DateTime.now();
     _entries.removeWhere((e) => _sameDay(e.day, now));
     _entries.add(MoodEntry(day: DateTime(now.year, now.month, now.day), mood: mood, note: note));

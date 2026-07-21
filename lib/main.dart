@@ -28,6 +28,7 @@ import 'providers/nav_provider.dart';
 import 'providers/reminders_provider.dart';
 import 'providers/notes_provider.dart';
 import 'providers/settings_provider.dart';
+import 'providers/streak_provider.dart';
 import 'providers/task_provider.dart';
 import 'services/notification_service.dart';
 import 'widgets/puter_host.dart';
@@ -101,6 +102,21 @@ class OurMyndApp extends StatelessWidget {
         // them, and read back into every coach reply.
         ChangeNotifierProvider(create: (_) => MemoryProvider()),
         ChangeNotifierProvider(create: (_) => MoodProvider()),
+        // Consecutive days you showed up. Listens for the two things that
+        // count rather than polling them, and reconciles a check-in that
+        // happened before this provider existed (a cold start later the same
+        // day) from the mood history.
+        ChangeNotifierProxyProvider2<TaskProvider, MoodProvider,
+            StreakProvider>(
+          create: (_) => StreakProvider(),
+          update: (_, tasks, mood, previous) {
+            final streak = previous ?? StreakProvider();
+            tasks.onTaskCompleted = streak.markToday;
+            mood.onCheckIn = streak.markToday;
+            if (mood.today != null) streak.markToday();
+            return streak;
+          },
+        ),
         ChangeNotifierProvider(create: (_) => NotesProvider(ApiClient.instance)),
         // Goals depend on TaskProvider (they push today's milestones into it).
         ChangeNotifierProxyProvider<TaskProvider, GoalProvider>(

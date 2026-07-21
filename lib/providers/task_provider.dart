@@ -211,8 +211,16 @@ class TaskProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Fired the moment a task is checked off, so the streak can record *today*.
+  ///
+  /// An event rather than the provider exposing "how many are done", because
+  /// that count belongs to whichever day is being looked at - scrolling back
+  /// to last Tuesday would otherwise credit today.
+  VoidCallback? onTaskCompleted;
+
   void toggleDone(Task task) {
     task.done = !task.done;
+    if (task.done) onTaskCompleted?.call();
     // When every chunk of a heavy task is checked off, mark the parent done and
     // clear the now-redundant chunk blocks so it reads as a single finished item.
     if (task.isChunk) {

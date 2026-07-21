@@ -18,6 +18,8 @@ import '../../../widgets/om_mascot.dart';
 import '../../../widgets/om_tappable.dart';
 import '../../../widgets/shimmer_swipe.dart';
 import '../search/global_search_screen.dart';
+import '../../../providers/streak_provider.dart';
+import 'streak_calendar.dart';
 import 'goal_sheet.dart';
 import 'home_illustrations.dart';
 import 'brain_dump_sheet.dart';
@@ -32,11 +34,12 @@ class HomeTopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.omColors;
-    final tasks = context.watch<TaskProvider>();
-    final goalsDone =
-        context.watch<GoalProvider>().goals.fold<int>(0, (s, g) => s + g.doneCount);
-    // A light, derived momentum score so the pill reflects real progress.
-    final berries = tasks.doneCount * 10 + goalsDone * 20;
+    // This pill used to show a "berries" momentum score - doneCount * 10 +
+    // goalsDone * 20 - under a flame icon, which is the universal symbol for a
+    // streak. It reset every midnight and survived nothing, so the flame was
+    // advertising a history the app was not keeping. It is now the streak it
+    // always looked like.
+    final streak = context.watch<StreakProvider>();
 
     final name = ApiConfig.instance.displayName ?? 'friend';
     final userId = ApiConfig.instance.userId ?? name;
@@ -82,23 +85,37 @@ class HomeTopBar extends StatelessWidget {
             ),
           ),
           const SizedBox(width: AppSpacing.sm),
-          Container(
-            height: 44,
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            decoration: BoxDecoration(
-              color: c.primaryTint,
-              borderRadius: BorderRadius.circular(AppRadius.pill),
-            ),
-            child: Row(
-              children: [
-                Icon(OmIcons.byName('flame'), size: 18, color: c.accent),
-                const SizedBox(width: 6),
-                Text('$berries',
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: c.primary,
-                          fontWeight: FontWeight.w800,
-                        )),
-              ],
+          // The streak, and a way into the history behind it. A number with a
+          // flame on it that you cannot tap is asking to be taken on faith.
+          OmTappable(
+            onTap: () => showStreakCalendar(context),
+            feedback: OmTapFeedback.light,
+            pressedScale: 0.94,
+            child: Container(
+              height: 44,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              decoration: BoxDecoration(
+                color: c.primaryTint,
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+              ),
+              child: Row(
+                children: [
+                  Icon(OmIcons.byName('flame'),
+                      size: 18,
+                      // Today not yet earned reads as unlit rather than as a
+                      // broken streak - it is still going, it is just waiting
+                      // on you.
+                      color: streak.todayComplete
+                          ? c.accent
+                          : c.accent.withValues(alpha: 0.45)),
+                  const SizedBox(width: 6),
+                  Text('${streak.currentStreak}',
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                            color: c.primary,
+                            fontWeight: FontWeight.w800,
+                          )),
+                ],
+              ),
             ),
           ),
         ],

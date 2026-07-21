@@ -8,6 +8,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../core/utils/om_icons.dart';
 import '../../../providers/goal_provider.dart';
+import '../../../providers/streak_provider.dart';
 import '../../../providers/task_provider.dart';
 import '../../../widgets/fluid_orb.dart';
 import '../../../widgets/om_glass.dart';
@@ -97,6 +98,11 @@ class _MyndHeroState extends State<MyndHero> with TickerProviderStateMixin {
     final goals = context.watch<GoalProvider>().activeCount;
     final done = tasks.doneCount;
     final scheduled = tasks.daySchedule.length;
+    // The badge wore a flame and showed today's completed-task count, which
+    // meant it read as a streak and reset every midnight. It is the streak now,
+    // and it agrees with the pill in the top bar because both read the same
+    // provider.
+    final streak = context.watch<StreakProvider>();
 
     return Column(
       children: [
@@ -158,7 +164,10 @@ class _MyndHeroState extends State<MyndHero> with TickerProviderStateMixin {
                       Positioned(
                         right: -14,
                         bottom: 2,
-                        child: _StreakBadge(count: done),
+                        child: _StreakBadge(
+                          count: streak.currentStreak,
+                          pending: streak.todayPending,
+                        ),
                       ),
                     ],
                   ),
@@ -183,12 +192,17 @@ class _MyndHeroState extends State<MyndHero> with TickerProviderStateMixin {
   }
 }
 
-/// Streak, unchanged in substance: the count of what you finished today, worn
-/// on the orb rather than listed under it.
+/// The streak, worn on the orb rather than listed under it.
+///
+/// [pending] is the day that has not been earned yet: the badge dims rather
+/// than dropping to zero, because the streak is not broken until the day is
+/// actually over, and resetting the number at midnight would punish someone
+/// for not having started their morning.
 class _StreakBadge extends StatelessWidget {
-  const _StreakBadge({required this.count});
+  const _StreakBadge({required this.count, this.pending = false});
 
   final int count;
+  final bool pending;
 
   @override
   Widget build(BuildContext context) {
@@ -197,7 +211,13 @@ class _StreakBadge extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [c.accent, Color.lerp(c.accent, Colors.red, 0.25)!],
+          colors: pending
+              ? [
+                  c.accent.withValues(alpha: 0.55),
+                  Color.lerp(c.accent, Colors.red, 0.25)!
+                      .withValues(alpha: 0.55),
+                ]
+              : [c.accent, Color.lerp(c.accent, Colors.red, 0.25)!],
         ),
         borderRadius: BorderRadius.circular(AppRadius.pill),
         boxShadow: [
