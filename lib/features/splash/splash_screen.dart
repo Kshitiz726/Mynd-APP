@@ -2,11 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:video_player/video_player.dart';
 
 import '../../core/routes/app_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../providers/settings_provider.dart';
+import '../../widgets/fluid_orb.dart';
 
 /// The way in.
 ///
@@ -15,18 +15,14 @@ import '../../providers/settings_provider.dart';
 /// an animated thing everywhere else in the app, so the one moment it was
 /// guaranteed to be still was the moment it was introducing itself.
 ///
-/// This plays the real thing instead, and the timing is the whole point:
+/// This shows the real thing instead - the same shader-drawn orb the rest of
+/// the app uses, so the logo you are introduced to is the logo you then live
+/// with. It paints on the first frame it is asked to, with nothing to preload
+/// and no decoder to wake up, so there is never a blank hole to cover.
 ///
-///  - The still frame paints first, on the very first frame, so there is never
-///    a blank hole while a decoder wakes up. It is frame 0 of the video (byte
-///    for byte, not by eye), so when the video fades in on top there is
-///    nothing to jump between.
-///  - It holds for a deliberate beat even if the app was ready immediately,
-///    because a splash that flashes past reads as a stutter rather than an
-///    entrance.
-///  - If the app is *not* ready it keeps playing rather than freezing on a
-///    frame. The loop is seamless now, so waiting looks like breathing.
-///  - It leaves on a fade, never a cut.
+/// It holds for a deliberate beat even when the app was ready immediately,
+/// because a splash that flashes past reads as a stutter rather than an
+/// entrance. And it leaves on a fade, never a cut.
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key, required this.next});
 
@@ -45,9 +41,11 @@ class _SplashScreenState extends State<SplashScreen> {
   static const _minShow = Duration(milliseconds: 2200);
   static const _fadeOut = Duration(milliseconds: 520);
 
-  VideoPlayerController? _video;
-  bool _videoReady = false;
   bool _leaving = false;
+
+  /// Reduce-motion gets the orb holding still, and the same beat. The point of
+  /// the setting is that nothing moves, not that nothing happens.
+  bool _moving = true;
 
   @override
   void initState() {
@@ -56,40 +54,12 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _run() async {
-    final started = DateTime.now();
-    // Reduce-motion gets the still frame and the same beat. The point of the
-    // setting is that nothing moves, not that nothing happens.
-    final reduceMotion = context.read<SettingsProvider>().reduceMotion;
+    _moving = !context.read<SettingsProvider>().reduceMotion;
 
-    if (!reduceMotion) {
-      final c = VideoPlayerController.asset('assets/video/fluid.mp4');
-      try {
-        // Fully initialised before it is ever shown - the decoder buffering
-        // mid-frame is what a "laggy" loop usually is.
-        await c.initialize();
-        await c.setLooping(true);
-        await c.setVolume(0);
-        await c.play();
-        if (!mounted) {
-          await c.dispose();
-          return;
-        }
-        setState(() {
-          _video = c;
-          _videoReady = true;
-        });
-      } catch (_) {
-        // The still frame is already on screen and is a perfectly good logo.
-        await c.dispose();
-      }
-    }
-
-    // Whatever is left of the beat after the decoder took its time.
-    final elapsed = DateTime.now().difference(started);
-    final remaining = _minShow - elapsed;
-    if (remaining > Duration.zero) {
-      await Future<void>.delayed(remaining);
-    }
+    // A flat wait now. There is nothing to preload: the orb is a shader, so it
+    // is ready on the frame it is first painted, which is the whole reason it
+    // replaced a video that had to be decoded before it could be shown.
+    await Future<void>.delayed(_minShow);
     if (!mounted) return;
 
     setState(() => _leaving = true);
@@ -106,12 +76,6 @@ class _SplashScreenState extends State<SplashScreen> {
     Navigator.of(context).pushReplacement(
       AppRouter.onGenerateRoute(RouteSettings(name: widget.next)),
     );
-  }
-
-  @override
-  void dispose() {
-    _video?.dispose();
-    super.dispose();
   }
 
   @override
@@ -155,36 +119,13 @@ class _SplashScreenState extends State<SplashScreen> {
               // Leaves *towards* the viewer, which reads as the app opening
               // rather than the logo being dismissed.
               scale: _leaving ? 1.08 : 1,
-              child: SizedBox(
-                width: 200,
-                height: 200,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    // Frame 0, painted immediately. Never a blank hole.
-                    Image.asset('assets/img/logo_static.png',
-                        fit: BoxFit.contain, gaplessPlayback: true),
-                    if (_videoReady && _video != null)
-                      // Cross-fades in over a frame it is identical to, so the
-                      // hand-off is invisible.
-                      AnimatedOpacity(
-                        duration: const Duration(milliseconds: 260),
-                        opacity: 1,
-                        child: FittedBox(
-                          fit: BoxFit.contain,
-                          child: SizedBox(
-                            width: _video!.value.size.width,
-                            height: _video!.value.size.height,
-                            child: VideoPlayer(_video!),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-                ),
-              ),
+              // The same orb the app uses everywhere else, at hero size. No
+              // preload, no decoder, and no still-frame stand-in to cross-fade
+              // from: it paints on the first frame it is asked to.
+              child: FluidOrb(size: 200, playing: _moving),
             ),
-          ],
+          ),
+        ],
         ),
       ),
     );

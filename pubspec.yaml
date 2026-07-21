@@ -69,9 +69,13 @@ flutter:
   uses-material-design: true
   assets:
     - assets/audio/
-    - assets/img/
     - assets/puter/
-    - assets/video/
+
+  # The orb is generated on the GPU rather than decoded from a video, which is
+  # why there is no longer an assets/video/ directory: fluid.mp4 and the still
+  # frame extracted from it are gone. See lib/widgets/fluid_orb.dart.
+  shaders:
+    - shaders/fluid_orb.frag
 
 # App-icon generation from the OurMynd logo.
 # Run: dart run flutter_launcher_icons
