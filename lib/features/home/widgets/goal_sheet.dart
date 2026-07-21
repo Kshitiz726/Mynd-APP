@@ -10,12 +10,16 @@ import '../../../core/utils/toast.dart';
 import '../../../providers/energy_provider.dart';
 import '../../../providers/goal_provider.dart';
 import '../../../widgets/om_button.dart';
+import '../../../widgets/om_form_page.dart';
 import '../../../widgets/om_tappable.dart';
 import '../../../widgets/text_editing_scope.dart';
 
-/// "New goal" sheet: capture a title and a target date ("achieve this by"),
-/// then hand off to [GoalProvider] which breaks the goal into a day-by-day plan
-/// tuned to the user's current energy.
+/// "New goal": capture a title, a target date ("achieve this by") and the slot
+/// they are setting aside for it, then hand off to [GoalProvider] which breaks
+/// the goal into a day-by-day plan tuned to the user's current energy.
+///
+/// A full screen, not a sheet. Four fields and a keyboard is more than a sheet
+/// can hold without shoving itself off the top of the display.
 Future<void> showAddGoalSheet(BuildContext context) async {
   final goals = context.read<GoalProvider>();
   final energy = context.read<EnergyProvider>().current;
@@ -26,21 +30,15 @@ Future<void> showAddGoalSheet(BuildContext context) async {
   TimeOfDay? dailyStart;
   int dailyMinutes = 60;
 
-  await showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    showDragHandle: true,
+  await showOmFormPage<void>(
+    context,
+    title: 'new goal',
+    subtitle: "the big thing - we'll break it into daily steps.",
     builder: (sheetContext) {
       final colors = sheetContext.omColors;
       return TextEditingScope(
-        builder: (scopeContext, controller) => Padding(
-        padding: EdgeInsets.only(
-          left: 20,
-          right: 20,
-          top: 4,
-          bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 24,
-        ),
-        child: StatefulBuilder(
+        builder: (scopeContext, controller) => Builder(
+        builder: (_) => StatefulBuilder(
           builder: (builderContext, setState) {
             Future<void> pickDate() async {
               final now = DateTime.now();
@@ -104,19 +102,12 @@ Future<void> showAddGoalSheet(BuildContext context) async {
               });
             }
 
-            // Scrollable, because this sheet is now tall enough that a raised
-            // keyboard leaves it no room: with the IME up it overflowed by
-            // ~110px and the duration chips were cut off mid-row.
-            return SingleChildScrollView(
-              child: Column(
+            // The page scrolls for us now, and the title/subtitle live in its
+            // header rather than being repeated here.
+            return Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('new goal', style: Theme.of(context).textTheme.titleLarge),
-                const SizedBox(height: 4),
-                Text("the big thing - we'll break it into daily steps.",
-                    style: Theme.of(context).textTheme.bodySmall),
-                const SizedBox(height: AppSpacing.lg),
                 TextField(
                   controller: controller,
                   autofocus: true,
@@ -235,7 +226,6 @@ Future<void> showAddGoalSheet(BuildContext context) async {
                   onPressed: create,
                 ),
               ],
-              ),
             );
           },
         ),

@@ -112,6 +112,22 @@ abstract final class OmIcons {
     'check': Icons.check_rounded,
     'flame': Icons.local_fire_department_rounded,
     'sparkles': Icons.auto_awesome_rounded,
+    // Focus-room badges. These are drawn white-on-gradient at ~21px, where an
+    // outline glyph disappears entirely.
+    'coffee': Icons.local_cafe_rounded,
+    'brain': Icons.psychology_rounded,
+    'keyboard': Icons.keyboard_rounded,
+    'book': Icons.menu_book_rounded,
+    'moon': Icons.bedtime_rounded,
+    'sun': Icons.wb_sunny_rounded,
+    'zap': Icons.bolt_rounded,
+    'leaf': Icons.eco_rounded,
+    'waves': Icons.waves_rounded,
+    'target': Icons.adjust_rounded,
+    'timer': Icons.timer_rounded,
+    'music': Icons.headphones_rounded,
+    'pencil': Icons.edit_rounded,
+    'code': Icons.terminal_rounded,
   };
 
   /// The solid form of [name], falling back to the outline one when there is

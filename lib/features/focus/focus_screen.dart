@@ -16,6 +16,8 @@ import '../../models/task.dart';
 import '../../providers/focus_provider.dart';
 import '../../providers/task_provider.dart';
 import '../../widgets/om_button.dart';
+import '../../widgets/om_form_page.dart';
+import '../../widgets/om_minute_dial.dart';
 import '../../widgets/om_glass.dart';
 import '../../widgets/om_switch.dart';
 import '../../widgets/om_tappable.dart';
@@ -715,25 +717,20 @@ Future<void> showNewFocusSheet(
   required int initialMinutes,
   required void Function(String name, int minutes) onStart,
 }) async {
-  const options = [10, 15, 20, 25, 30, 45, 60, 75, 90, 120];
-  var minutes = options.contains(initialMinutes) ? initialMinutes : 25;
+  // Snapped to 5, so any length is reachable. The old fixed set of ten presets
+  // made the machine's convenient numbers the only allowed answers.
+  var minutes = initialMinutes.clamp(5, 180);
   final focus = context.read<FocusProvider>();
 
-  await showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    showDragHandle: true,
+  await showOmFormPage<void>(
+    context,
+    title: 'new focus',
+    subtitle: 'what are you sitting down to do?',
     builder: (sheetContext) {
       final c = sheetContext.omColors;
       return TextEditingScope(
-        builder: (scopeContext, controller) => Padding(
-          padding: EdgeInsets.only(
-            left: 20,
-            right: 20,
-            top: 4,
-            bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 24,
-          ),
-          child: StatefulBuilder(
+        builder: (scopeContext, controller) => Builder(
+          builder: (_) => StatefulBuilder(
             builder: (builderContext, setSheetState) {
               void save({required bool startNow}) {
                 final name = controller.text.trim();
@@ -743,7 +740,7 @@ Future<void> showNewFocusSheet(
                 }
                 focus.addSavedFocus(name: name, minutes: minutes);
                 FocusManager.instance.primaryFocus?.unfocus();
-                Navigator.of(sheetContext).pop();
+                Navigator.of(builderContext).pop();
                 Haptics.success();
                 if (startNow) {
                   onStart(name, minutes);
@@ -756,12 +753,6 @@ Future<void> showNewFocusSheet(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('new focus',
-                      style: Theme.of(builderContext).textTheme.headlineMedium?.copyWith(fontSize: 24)),
-                  const SizedBox(height: 4),
-                  Text('what are you sitting down to do?',
-                      style: Theme.of(builderContext).textTheme.bodySmall?.copyWith(color: c.text2)),
-                  const SizedBox(height: AppSpacing.lg),
                   TextField(
                     controller: controller,
                     autofocus: true,
@@ -779,45 +770,16 @@ Future<void> showNewFocusSheet(
                     ),
                   ),
                   const SizedBox(height: AppSpacing.lg),
-                  Text('FOCUS TIME IN MINS',
+                  Text('HOW LONG',
                       style: Theme.of(builderContext).textTheme.labelSmall?.copyWith(
                             color: c.text2,
                             fontSize: 9,
                             letterSpacing: 1,
                             fontWeight: FontWeight.w800,
                           )),
-                  const SizedBox(height: AppSpacing.sm),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      for (final m in options)
-                        OmTappable(
-                          onTap: () {
-                            Haptics.select();
-                            setSheetState(() => minutes = m);
-                          },
-                          feedback: OmTapFeedback.none,
-                          pressedScale: 0.94,
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 180),
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                            decoration: BoxDecoration(
-                              gradient: m == minutes ? c.brandGradient : null,
-                              color: m == minutes ? null : c.surfaceAlt,
-                              borderRadius: BorderRadius.circular(AppRadius.pill),
-                              border: Border.all(color: m == minutes ? Colors.transparent : c.border),
-                            ),
-                            child: Text(
-                              '$m',
-                              style: Theme.of(builderContext).textTheme.labelLarge?.copyWith(
-                                    color: m == minutes ? Colors.white : c.text,
-                                    fontSize: 15,
-                                  ),
-                            ),
-                          ),
-                        ),
-                    ],
+                  OmMinuteDial(
+                    value: minutes,
+                    onChanged: (m) => setSheetState(() => minutes = m),
                   ),
                   const SizedBox(height: AppSpacing.xl),
                   OmButton(label: 'save and start', onPressed: () => save(startNow: true)),

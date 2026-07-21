@@ -18,13 +18,16 @@ import '../../providers/chat_provider.dart';
 import '../../providers/focus_room_provider.dart';
 import '../../widgets/om_avatar.dart';
 import '../../widgets/om_card.dart';
+import '../../widgets/om_form_page.dart';
 import '../../widgets/om_glass.dart';
 import '../../widgets/om_tappable.dart';
 import '../home/search/global_search_screen.dart';
 import '../notifications/notifications_screen.dart';
+import '../shell/route_host.dart';
 import 'chat_screen.dart';
 import 'new_dm_sheet.dart';
 import 'widgets/post_comments_sheet.dart';
+import 'widgets/room_glyph.dart';
 import 'package:audioplayers/audioplayers.dart';
 
 final _audio = AudioPlayer();
@@ -262,7 +265,13 @@ class _FeedHeader extends StatelessWidget {
           icon: 'bell',
           dot: unread > 0,
           onTap: () => Navigator.of(context).push(
-            MaterialPageRoute<void>(builder: (_) => const NotificationsScreen()),
+            // Alerts paints no background of its own - pushed bare it rendered
+            // as a transparent sheet with Home legible underneath it. RouteHost
+            // supplies the opaque surface; the screen draws its own back
+            // control, so it does not get a second one.
+            MaterialPageRoute<void>(
+              builder: (_) => const RouteHost(showBack: false, child: NotificationsScreen()),
+            ),
           ),
         ),
         const SizedBox(width: 6),
@@ -370,12 +379,16 @@ class _NewPostFab extends StatelessWidget {
 class _HeroCard extends StatelessWidget {
   const _HeroCard();
 
-  static const _avatars = [('M', Color(0xFF6366F1)), ('A', Color(0xFF10B981)), ('L', Color(0xFFEC4899)), ('J', Color(0xFFF59E0B))];
+  static const _dots = [Color(0xFF6366F1), Color(0xFF10B981), Color(0xFFEC4899), Color(0xFFF59E0B)];
 
   @override
   Widget build(BuildContext context) {
     final c = context.omColors;
     final live = context.watch<FocusRoomProvider>().globalLive;
+    // One disc per person actually in a room, capped at four. It used to draw a
+    // fixed M/A/L/J regardless, so an empty lobby showed four strangers next to
+    // the words "0 minds focusing right now".
+    final faces = live.clamp(0, 4);
     return GestureDetector(
       onTap: () => Toast.show(context, 'Opens focus room pre-join'),
       child: Container(
@@ -396,50 +409,62 @@ class _HeroCard extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           child: Row(
           children: [
-            SizedBox(
-              width: 88,
-              height: 28,
-              child: Stack(
-                children: [
-                  for (var i = 0; i < _avatars.length; i++)
-                    Positioned(
-                      left: i * 20.0,
-                      child: Container(
-                        width: 28,
-                        height: 28,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: _avatars[i].$2,
-                          border: Border.all(color: c.surface, width: 2),
-                        ),
-                        alignment: Alignment.center,
-                        child: Text(_avatars[i].$1,
-                            style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 4),
-            Expanded(
-              child: RichText(
-                text: TextSpan(
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(color: c.text),
+            if (faces > 0) ...[
+              SizedBox(
+                width: 8.0 + faces * 20.0,
+                height: 28,
+                child: Stack(
                   children: [
-                    TextSpan(text: '$live ', style: TextStyle(color: c.primary, fontWeight: FontWeight.w700)),
-                    const TextSpan(text: 'minds focusing right now'),
+                    for (var i = 0; i < faces; i++)
+                      Positioned(
+                        left: i * 20.0,
+                        child: Container(
+                          width: 28,
+                          height: 28,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: _dots[i % _dots.length],
+                            border: Border.all(color: c.surface, width: 2),
+                          ),
+                          alignment: Alignment.center,
+                          child: const Icon(Icons.person_rounded, size: 15, color: Colors.white),
+                        ),
+                      ),
                   ],
                 ),
               ),
+              const SizedBox(width: 8),
+            ] else ...[
+              Icon(OmIcons.byName('waves'), size: 18, color: c.text2),
+              const SizedBox(width: 10),
+            ],
+            Expanded(
+              child: live == 0
+                  ? Text(
+                      'quiet right now. be the first in.',
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(color: c.text2),
+                    )
+                  : RichText(
+                      text: TextSpan(
+                        style: Theme.of(context).textTheme.labelMedium?.copyWith(color: c.text),
+                        children: [
+                          TextSpan(
+                              text: '$live ',
+                              style: TextStyle(color: c.primary, fontWeight: FontWeight.w700)),
+                          TextSpan(text: '${live == 1 ? 'mind' : 'minds'} focusing right now'),
+                        ],
+                      ),
+                    ),
             ),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(width: 6, height: 6, decoration: BoxDecoration(color: c.success, shape: BoxShape.circle)),
-                const SizedBox(width: 4),
-                Text('LIVE', style: Theme.of(context).textTheme.labelSmall?.copyWith(color: c.success, letterSpacing: 0.5)),
-              ],
-            ),
+            if (live > 0)
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(width: 6, height: 6, decoration: BoxDecoration(color: c.success, shape: BoxShape.circle)),
+                  const SizedBox(width: 4),
+                  Text('LIVE', style: Theme.of(context).textTheme.labelSmall?.copyWith(color: c.success, letterSpacing: 0.5)),
+                ],
+              ),
           ],
           ),
         ),
@@ -554,19 +579,22 @@ class _FeedTab extends StatelessWidget {
 class _ComposerSheet extends StatefulWidget {
   const _ComposerSheet();
 
-  /// Opens the sheet carrying the live provider across the route boundary, so
-  /// a new post lands in the same feed you were just looking at.
+  /// Opens the composer as its own screen, carrying the live provider across
+  /// the route boundary so a new post lands in the same feed you were just
+  /// looking at.
+  ///
+  /// It used to be a bottom sheet, which put a text field, a mood row, six tag
+  /// chips and a button inside a box the keyboard then pushed halfway off the
+  /// display. Writing a post deserves the whole screen.
   static void open(BuildContext context) {
     final community = context.read<CommunityProvider>();
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      fullscreenDialog: true,
       builder: (_) => ChangeNotifierProvider.value(
         value: community,
         child: const _ComposerSheet(),
       ),
-    );
+    ));
   }
 
   @override
@@ -613,28 +641,30 @@ class _ComposerSheetState extends State<_ComposerSheet> {
   Widget build(BuildContext context) {
     final c = context.omColors;
     final canPost = _ctrl.text.trim().isNotEmpty && !_posting;
-    return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: c.bg,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+    return OmFormPage(
+      title: 'share with the community',
+      subtitle: 'a win, a struggle, a tip. no pressure to be tidy.',
+      footer: (_) => SizedBox(
+        width: double.infinity,
+        child: FilledButton(
+          onPressed: canPost ? _share : null,
+          style: FilledButton.styleFrom(
+            backgroundColor: c.primary,
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          ),
+          child: _posting
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+              : const Text('Share'),
         ),
-        child: SingleChildScrollView(
-          child: Column(
+      ),
+      child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-            Center(
-              child: Container(
-                width: 40, height: 4,
-                decoration: BoxDecoration(color: c.border, borderRadius: BorderRadius.circular(2)),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text('share with the community', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
               decoration: BoxDecoration(color: c.surface, borderRadius: BorderRadius.circular(18)),
@@ -682,26 +712,8 @@ class _ComposerSheetState extends State<_ComposerSheet> {
                   ),
               ],
             ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: canPost ? _share : null,
-                style: FilledButton.styleFrom(
-                  backgroundColor: c.primary,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                ),
-                child: _posting
-                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                    : const Text('Share'),
-              ),
-            ),
-            const SizedBox(height: 8),
           ],
         ),
-        ),
-      ),
     );
   }
 }
@@ -721,10 +733,6 @@ class _PostCard extends StatelessWidget {
   final Post post;
 
   static const _order = [ReactionKind.relate, ReactionKind.support, ReactionKind.proud];
-
-  /// Relate lives in the card's top-right heart, so the footer carries the
-  /// other two.
-  static const _footer = [ReactionKind.support, ReactionKind.proud];
 
   @override
   Widget build(BuildContext context) {
@@ -799,6 +807,7 @@ class _PostCard extends StatelessWidget {
                           onTap: () => context
                               .read<CommunityProvider>()
                               .toggleReaction(post.id, ReactionKind.relate),
+                          onLongPress: () => _showReactionPicker(context, post),
                         ),
                       ],
                     ),
@@ -829,27 +838,28 @@ class _PostCard extends StatelessWidget {
                       ),
                     ],
                     const SizedBox(height: 12),
-                    // The reference's footer: quiet icons at the two ends, no
-                    // rule between them. Support and proud sit left, the
-                    // comment thread right.
+                    // The reference's footer: quiet, no rule, no second row of
+                    // buttons.
+                    //
+                    // "Support" used to sit here as a heart-with-hands, which
+                    // read as a duplicate of the real heart in the corner and
+                    // animated worse. Reacting now happens in exactly one
+                    // place; the other two kinds live behind a long-press on
+                    // that heart, and tapping the count opens the same picker
+                    // so they are not hidden behind a gesture alone.
                     Row(
                       children: [
-                        for (final kind in _footer)
-                          _IconAction(
-                            iconName: kind.iconName,
-                            count: post.countOf(kind),
-                            active: post.isActive(kind),
-                            onTap: () => context.read<CommunityProvider>().toggleReaction(post.id, kind),
-                          ),
-                        const Spacer(),
                         if (reactions > 0)
-                          Padding(
-                            padding: const EdgeInsets.only(right: 6),
+                          OmTappable(
+                            onTap: () => _showReactionPicker(context, post),
+                            feedback: OmTapFeedback.none,
+                            pressedScale: 0.96,
                             child: Text(
                               '$reactions ${reactions == 1 ? 'reaction' : 'reactions'}',
                               style: Theme.of(context).textTheme.labelSmall?.copyWith(color: c.text2),
                             ),
                           ),
+                        const Spacer(),
                         _IconAction(
                           iconName: 'message',
                           count: post.commentCount,
@@ -945,6 +955,77 @@ class _PostBody extends StatelessWidget {
   }
 }
 
+/// A small floating pill of the three reaction kinds, anchored over the post.
+///
+/// The feed only ever shows one react control. This is where the other two
+/// live, reachable from a long-press on the heart or a tap on the count, so the
+/// card stays quiet without the kinds becoming undiscoverable.
+void _showReactionPicker(BuildContext context, Post post) {
+  Haptics.medium();
+  final provider = context.read<CommunityProvider>();
+  showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    builder: (sheetContext) {
+      final c = sheetContext.omColors;
+      return SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              OmGlass(
+                borderRadius: AppRadius.pill,
+                blur: 30,
+                opacity: sheetContext.isDark ? 0.5 : 0.9,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    for (final kind in _PostCard._order)
+                      OmTappable(
+                        onTap: () {
+                          Haptics.light();
+                          provider.toggleReaction(post.id, kind);
+                          Navigator.of(sheetContext).pop();
+                        },
+                        feedback: OmTapFeedback.none,
+                        pressedScale: 0.86,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _PopIcon(
+                                iconName: kind.iconName,
+                                active: post.isActive(kind),
+                                size: 26,
+                                color: post.isActive(kind) ? c.primary : c.text2,
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                kind.label,
+                                style: Theme.of(sheetContext).textTheme.labelSmall?.copyWith(
+                                      color: post.isActive(kind) ? c.primary : c.text2,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
 /// The circular ghost button in the card's top-right corner.
 class _RoundAction extends StatelessWidget {
   const _RoundAction({
@@ -952,12 +1033,14 @@ class _RoundAction extends StatelessWidget {
     required this.active,
     required this.count,
     required this.onTap,
+    this.onLongPress,
   });
 
   final String iconName;
   final bool active;
   final int count;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -967,6 +1050,7 @@ class _RoundAction extends StatelessWidget {
         Haptics.light();
         onTap();
       },
+      onLongPress: onLongPress,
       feedback: OmTapFeedback.none,
       pressedScale: 0.85,
       child: AnimatedContainer(
@@ -1192,15 +1276,7 @@ class _RoomTile extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: iconColor.withValues(alpha: 0.14),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Icon(OmIcons.byName(room.iconName), size: 21, color: iconColor),
-                  ),
+                  RoomGlyph(iconName: room.iconName, color: iconColor, live: live),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(

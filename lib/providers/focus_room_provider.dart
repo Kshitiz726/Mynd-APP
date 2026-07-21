@@ -27,7 +27,23 @@ class FocusRoomProvider extends ChangeNotifier {
 
   // ── Room list ──
   List<FocusRoom> rooms = [];
-  int globalLive = 0; // "62 minds focusing right now"
+
+  /// Last figure the server pushed for "N minds focusing right now".
+  int _serverLive = 0;
+
+  set globalLive(int v) => _serverLive = v;
+
+  /// What the banner shows.
+  ///
+  /// The server's number arrives on a socket event, so between a cold start and
+  /// the first push it is zero even when rooms visibly have people in them.
+  /// Falling back to the sum of the room counts we already hold means the
+  /// banner is never dishonest in the meantime, and the pushed value wins as
+  /// soon as it lands.
+  int get globalLive {
+    final fromRooms = rooms.fold<int>(0, (sum, r) => sum + r.liveCount);
+    return _serverLive > fromRooms ? _serverLive : fromRooms;
+  }
 
   // ── Active room ──
   String? activeRoomId;
@@ -55,7 +71,7 @@ class FocusRoomProvider extends ChangeNotifier {
 
   void setRooms(List<FocusRoom> r, int global) {
     rooms = r;
-    globalLive = global;
+    _serverLive = global;
     bindLobby();
     notifyListeners();
   }
@@ -87,7 +103,7 @@ class FocusRoomProvider extends ChangeNotifier {
     });
 
     _rt.on('global_focus_update', (d) {
-      globalLive = d['count'] as int? ?? globalLive;
+      _serverLive = d['count'] as int? ?? _serverLive;
       notifyListeners();
     });
   }
