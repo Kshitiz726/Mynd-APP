@@ -36,9 +36,10 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
-  /// Long enough to register as a deliberate entrance, short enough that
-  /// nobody waiting to use the app resents it.
-  static const _minShow = Duration(milliseconds: 2200);
+  /// Long enough to watch the orb actually move through a shape or two, which
+  /// is the point of it being alive rather than a logo. Anything under about
+  /// three seconds and it reads as a flash on the way past.
+  static const _minShow = Duration(milliseconds: 3500);
   static const _fadeOut = Duration(milliseconds: 520);
 
   bool _leaving = false;

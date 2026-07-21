@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12+ replaced the plain window background with its own splash
+     screen, which centres the launcher icon on a coloured field whether you
+     asked for it or not. That is why a white circle with the MYND smiley
+     appeared before our own launch screen: two logos, back to back, the first
+     of them the old icon art.
+
+     The system splash cannot be turned off, but it can be made to look like
+     nothing: the icon is set to transparent and the background to the same
+     colour our launch screen paints. What is left is a cream screen that hands
+     over to the animated orb without a visible change. -->
+<resources>
+    <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <item name="android:windowBackground">@drawable/launch_background</item>
+        <item name="android:windowSplashScreenBackground">@color/launch_bg</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@android:color/transparent</item>
+    </style>
+    <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <item name="android:windowBackground">?android:colorBackground</item>
+    </style>
+</resources>

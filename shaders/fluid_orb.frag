@@ -74,33 +74,49 @@ void main() {
 
     // A four-stop ramp, dark to light. Primary and flow sit close together in
     // hue, so the depth has to come from a tone darker than either of them -
-    // the same near-black the painted fallback orb has always ended on.
-    vec3 deep = mix(uPrimary, vec3(0.086, 0.047, 0.180), 0.74);
+    // but only a little darker. Taking it most of the way to black gave an orb
+    // with more contrast in it than the entire rest of the app, which reads as
+    // a stock 3D render dropped onto a pastel page.
+    vec3 deep = mix(uPrimary, vec3(0.086, 0.047, 0.180), 0.46);
 
     vec3 col = mix(deep, uPrimary, smoothstep(0.06, 0.46, a));
-    col = mix(col, uFlow, smoothstep(0.42, 0.86, a) * 0.90);
-    col = mix(col, uAccent, smoothstep(0.60, 0.98, b) * 0.85);
+    col = mix(col, uFlow, smoothstep(0.42, 0.86, a) * 0.80);
+    col = mix(col, uAccent, smoothstep(0.60, 0.98, b) * 0.70);
 
     // Filaments along the folds, softened. At full strength these were etched
     // lines of even weight across the whole disc, which reads as engraving on
     // a flat surface; they fade towards the rim with everything else now.
     float ridge = pow(abs(sin(a * 8.0 + b * 3.0)), 5.0);
-    col += mix(uAccent, vec3(1.0), 0.55) * ridge * 0.18 * (0.35 + 0.65 * z);
+    col += mix(uAccent, vec3(1.0), 0.55) * ridge * 0.12 * (0.35 + 0.65 * z);
 
-    // Diffuse, lit from the upper left.
+    // Diffuse, lit from the upper left. A shallower falloff than a real
+    // material would have, because the page it sits on has no hard shadows in
+    // it anywhere.
     vec3 light = normalize(vec3(-0.45, -0.55, 0.70));
-    col *= 0.50 + 0.80 * clamp(dot(light, n), 0.0, 1.0);
+    col *= 0.62 + 0.58 * clamp(dot(light, n), 0.0, 1.0);
 
     // The wet highlight, broad enough to be a sheen on a surface rather than
     // a hard dot stuck on top of one.
     float spec = pow(clamp(dot(light, normalize(n + vec3(0.0, 0.0, 0.75))), 0.0, 1.0), 16.0);
-    col += vec3(1.0) * spec * 0.38;
+    col += vec3(1.0) * spec * 0.26;
 
     // Contact shading at the very edge, where a sphere turns away from every
     // light in the room. Doing this *and* a rim light was the mistake - a
     // bright ring all the way round is how a sticker catches light, not a ball.
-    col *= 1.0 - 0.32 * smoothstep(0.72, 1.0, r);
-    col += mix(uFlow, vec3(1.0), 0.45) * pow(1.0 - z, 4.5) * 0.10;
+    col *= 1.0 - 0.22 * smoothstep(0.72, 1.0, r);
+    col += mix(uFlow, vec3(1.0), 0.45) * pow(1.0 - z, 4.5) * 0.08;
+
+    // Settle it into the interface.
+    //
+    // Everything above is a lighting model, and a correct lighting model
+    // produces more saturation and more contrast than this app has anywhere
+    // else - next to the pastel gradient on Home it looked like a product
+    // render pasted onto a watercolour. Desaturating and lifting at the very
+    // end keeps the form and drops the vividness, which is the trade the page
+    // wants.
+    float luma = dot(col, vec3(0.213, 0.715, 0.072));
+    col = mix(col, vec3(luma), 0.24);
+    col = mix(col, vec3(1.0), 0.10);
 
     // Soft enough to sit in the page, tight enough to keep a silhouette.
     float px = 1.0 / min(uSize.x, uSize.y);
