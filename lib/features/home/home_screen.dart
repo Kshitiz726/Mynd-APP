@@ -8,7 +8,6 @@ import '../../core/utils/om_icons.dart';
 import '../../models/task.dart';
 import '../../providers/energy_provider.dart';
 import '../../providers/goal_provider.dart';
-import '../../providers/memory_provider.dart';
 import '../../providers/mood_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../providers/task_provider.dart';
@@ -64,21 +63,6 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  /// The memory rewrites itself once a day rather than waiting for someone to
-  /// notice a refresh button. A picture of you that only updates when you ask
-  /// it to is a picture that is usually wrong.
-  bool _refreshed = false;
-
-  void _maybeRefreshMemory(BuildContext context) {
-    if (_refreshed) return;
-    final memory = context.read<MemoryProvider>();
-    if (!memory.isStale || memory.refreshing) return;
-    _refreshed = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) MemoryCard.refreshFrom(context, haptic: false);
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final energy = context.watch<EnergyProvider>().current;
@@ -86,10 +70,6 @@ class _HomeScreenState extends State<HomeScreen> {
     // Watched, so the prompt fires as soon as stored moods have loaded.
     context.watch<MoodProvider>();
     _maybeAskMood(context);
-    // Watched too, so the pass fires once the stored memory has loaded and we
-    // actually know how old it is.
-    context.watch<MemoryProvider>();
-    _maybeRefreshMemory(context);
 
     return Stack(
       children: [

@@ -10,6 +10,7 @@ import '../../providers/focus_provider.dart';
 import '../../providers/nav_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../widgets/low_stim_filter.dart';
+import '../../widgets/memory_autopilot.dart';
 import '../community/community_screen.dart';
 import '../focus/focus_active_screen.dart';
 import '../focus/focus_room_screen.dart';
@@ -74,67 +75,73 @@ class _AppShellState extends State<AppShell> {
     final keyboardUp = MediaQuery.of(context).viewInsets.bottom != 0;
     final hideNav = inFocusRoom || inChat || keyboardUp;
 
-    return LowStimFilter(
-      child: Scaffold(
-        // The nav bar is glass, and glass needs something behind it. Without
-        // extendBody the Scaffold reserves a strip of its own background colour
-        // under the bar, so the capsule floats on an opaque slab and the blur
-        // has nothing to blur. Letting the body run underneath is what makes it
-        // read as transparent; every screen already pads for it via
-        // AppSpacing.screenBottom.
-        extendBody: true,
-        body: Stack(
-          children: [
-            SafeArea(
-              bottom: false,
-              child: Stack(
-                children: [
-                  AnimatedIndexedStack(
-                    index: nav.index,
-                    reduceMotion: context.select<SettingsProvider, bool>((s) => s.reduceMotion),
-                    children: _tabs,
-                  ),
-                  if (rooms.roomVisible) const Positioned.fill(child: FocusRoomScreen()),
-                ],
+    return MemoryAutopilot(
+      child: LowStimFilter(
+        child: Scaffold(
+          // The nav bar is glass, and glass needs something behind it. Without
+          // extendBody the Scaffold reserves a strip of its own background colour
+          // under the bar, so the capsule floats on an opaque slab and the blur
+          // has nothing to blur. Letting the body run underneath is what makes it
+          // read as transparent; every screen already pads for it via
+          // AppSpacing.screenBottom.
+          extendBody: true,
+          body: Stack(
+            children: [
+              SafeArea(
+                bottom: false,
+                child: Stack(
+                  children: [
+                    AnimatedIndexedStack(
+                      index: nav.index,
+                      reduceMotion: context.select<SettingsProvider, bool>(
+                          (s) => s.reduceMotion),
+                      children: _tabs,
+                    ),
+                    if (rooms.roomVisible)
+                      const Positioned.fill(child: FocusRoomScreen()),
+                  ],
+                ),
               ),
-            ),
-            // One pill slot. A minimised room outranks a solo session, because
-            // other people are waiting in it.
-            if (rooms.minimised || showLivePill)
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                child: SafeArea(
-                  bottom: false,
-                  child: Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Center(
-                      child: rooms.minimised
-                          ? LiveFocusPill(
-                              time: '${rooms.participantCount}',
-                              modeName: rooms.activeRoom?.title ?? 'focus room',
-                              onTap: rooms.restoreRoom,
-                            )
-                          : LiveFocusPill(
-                              time: focus.timeString,
-                              modeName: focus.activeMode!.name,
-                              onTap: () => Navigator.of(context).pushNamed(AppRoutes.focus),
-                            ),
+              // One pill slot. A minimised room outranks a solo session, because
+              // other people are waiting in it.
+              if (rooms.minimised || showLivePill)
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: SafeArea(
+                    bottom: false,
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Center(
+                        child: rooms.minimised
+                            ? LiveFocusPill(
+                                time: '${rooms.participantCount}',
+                                modeName:
+                                    rooms.activeRoom?.title ?? 'focus room',
+                                onTap: rooms.restoreRoom,
+                              )
+                            : LiveFocusPill(
+                                time: focus.timeString,
+                                modeName: focus.activeMode!.name,
+                                onTap: () => Navigator.of(context)
+                                    .pushNamed(AppRoutes.focus),
+                              ),
+                      ),
                     ),
                   ),
                 ),
-              ),
-          ],
+            ],
+          ),
+          bottomNavigationBar: hideNav
+              ? null
+              : OmNavBar(
+                  current: nav.tab,
+                  onSelect: nav.select,
+                  onCreate: () => _showCreateSheet(context),
+                  alertsUnread: context.watch<AlertsProvider>().alertsUnread,
+                ),
         ),
-        bottomNavigationBar: hideNav
-            ? null
-            : OmNavBar(
-                current: nav.tab,
-                onSelect: nav.select,
-                onCreate: () => _showCreateSheet(context),
-                alertsUnread: context.watch<AlertsProvider>().alertsUnread,
-              ),
       ),
     );
   }
@@ -163,8 +170,10 @@ void _showCreateSheet(BuildContext context) {
             ),
             child: Icon(icon, color: c.primary),
           ),
-          title: Text(title, style: Theme.of(sheetContext).textTheme.titleMedium),
-          subtitle: Text(subtitle, style: Theme.of(sheetContext).textTheme.bodySmall),
+          title:
+              Text(title, style: Theme.of(sheetContext).textTheme.titleMedium),
+          subtitle:
+              Text(subtitle, style: Theme.of(sheetContext).textTheme.bodySmall),
           onTap: () {
             Navigator.of(sheetContext).pop();
             Navigator.of(context).pushNamed(route);

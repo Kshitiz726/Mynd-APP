@@ -119,6 +119,14 @@ class CoachProvider extends ChangeNotifier {
   /// True while the last assistant message is still streaming.
   bool get isStreaming => _messages.isNotEmpty && _messages.last.isStreaming;
 
+  int _completedTurns = 0;
+
+  /// How many exchanges have finished this session. Watched by the memory
+  /// autopilot: what you say to the coach is the richest thing the app hears
+  /// all day, and it used to reach the profile only if you happened to open
+  /// Home the next morning.
+  int get completedTurns => _completedTurns;
+
   // ─── Init ─────────────────────────────────────────────────────────────────
 
   // ─── Persistence ──────────────────────────────────────────────────────────
@@ -407,6 +415,7 @@ class CoachProvider extends ChangeNotifier {
   /// so often fold it into the long-term memo so the coach remembers this
   /// conversation tomorrow.
   void _afterTurn() {
+    _completedTurns++;
     unawaited(_persistLog());
     _sinceCondense += 2;
     if (_sinceCondense >= _condenseEvery) unawaited(_condense());

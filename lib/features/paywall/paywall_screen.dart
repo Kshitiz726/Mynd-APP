@@ -329,10 +329,31 @@ class _Step extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.omColors;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Stack(
       children: [
-        Column(
+        // The rail runs from under one icon to the top of the next, whatever
+        // height the row turns out to be. A fixed 34px stub could not reach:
+        // the gap between icons is set by the wrapping body text, so the line
+        // stopped in mid-air and the timeline read as three loose blocks.
+        // Positioned against the Row means it is measured, not guessed.
+        if (!last)
+          Positioned(
+            left: 21,
+            width: 2,
+            top: 50,
+            bottom: 4,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                // Tinted, not grey. At two pixels a neutral hairline reads as
+                // a rendering artefact; borrowing the icons' own colour makes
+                // the three moments look like one timeline.
+                color: c.primary.withValues(alpha: 0.28),
+                borderRadius: BorderRadius.circular(1),
+              ),
+            ),
+          ),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
               width: 44,
@@ -344,45 +365,35 @@ class _Step extends StatelessWidget {
               ),
               child: Icon(icon, size: 20, color: c.primary),
             ),
-            // A fixed rail, not an Expanded one. Expanded inside an
-            // IntrinsicHeight makes the row's height a guess, and the guess
-            // is short whenever the body text wraps.
-            if (!last)
-              Container(
-                width: 2,
-                height: 34,
-                margin: const EdgeInsets.symmetric(vertical: 6),
-                color: c.border,
+            const SizedBox(width: 16),
+            Expanded(
+              child: Padding(
+                padding: EdgeInsets.only(top: 4, bottom: last ? 0 : 30),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        color: c.text,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      body,
+                      style: TextStyle(
+                        color: c.text2,
+                        fontSize: 13.5,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-          ],
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Padding(
-            padding: EdgeInsets.only(top: 4, bottom: last ? 0 : 26),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    color: c.text,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  body,
-                  style: TextStyle(
-                    color: c.text2,
-                    fontSize: 13.5,
-                    height: 1.4,
-                  ),
-                ),
-              ],
             ),
-          ),
+          ],
         ),
       ],
     );

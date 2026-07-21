@@ -5,9 +5,11 @@ import 'package:google_sign_in/google_sign_in.dart';
 
 import '../../core/routes/app_routes.dart';
 import '../../core/services/api_client.dart';
+import '../../core/services/google_auth.dart';
 // Desktop-only real Google OAuth (loopback). Web/mobile pull in the stub.
 import '../../core/services/desktop_google_auth_stub.dart'
-    if (dart.library.io) '../../core/services/desktop_google_auth_io.dart' as desktop_auth;
+    if (dart.library.io) '../../core/services/desktop_google_auth_io.dart'
+    as desktop_auth;
 import '../../core/services/realtime_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/haptics.dart';
@@ -21,33 +23,56 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStateMixin {
+class _LoginScreenState extends State<LoginScreen>
+    with SingleTickerProviderStateMixin {
   bool _loading = false;
   bool _showAuth = false;
   late final AnimationController _intro;
 
-  static const _serverClientId = String.fromEnvironment('GOOGLE_SERVER_CLIENT_ID');
-  static const _desktopClientId = String.fromEnvironment('GOOGLE_DESKTOP_CLIENT_ID');
+  static const _desktopClientId =
+      String.fromEnvironment('GOOGLE_DESKTOP_CLIENT_ID');
 
-  late final GoogleSignIn _googleSignIn = (!kIsWeb && _serverClientId.isNotEmpty)
-      ? GoogleSignIn(scopes: const ['email', 'profile'], serverClientId: _serverClientId)
-      : GoogleSignIn(scopes: const ['email', 'profile']);
+  GoogleSignIn get _googleSignIn => GoogleAuth.instance;
 
-  bool get _googleNativeSupported =>
-      kIsWeb ||
-      defaultTargetPlatform == TargetPlatform.android ||
-      defaultTargetPlatform == TargetPlatform.iOS ||
-      defaultTargetPlatform == TargetPlatform.macOS;
+  bool get _googleNativeSupported => GoogleAuth.supported;
 
   @override
   void initState() {
     super.initState();
-    _intro = AnimationController(vsync: this, duration: const Duration(milliseconds: 1100))..forward();
-    
+    _intro = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 1100))
+      ..forward();
+
     // Delayed animation to show the auth options (Splash -> Login transition)
     Future.delayed(const Duration(milliseconds: 2500), () {
       if (mounted) setState(() => _showAuth = true);
     });
+
+    _tryResume();
+  }
+
+  /// Land signed in, if we already know who this is.
+  ///
+  /// A saved session normally means the login screen is never built at all.
+  /// This covers the other route in: the session expired or was cleared, but
+  /// the device still has our Google grant, so there is nothing to ask. Signing
+  /// out drops that grant too, so leaving stays left.
+  Future<void> _tryResume() async {
+    final account = await GoogleAuth.silent();
+    if (account == null || !mounted) return;
+    try {
+      final idToken = (await account.authentication).idToken;
+      if (idToken == null) return;
+      await ApiClient.instance.authWithGoogleIdToken(idToken);
+      RealtimeService.instance.connect();
+      if (mounted) {
+        Navigator.of(context).pushReplacementNamed(AppRoutes.shell);
+      }
+    } catch (e) {
+      // Quietly. They can still press the button, and an error toast for
+      // something nobody asked for is just noise on a splash screen.
+      debugPrint('[login] silent resume failed: $e');
+    }
   }
 
   @override
@@ -61,11 +86,14 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     Haptics.medium();
     try {
       final n = math.Random().nextInt(9000) + 1000;
-      await ApiClient.instance.authWithGoogle(handle: 'test_$n', displayName: 'Test User $n');
+      await ApiClient.instance
+          .authWithGoogle(handle: 'test_$n', displayName: 'Test User $n');
       RealtimeService.instance.connect();
       if (mounted) Navigator.of(context).pushReplacementNamed(AppRoutes.shell);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Test login failed: $e')));
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Test login failed: $e')));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -77,8 +105,14 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
     try {
       if (_googleNativeSupported) {
-        final account = await _googleSignIn.signIn();
-        if (account == null) return; 
+        // Silent first. If this device has already granted us an account, that
+        // is the answer, and "continue with Google" should just continue: no
+        // chooser, no consent sheet, no second decision they already made.
+        // Only a device we have never been authorised on falls through to the
+        // interactive flow.
+        final account = await _googleSignIn.signInSilently() ??
+            await _googleSignIn.signIn();
+        if (account == null) return; // they backed out of the chooser
 
         final auth = await account.authentication;
         final idToken = auth.idToken;
@@ -124,9 +158,16 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       body: Stack(
         children: [
           // ── Ambient mood lighting ──────────────────────────────────────────
-          _Glow(color: c.primary, alignment: const Alignment(-0.9, -0.85), size: 360),
-          _Glow(color: c.accent, alignment: const Alignment(1.1, 0.75), size: 420),
-          _Glow(color: c.flow, alignment: const Alignment(0.9, -1.0), size: 280),
+          _Glow(
+              color: c.primary,
+              alignment: const Alignment(-0.9, -0.85),
+              size: 360),
+          _Glow(
+              color: c.accent,
+              alignment: const Alignment(1.1, 0.75),
+              size: 420),
+          _Glow(
+              color: c.flow, alignment: const Alignment(0.9, -1.0), size: 280),
 
           // Splash Logo
           AnimatedAlign(
@@ -142,14 +183,16 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                     curve: const Interval(0.0, 0.6, curve: Curves.elasticOut),
                   ),
                   child: FadeTransition(
-                    opacity: CurvedAnimation(parent: _intro, curve: const Interval(0.0, 0.35)),
+                    opacity: CurvedAnimation(
+                        parent: _intro, curve: const Interval(0.0, 0.35)),
                     child: const OmMascot(size: 96),
                   ),
                 ),
                 const SizedBox(height: 24),
                 // MYND wordmark based on brand color
                 FadeTransition(
-                  opacity: CurvedAnimation(parent: _intro, curve: const Interval(0.2, 0.7)),
+                  opacity: CurvedAnimation(
+                      parent: _intro, curve: const Interval(0.2, 0.7)),
                   child: ShaderMask(
                     shaderCallback: (r) => c.brandGradient.createShader(r),
                     child: Text(
@@ -174,7 +217,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
             child: Align(
               alignment: Alignment.bottomCenter,
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 48),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 28, vertical: 48),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -182,19 +226,24 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                     Text(
                       'Log in or sign up',
                       textAlign: TextAlign.center,
-                      style: t.headlineMedium?.copyWith(fontWeight: FontWeight.w800, fontSize: 26),
+                      style: t.headlineMedium
+                          ?.copyWith(fontWeight: FontWeight.w800, fontSize: 26),
                     ),
                     const SizedBox(height: 36),
-
-                    _GoogleButton(loading: _loading, onTap: _showAuth ? _handleGoogleSignIn : null),
+                    _GoogleButton(
+                        loading: _loading,
+                        onTap: _showAuth ? _handleGoogleSignIn : null),
                     const SizedBox(height: 12),
-                    _AppleButton(loading: _loading, onTap: _showAuth ? () {} : null),
-
+                    _AppleButton(
+                        loading: _loading, onTap: _showAuth ? () {} : null),
                     const SizedBox(height: 48),
                     Text(
                       'By continuing you agree to our Terms & Privacy Policy.',
                       textAlign: TextAlign.center,
-                      style: t.labelSmall?.copyWith(color: c.text2, letterSpacing: 0.1, fontWeight: FontWeight.w500),
+                      style: t.labelSmall?.copyWith(
+                          color: c.text2,
+                          letterSpacing: 0.1,
+                          fontWeight: FontWeight.w500),
                     ),
                   ],
                 ),
@@ -209,7 +258,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
 /// A soft radial glow blob used for the ambient background lighting.
 class _Glow extends StatelessWidget {
-  const _Glow({required this.color, required this.alignment, required this.size});
+  const _Glow(
+      {required this.color, required this.alignment, required this.size});
   final Color color;
   final Alignment alignment;
   final double size;
@@ -225,7 +275,10 @@ class _Glow extends StatelessWidget {
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             gradient: RadialGradient(
-              colors: [color.withValues(alpha: context.isDark ? 0.22 : 0.18), color.withValues(alpha: 0.0)],
+              colors: [
+                color.withValues(alpha: context.isDark ? 0.22 : 0.18),
+                color.withValues(alpha: 0.0)
+              ],
             ),
           ),
         ),
@@ -267,14 +320,21 @@ class _GoogleButton extends StatelessWidget {
               SizedBox(
                 width: 22,
                 height: 22,
-                child: CircularProgressIndicator(strokeWidth: 2.4, color: c.primary),
+                child: CircularProgressIndicator(
+                    strokeWidth: 2.4, color: c.primary),
               )
             else ...[
-              const SizedBox(width: 22, height: 22, child: CustomPaint(painter: _GoogleGPainter())),
+              const SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CustomPaint(painter: _GoogleGPainter())),
               const SizedBox(width: 14),
               Text(
                 'Continue with Google',
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700, fontSize: 16),
+                style: Theme.of(context)
+                    .textTheme
+                    .labelLarge
+                    ?.copyWith(fontWeight: FontWeight.w700, fontSize: 16),
               ),
             ],
           ],
@@ -328,8 +388,6 @@ class _AppleButton extends StatelessWidget {
   }
 }
 
-
-
 /// The four-colour Google "G", drawn from arcs + the blue crossbar.
 class _GoogleGPainter extends CustomPainter {
   const _GoogleGPainter();
@@ -354,14 +412,17 @@ class _GoogleGPainter extends CustomPainter {
       ..strokeCap = StrokeCap.butt;
 
     // Clockwise from just below 3 o'clock (a small gap at the crossbar exit):
-    canvas.drawArc(rect, _d(8), _d(82), false, p..color = _green); // bottom-right
-    canvas.drawArc(rect, _d(90), _d(90), false, p..color = _yellow); // bottom-left
+    canvas.drawArc(
+        rect, _d(8), _d(82), false, p..color = _green); // bottom-right
+    canvas.drawArc(
+        rect, _d(90), _d(90), false, p..color = _yellow); // bottom-left
     canvas.drawArc(rect, _d(180), _d(90), false, p..color = _red); // top-left
     canvas.drawArc(rect, _d(270), _d(82), false, p..color = _blue); // top-right
 
     // Blue crossbar from centre to the right edge.
     final bar = RRect.fromRectAndRadius(
-      Rect.fromLTRB(center.dx - w * 0.1, center.dy - w / 2, center.dx + radius + w / 2, center.dy + w / 2),
+      Rect.fromLTRB(center.dx - w * 0.1, center.dy - w / 2,
+          center.dx + radius + w / 2, center.dy + w / 2),
       Radius.circular(w * 0.1),
     );
     canvas.drawRRect(bar, Paint()..color = _blue);

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../core/constants/app_spacing.dart';
 import '../../core/routes/app_routes.dart';
 import '../../core/services/api_client.dart';
+import '../../core/services/google_auth.dart';
 import '../../core/services/api_config.dart';
 import '../../core/services/coach_memory_service.dart';
 import '../../core/services/realtime_service.dart';
@@ -65,6 +66,8 @@ class ProfileScreen extends StatelessWidget {
     if (ok != true || !context.mounted) return;
 
     await ApiClient.instance.signOut();
+    // Drop the Google grant as well, or the next launch signs straight back in.
+    await GoogleAuth.forget();
     RealtimeService.instance.dispose();
     await CoachMemoryService.instance.clearAll();
 

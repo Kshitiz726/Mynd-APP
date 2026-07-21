@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/constants/app_spacing.dart';
@@ -14,6 +13,7 @@ import '../../widgets/fluid_orb.dart';
 import '../../widgets/om_back_button.dart';
 import '../../widgets/om_glass.dart';
 import '../../widgets/om_tappable.dart';
+import 'coach_history_screen.dart';
 import 'coach_voice_screen.dart';
 import 'puter_gate.dart';
 
@@ -174,8 +174,29 @@ class _CoachScreenState extends State<CoachScreen> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  // New chat. The history lives under the orb, so this is the
-                  // only control needed up here.
+                  // Mid-conversation, the orb and its history button are
+                  // scrolled far above, so the way back to an old chat lives
+                  // up here too.
+                  OmTappable(
+                    onTap: () {
+                      Haptics.light();
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                            builder: (_) => const CoachHistoryScreen()),
+                      );
+                    },
+                    feedback: OmTapFeedback.none,
+                    pressedScale: 0.86,
+                    child: Container(
+                      width: 38,
+                      height: 38,
+                      margin: const EdgeInsets.only(right: 6),
+                      decoration: BoxDecoration(
+                          color: c.surfaceAlt, shape: BoxShape.circle),
+                      child: Icon(OmIcons.byName('history'),
+                          size: 17, color: c.text2),
+                    ),
+                  ),
                   OmTappable(
                     onTap: () {
                       Haptics.light();
@@ -214,11 +235,11 @@ class _CoachScreenState extends State<CoachScreen> {
                 itemBuilder: (context, i) {
                   if (coach.messages.length <= 1) {
                     if (i == 0) {
-                      // The orb, then everything you have said to it before.
+                      // The orb, then one way back into everything before it.
                       return Column(
                         children: [
                           const _CoachHero(),
-                          _ThreadHistory(threads: coach.threads),
+                          _HistoryButton(count: coach.threads.length),
                         ],
                       );
                     }
@@ -403,88 +424,58 @@ class _ModelPickerState extends State<_ModelPicker> {
   }
 }
 
-/// Everything you have talked to Mynd about before, under the orb.
-class _ThreadHistory extends StatelessWidget {
-  const _ThreadHistory({required this.threads});
+/// One quiet row under the orb that opens everything you have said before.
+///
+/// The whole list used to sit here. That made the first thing a new
+/// conversation showed you every old one, which is the opposite of a fresh
+/// start, and it grew without limit. One button with a count says the same
+/// thing in a line, and the searching happens on the screen it opens.
+class _HistoryButton extends StatelessWidget {
+  const _HistoryButton({required this.count});
 
-  final List<CoachThread> threads;
+  final int count;
 
   @override
   Widget build(BuildContext context) {
-    if (threads.isEmpty) return const SizedBox.shrink();
+    if (count == 0) return const SizedBox.shrink();
     final c = context.omColors;
     return Padding(
-      padding: const EdgeInsets.only(top: AppSpacing.xl),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(left: 4, bottom: 10),
-            child: Text('earlier',
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: c.text2,
-                      fontWeight: FontWeight.w800,
-                    )),
+      padding: const EdgeInsets.only(top: AppSpacing.md),
+      child: OmTappable(
+        onTap: () {
+          Haptics.light();
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(builder: (_) => const CoachHistoryScreen()),
+          );
+        },
+        feedback: OmTapFeedback.none,
+        pressedScale: 0.97,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+          decoration: BoxDecoration(
+            color: c.surface,
+            borderRadius: BorderRadius.circular(AppRadius.pill),
+            border: Border.all(color: c.border),
           ),
-          for (final t in threads.take(12))
-            OmTappable(
-              onTap: () {
-                Haptics.light();
-                context.read<CoachProvider>().openThread(t.id);
-              },
-              feedback: OmTapFeedback.none,
-              pressedScale: 0.98,
-              child: Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                decoration: BoxDecoration(
-                  color: c.surface,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: c.border),
-                ),
-                child: Row(
-                  children: [
-                    const FluidOrb.still(size: 22),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(t.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodyMedium
-                                  ?.copyWith(fontWeight: FontWeight.w600)),
-                          const SizedBox(height: 2),
-                          Text(_ago(t.updatedAt),
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .labelSmall
-                                  ?.copyWith(color: c.text2)),
-                        ],
-                      ),
-                    ),
-                    Icon(OmIcons.byName('chevR'), size: 15, color: c.text2),
-                  ],
-                ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(OmIcons.byName('history'), size: 16, color: c.primary),
+              const SizedBox(width: 10),
+              Text(
+                count == 1 ? '1 earlier chat' : '$count earlier chats',
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyMedium
+                    ?.copyWith(fontWeight: FontWeight.w600),
               ),
-            ),
-        ],
+              const SizedBox(width: 8),
+              Icon(OmIcons.byName('chevR'), size: 14, color: c.text2),
+            ],
+          ),
+        ),
       ),
     );
-  }
-
-  static String _ago(DateTime at) {
-    final d = DateTime.now().difference(at);
-    if (d.inMinutes < 1) return 'just now';
-    if (d.inMinutes < 60) return '${d.inMinutes}m ago';
-    if (d.inHours < 24) return '${d.inHours}h ago';
-    if (d.inDays == 1) return 'yesterday';
-    if (d.inDays < 7) return '${d.inDays}d ago';
-    return DateFormat.MMMd().format(at);
   }
 }
 

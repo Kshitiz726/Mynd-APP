@@ -11,7 +11,6 @@ import '../../providers/task_provider.dart';
 import '../../widgets/om_screen_header.dart';
 import '../../widgets/om_switch.dart';
 import '../../widgets/om_tappable.dart';
-import '../../providers/task_provider.dart';
 
 enum _Freq {
   daily('Daily', Color(0xFF5C9E72)),
@@ -79,7 +78,6 @@ class _RemindersScreenState extends State<RemindersScreen> {
             const OmScreenHeader(
               title: 'reminders',
               subtitle: 'things to remember, big or small.',
-              filledBack: true,
             ),
             const SizedBox(height: AppSpacing.md),
             Row(

@@ -84,6 +84,8 @@ abstract final class OmIcons {
     'refresh': LucideIcons.refreshCw,
     'trending-up': LucideIcons.trendingUp,
     'clock': LucideIcons.clock,
+    'history': LucideIcons.history,
+    'trash': LucideIcons.trash2,
     'list': LucideIcons.listTodo,
     'cornerUpLeft': LucideIcons.cornerUpLeft,
     'share': LucideIcons.share2,

@@ -106,12 +106,16 @@ class MemoryProvider extends ChangeNotifier {
       ),
     );
     if (_parked.length > _maxParked) _parked = _parked.sublist(0, _maxParked);
+    // A parked thought is the most direct signal there is about what is on
+    // someone's mind, so the profile should not wait a day to hear about it.
+    _dirty = true;
     notifyListeners();
     await _persistParked();
   }
 
   Future<void> removeThought(String id) async {
     _parked.removeWhere((t) => t.id == id);
+    _dirty = true;
     notifyListeners();
     await _persistParked();
   }
@@ -148,12 +152,47 @@ class MemoryProvider extends ChangeNotifier {
     return DateTime.now().difference(at) > const Duration(hours: 20);
   }
 
+  // ─────────────────────── Keeping itself current ───────────────────────
+
+  /// Something happened that the memory has not seen yet: a conversation
+  /// finished, a thought got parked.
+  bool _dirty = false;
+
+  /// When we last asked the model, successfully or not. Failures count, so a
+  /// dead network cannot turn into a retry loop.
+  DateTime? _lastAttempt;
+
+  /// The shortest gap between two AI rewrites. Every exchange with the coach
+  /// makes the memory dirty, and a chat is a dozen exchanges, so without this
+  /// a single conversation would pay for a dozen rewrites of the same profile.
+  /// A few minutes is well inside "it already knew" and costs one call.
+  static const _cooldown = Duration(minutes: 8);
+
+  /// Note that the picture has changed. Deliberately silent: callers hit this
+  /// from inside a build, and the refresh it leads to notifies anyway.
+  void markDirty() => _dirty = true;
+
+  /// Whether it is worth spending a model call right now.
+  ///
+  /// The refresh button still exists, but nobody should have to press it. This
+  /// is what makes the memory keep up on its own: stale once a day, and
+  /// otherwise whenever something real has happened and the cooldown is up.
+  bool get wantsRefresh {
+    if (!_loaded || _refreshing) return false;
+    if (isStale) return true;
+    if (!_dirty) return false;
+    final last = _lastAttempt;
+    return last == null || DateTime.now().difference(last) > _cooldown;
+  }
+
   /// Ask the model to (re)write the memory from a snapshot of everything the
   /// app can see. [snapshot] is assembled by the caller because only the widget
   /// tree has the other providers to hand.
   Future<void> refresh(String snapshot) async {
     if (_refreshing) return;
     _refreshing = true;
+    _dirty = false;
+    _lastAttempt = DateTime.now();
     _error = null;
     notifyListeners();
 

@@ -32,9 +32,12 @@ class MemoryCard extends StatelessWidget {
 
   /// Rewrite the memory from everything the app can currently see.
   ///
-  /// Shared by the refresh button and by Home's once-a-day automatic pass, so
-  /// both read from exactly the same picture of the user.
-  static Future<void> refreshFrom(BuildContext context, {bool haptic = true}) async {
+  /// Shared by the refresh button and by the [MemoryAutopilot], so both read
+  /// from exactly the same picture of the user. [quiet] suppresses the failure
+  /// toast: an automatic pass failing is not news the user asked for, and the
+  /// previous memory is still there.
+  static Future<void> refreshFrom(BuildContext context,
+      {bool haptic = true, bool quiet = false}) async {
     if (haptic) Haptics.medium();
     final memory = context.read<MemoryProvider>();
     final snapshot = buildMemorySnapshot(
@@ -51,7 +54,9 @@ class MemoryCard extends StatelessWidget {
       recentChat: context.read<CoachProvider>().recentTranscript(),
     );
     await memory.refresh(snapshot);
-    if (context.mounted && memory.error != null) Toast.show(context, memory.error!);
+    if (!quiet && context.mounted && memory.error != null) {
+      Toast.show(context, memory.error!);
+    }
   }
 
   Future<void> _refresh(BuildContext context) => refreshFrom(context);

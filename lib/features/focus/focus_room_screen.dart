@@ -39,18 +39,19 @@ class _FocusRoomScreenState extends State<FocusRoomScreen> {
     _initVideo('cafe');
   }
 
-  bool get _isVideoSupported => kIsWeb || Platform.isAndroid || Platform.isIOS || Platform.isMacOS;
+  bool get _isVideoSupported =>
+      kIsWeb || Platform.isAndroid || Platform.isIOS || Platform.isMacOS;
 
   void _initVideo(String ambience) {
     _currentAmbience = ambience;
-    
+
     if (!_isVideoSupported) {
       // Safely fallback for Windows/Linux
       return;
     }
-    
+
     final url = _getVideoUrl(ambience);
-    
+
     _videoController = VideoPlayerController.networkUrl(Uri.parse(url))
       ..initialize().then((_) {
         _videoController.setLooping(true);
@@ -73,23 +74,23 @@ class _FocusRoomScreenState extends State<FocusRoomScreen> {
         _currentAmbience = fr.ambience;
         return;
       }
-      
+
       final oldController = _videoController;
       final newUrl = _getVideoUrl(fr.ambience);
-      
+
       final newController = VideoPlayerController.networkUrl(Uri.parse(newUrl));
       newController.initialize().then((_) {
         newController.setLooping(true);
         newController.setVolume(0.0);
         newController.play();
-        
+
         if (mounted) {
           setState(() {
             _videoController = newController;
             _currentAmbience = fr.ambience;
           });
         }
-        
+
         // Smooth crossfade, dispose old controller after a delay
         Future.delayed(const Duration(milliseconds: 1000), () {
           oldController.dispose();
@@ -128,24 +129,35 @@ class _FocusRoomScreenState extends State<FocusRoomScreen> {
   Widget build(BuildContext context) {
     final fr = context.watch<FocusRoomProvider>();
     final c = context.omColors;
-    final me = fr.participants.where((p) => p.userId == fr.myUserId).firstOrNull;
-    
+    final me =
+        fr.participants.where((p) => p.userId == fr.myUserId).firstOrNull;
+
     // Find active task and timer from me, or from the host, or just anyone running
-    final activeParticipant = me?.timerRunning == true ? me : (fr.participants.where((p) => p.timerRunning).firstOrNull ?? me);
-    
+    final activeParticipant = me?.timerRunning == true
+        ? me
+        : (fr.participants.where((p) => p.timerRunning).firstOrNull ?? me);
+
     final isNeedHelp = me?.state == ParticipantState.needHelp;
 
     // Timer text - the true elapsed time, fully independent of the ring.
     final secs = fr.myElapsedSecs;
     final m = secs ~/ 60;
     final s = secs % 60;
-    final timeString = '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+    final timeString =
+        '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
 
     const ringTau = 1200.0; // seconds
     final progress = 1 - math.exp(-secs / ringTau);
 
     return Scaffold(
       backgroundColor: c.bg,
+      // Nothing on this screen takes typing, so a keyboard here always belongs
+      // to somewhere else: it rides in from the join-code field or the invite
+      // sheet and lingers for a frame. Reflowing the room around it shrank the
+      // body by roughly a keyboard, the Spacers went to zero, and the fixed
+      // content underneath ran 105px past the bottom. The room simply does not
+      // move for a keyboard now.
+      resizeToAvoidBottomInset: false,
       body: Stack(
         children: [
           // Vibrant ambience wash - always present (and the only backdrop on
@@ -178,168 +190,213 @@ class _FocusRoomScreenState extends State<FocusRoomScreen> {
                 ),
               ),
             ),
-            
+
           // Glassy Overlay for Readability
           Container(
-            color: context.isDark ? Colors.black.withValues(alpha: 0.7) : Colors.white.withValues(alpha: 0.8),
+            color: context.isDark
+                ? Colors.black.withValues(alpha: 0.7)
+                : Colors.white.withValues(alpha: 0.8),
           ),
-          
+
           SafeArea(
-            child: Column(
-              children: [
-                AppBar(
-                  backgroundColor: Colors.transparent,
-                  elevation: 0,
-                  automaticallyImplyLeading: false,
-                  // Backing out is not leaving. You stay in the room, still
-                  // counted in it, and can go do something else in the app and
-                  // come back - only "Leave Room" takes you out.
-                  leading: OmBackButton(
-                    onTap: () {
-                      Haptics.light();
-                      fr.minimiseRoom();
-                      Toast.show(context, "Still in the room - tap the pill to come back.");
-                    },
-                  ),
-                  title: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(fr.activeRoom?.title ?? 'Focus Room',
-                          style: Theme.of(context).textTheme.titleMedium),
-                      // The code lives where you are when someone asks for it.
-                      if (fr.activeRoom != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: RoomCodeChip(room: fr.activeRoom!),
-                        ),
-                    ],
-                  ),
-                  toolbarHeight: 78,
-                  centerTitle: true,
-                  actions: [
-                    OmTappable(
+            child: LayoutBuilder(builder: (context, box) {
+              // A short viewport (a small phone, or landscape) cannot hold the
+              // room at its natural size: the flexible gaps collapse to zero
+              // and the fixed content below them runs off the bottom. Under
+              // this height the room scrolls instead of squeezing, which is
+              // the only layout that cannot overflow.
+              final tight = box.maxHeight < 660;
+              Widget gap() => tight
+                  ? const SizedBox(height: AppSpacing.lg)
+                  : const Spacer();
+              final column = Column(
+                children: [
+                  AppBar(
+                    backgroundColor: Colors.transparent,
+                    elevation: 0,
+                    automaticallyImplyLeading: false,
+                    // Backing out is not leaving. You stay in the room, still
+                    // counted in it, and can go do something else in the app and
+                    // come back - only "Leave Room" takes you out.
+                    leading: OmBackButton(
                       onTap: () {
                         Haptics.light();
-                        _showMembers(context, fr);
+                        fr.minimiseRoom();
+                        Toast.show(context,
+                            "Still in the room - tap the pill to come back.");
                       },
-                      child: Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(OmIcons.byName('users'), color: c.text, size: 20),
-                            const SizedBox(width: 5),
-                            Text('${fr.participantCount}',
-                                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                                      fontWeight: FontWeight.w800,
-                                    )),
-                          ],
-                        ),
-                      ),
                     ),
-                    const SizedBox(width: 8),
-                  ],
-                ),
-                
-                const SizedBox(height: AppSpacing.lg),
-                Text(
-                  'CURRENT FOCUS',
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(color: c.primary, fontWeight: FontWeight.w700, letterSpacing: 0.5),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  activeParticipant?.task?.isNotEmpty == true ? activeParticipant!.task! : 'Focusing together',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
-                ),
-                const Spacer(),
-                _TimerCircle(progress: progress, time: timeString, running: activeParticipant?.timerRunning ?? false),
-                const Spacer(),
-                
-                // Participant Grid
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
-                  child: Wrap(
-                    spacing: 20,
-                    runSpacing: 20,
-                    alignment: WrapAlignment.center,
-                    children: [
-                      for (final p in fr.participants)
-                        _ParticipantTile(
-                          userId: p.userId,
-                          name: p.userId == fr.myUserId ? 'You' : p.displayName,
-                          initial: p.initial,
-                          color: _hex(p.avatarColor),
-                          needsHelp: p.state == ParticipantState.needHelp,
-                          dimmed: p.state == ParticipantState.inactive,
-                        ),
-                    ],
-                  ),
-                ),
-                
-                const Spacer(),
-                // Controls
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl, vertical: AppSpacing.xl),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      _ControlButton(
-                        label: 'Need Help',
-                        icon: 'life-buoy',
-                        active: isNeedHelp,
-                        activeColor: c.primary,
-                        onTap: () async {
-                          Haptics.medium();
-                          // Leave the room and go straight to Mynd, primed with a
-                          // "help me focus" prompt.
-                          await fr.leaveRoom();
-                          if (context.mounted) {
-                            Navigator.of(context).maybePop();
-                            askMyndForHelp(context);
-                          }
-                        },
-                      ),
-                      _ControlButton(
-                        label: fr.ambience,
-                        icon: _ambienceIcon(fr.ambience),
-                        active: false,
-                        activeColor: c.text2,
+                    title: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(fr.activeRoom?.title ?? 'Focus Room',
+                            style: Theme.of(context).textTheme.titleMedium),
+                        // The code lives where you are when someone asks for it.
+                        if (fr.activeRoom != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: RoomCodeChip(room: fr.activeRoom!),
+                          ),
+                      ],
+                    ),
+                    toolbarHeight: 78,
+                    centerTitle: true,
+                    actions: [
+                      OmTappable(
                         onTap: () {
                           Haptics.light();
-                          // cycle ambience
-                          const cycle = ['cafe', 'silent', 'rain', 'library', 'typing'];
-                          final next = cycle[(cycle.indexOf(fr.ambience) + 1) % cycle.length];
-                          fr.setAmbience(next);
+                          _showMembers(context, fr);
                         },
+                        child: Padding(
+                          padding: const EdgeInsets.all(8.0),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(OmIcons.byName('users'),
+                                  color: c.text, size: 20),
+                              const SizedBox(width: 5),
+                              Text('${fr.participantCount}',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .labelLarge
+                                      ?.copyWith(
+                                        fontWeight: FontWeight.w800,
+                                      )),
+                            ],
+                          ),
+                        ),
                       ),
+                      const SizedBox(width: 8),
                     ],
                   ),
-                ),
-                // Leave Button
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenH, vertical: 8),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: OmTappable(
-                      onTap: () async {
-                        Haptics.medium();
-                        await fr.leaveRoom();
-                        if (context.mounted) Navigator.of(context).pop();
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        decoration: BoxDecoration(
-                          color: c.surface,
-                          borderRadius: BorderRadius.circular(16),
+
+                  const SizedBox(height: AppSpacing.lg),
+                  Text(
+                    'CURRENT FOCUS',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: c.primary,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.5),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    activeParticipant?.task?.isNotEmpty == true
+                        ? activeParticipant!.task!
+                        : 'Focusing together',
+                    style: Theme.of(context)
+                        .textTheme
+                        .headlineSmall
+                        ?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                  gap(),
+                  _TimerCircle(
+                      progress: progress,
+                      time: timeString,
+                      running: activeParticipant?.timerRunning ?? false),
+                  gap(),
+
+                  // Participant Grid
+                  Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+                    child: Wrap(
+                      spacing: 20,
+                      runSpacing: 20,
+                      alignment: WrapAlignment.center,
+                      children: [
+                        for (final p in fr.participants)
+                          _ParticipantTile(
+                            userId: p.userId,
+                            name:
+                                p.userId == fr.myUserId ? 'You' : p.displayName,
+                            initial: p.initial,
+                            color: _hex(p.avatarColor),
+                            needsHelp: p.state == ParticipantState.needHelp,
+                            dimmed: p.state == ParticipantState.inactive,
+                          ),
+                      ],
+                    ),
+                  ),
+
+                  gap(),
+                  // Controls
+                  Padding(
+                    padding: EdgeInsets.symmetric(
+                        horizontal: AppSpacing.xl,
+                        vertical: tight ? AppSpacing.md : AppSpacing.xl),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        _ControlButton(
+                          label: 'Need Help',
+                          icon: 'life-buoy',
+                          active: isNeedHelp,
+                          activeColor: c.primary,
+                          onTap: () async {
+                            Haptics.medium();
+                            // Leave the room and go straight to Mynd, primed with a
+                            // "help me focus" prompt.
+                            await fr.leaveRoom();
+                            if (context.mounted) {
+                              Navigator.of(context).maybePop();
+                              askMyndForHelp(context);
+                            }
+                          },
                         ),
-                        alignment: Alignment.center,
-                        child: Text('Leave Room', style: TextStyle(color: c.error, fontWeight: FontWeight.bold)),
+                        _ControlButton(
+                          label: fr.ambience,
+                          icon: _ambienceIcon(fr.ambience),
+                          active: false,
+                          activeColor: c.text2,
+                          onTap: () {
+                            Haptics.light();
+                            // cycle ambience
+                            const cycle = [
+                              'cafe',
+                              'silent',
+                              'rain',
+                              'library',
+                              'typing'
+                            ];
+                            final next = cycle[
+                                (cycle.indexOf(fr.ambience) + 1) %
+                                    cycle.length];
+                            fr.setAmbience(next);
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Leave Button
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.screenH, vertical: 8),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: OmTappable(
+                        onTap: () async {
+                          Haptics.medium();
+                          await fr.leaveRoom();
+                          if (context.mounted) Navigator.of(context).pop();
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          decoration: BoxDecoration(
+                            color: c.surface,
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          alignment: Alignment.center,
+                          child: Text('Leave Room',
+                              style: TextStyle(
+                                  color: c.error, fontWeight: FontWeight.bold)),
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ],
-            ),
+                ],
+              );
+              return tight ? SingleChildScrollView(child: column) : column;
+            }),
           ),
         ],
       ),
@@ -355,13 +412,19 @@ class _FocusRoomScreenState extends State<FocusRoomScreen> {
   }
 
   String _ambienceIcon(String a) {
-    switch(a) {
-      case 'cafe': return 'coffee';
-      case 'silent': return 'moon';
-      case 'rain': return 'cloud-rain';
-      case 'library': return 'book';
-      case 'typing': return 'keyboard';
-      default: return 'wind';
+    switch (a) {
+      case 'cafe':
+        return 'coffee';
+      case 'silent':
+        return 'moon';
+      case 'rain':
+        return 'cloud-rain';
+      case 'library':
+        return 'book';
+      case 'typing':
+        return 'keyboard';
+      default:
+        return 'wind';
     }
   }
 
@@ -425,9 +488,11 @@ class _FocusRoomScreenState extends State<FocusRoomScreen> {
                         ),
                       ),
                       if (p.state == ParticipantState.needHelp)
-                        Icon(OmIcons.byName('life-buoy'), size: 18, color: c.primary)
+                        Icon(OmIcons.byName('life-buoy'),
+                            size: 18, color: c.primary)
                       else if (p.timerRunning)
-                        Icon(OmIcons.byName('timer'), size: 18, color: c.success),
+                        Icon(OmIcons.byName('timer'),
+                            size: 18, color: c.success),
                     ],
                   ),
                 ),
@@ -440,7 +505,8 @@ class _FocusRoomScreenState extends State<FocusRoomScreen> {
 }
 
 class _TimerCircle extends StatelessWidget {
-  const _TimerCircle({required this.progress, required this.time, required this.running});
+  const _TimerCircle(
+      {required this.progress, required this.time, required this.running});
 
   final double progress;
   final String time;
@@ -473,10 +539,8 @@ class _TimerCircle extends StatelessWidget {
           children: [
             Text(
               time,
-              style: Theme.of(context)
-                  .textTheme
-                  .headlineLarge
-                  ?.copyWith(fontSize: 44, fontWeight: FontWeight.w800, letterSpacing: -1),
+              style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                  fontSize: 44, fontWeight: FontWeight.w800, letterSpacing: -1),
             ),
             Text('elapsed',
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
@@ -530,7 +594,11 @@ class _ParticipantTile extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 6),
-          Text(name, style: Theme.of(context).textTheme.labelMedium?.copyWith(fontSize: 13)),
+          Text(name,
+              style: Theme.of(context)
+                  .textTheme
+                  .labelMedium
+                  ?.copyWith(fontSize: 13)),
         ],
       ),
     );
@@ -572,13 +640,22 @@ class _ControlButton extends StatelessWidget {
               shape: BoxShape.circle,
               boxShadow: active
                   ? []
-                  : [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))],
+                  : [
+                      BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4))
+                    ],
             ),
             alignment: Alignment.center,
             child: Icon(OmIcons.byName(icon), size: 22, color: color),
           ),
           const SizedBox(height: 8),
-          Text(label, style: Theme.of(context).textTheme.labelSmall?.copyWith(color: color, fontWeight: FontWeight.w600)),
+          Text(label,
+              style: Theme.of(context)
+                  .textTheme
+                  .labelSmall
+                  ?.copyWith(color: color, fontWeight: FontWeight.w600)),
         ],
       ),
     );

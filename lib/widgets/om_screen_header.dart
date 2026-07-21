@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import '../core/constants/app_spacing.dart';
 import '../core/theme/app_colors.dart';
-import '../core/utils/om_icons.dart';
 import 'om_tappable.dart';
 
 /// Standard header for pushed detail screens (Notebook, Alarms, Reminders,
@@ -13,16 +12,11 @@ class OmScreenHeader extends StatelessWidget {
     super.key,
     required this.title,
     this.subtitle,
-    this.filledBack = false,
     this.onBack,
   });
 
   final String title;
   final String? subtitle;
-
-  /// When true the back button is a solid primary circle with a white chevron
-  /// (Alarms/Reminders); otherwise a soft white circle (Notebook).
-  final bool filledBack;
   final VoidCallback? onBack;
 
   @override
@@ -37,22 +31,22 @@ class OmScreenHeader extends StatelessWidget {
           child: Container(
             width: 44,
             height: 44,
+            // One back button, everywhere. Reminders used to get a solid
+            // violet disc while every other screen got the soft circle, so the
+            // same gesture wore two faces depending on where you were.
             decoration: BoxDecoration(
-              color: filledBack ? c.primary : c.surface,
+              color: c.surface,
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: filledBack
-                      ? c.primary.withValues(alpha: 0.3)
-                      : Colors.black.withValues(alpha: 0.08),
+                  color: Colors.black.withValues(alpha: 0.08),
                   blurRadius: 12,
                   offset: const Offset(0, 4),
                 ),
               ],
             ),
             alignment: Alignment.center,
-            child: Icon(CupertinoIcons.chevron_back,
-                size: 24, color: filledBack ? Colors.white : c.text),
+            child: Icon(CupertinoIcons.chevron_back, size: 24, color: c.text),
           ),
         ),
         const SizedBox(width: AppSpacing.md),
