@@ -27,6 +27,7 @@ import '../shell/route_host.dart';
 import 'chat_screen.dart';
 import 'new_dm_sheet.dart';
 import 'widgets/post_comments_sheet.dart';
+import 'widgets/room_code.dart';
 import 'widgets/room_glyph.dart';
 import 'package:audioplayers/audioplayers.dart';
 
@@ -1202,6 +1203,8 @@ class _RoomsTab extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
+          // The way into a private room, and the fast way into a friend's.
+          const JoinByCodeCard(),
           if (fr.rooms.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 24),

@@ -17,6 +17,7 @@ import '../../providers/focus_room_provider.dart';
 import '../../widgets/om_avatar.dart';
 import '../../widgets/om_back_button.dart';
 import '../../widgets/om_tappable.dart';
+import '../community/widgets/room_code.dart';
 import 'focus_help.dart';
 
 class FocusRoomScreen extends StatefulWidget {
@@ -200,7 +201,20 @@ class _FocusRoomScreenState extends State<FocusRoomScreen> {
                       Toast.show(context, "Still in the room - tap the pill to come back.");
                     },
                   ),
-                  title: Text(fr.activeRoom?.title ?? 'Focus Room', style: Theme.of(context).textTheme.titleMedium),
+                  title: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(fr.activeRoom?.title ?? 'Focus Room',
+                          style: Theme.of(context).textTheme.titleMedium),
+                      // The code lives where you are when someone asks for it.
+                      if (fr.activeRoom != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: RoomCodeChip(room: fr.activeRoom!),
+                        ),
+                    ],
+                  ),
+                  toolbarHeight: 78,
                   centerTitle: true,
                   actions: [
                     OmTappable(

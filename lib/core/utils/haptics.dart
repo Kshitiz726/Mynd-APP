@@ -23,6 +23,12 @@ abstract final class Haptics {
     if (enabled) HapticFeedback.selectionClick();
   }
 
+  /// "That did not work." A heavier single knock, distinct from [success] so a
+  /// failure is felt as a failure without having to read the toast.
+  static void error() {
+    if (enabled) HapticFeedback.heavyImpact();
+  }
+
   /// A celebratory double pulse for finishing things.
   static Future<void> success() async {
     if (!enabled) return;

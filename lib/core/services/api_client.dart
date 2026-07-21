@@ -166,6 +166,16 @@ class ApiClient {
     });
     return FocusRoom.fromJson(j);
   }
+  /// Resolve a join code to a room.
+  ///
+  /// Throws when the code does not resolve. The server answers the same 404
+  /// whether the room never existed, has ended, or is private and the code was
+  /// a guess, so this cannot be used to enumerate private rooms.
+  Future<FocusRoom> joinRoomByCode(String code) async {
+    final j = await _post('/api/rooms/join-by-code', {'code': code});
+    return FocusRoom.fromJson(j);
+  }
+
 
   Future<void> completeSession(String roomId, int completedSecs) =>
       _post('/api/sessions/complete', {'roomId': roomId, 'completedSecs': completedSecs});
