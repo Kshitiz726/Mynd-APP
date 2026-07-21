@@ -48,10 +48,20 @@ void main() {
     float z = sqrt(max(0.0, 1.0 - r * r));
     vec3 n = vec3(uv, z);
 
+    // Project onto the sphere before sampling.
+    //
+    // This is what makes it read as a ball rather than a disc with a picture
+    // on it. Warping flat uv keeps the pattern the same size from centre to
+    // rim, which is exactly what a *printed* circle looks like; dividing by
+    // the normal's z stretches the coordinates as the surface turns away, so
+    // the detail compresses towards the edge the way it does on anything
+    // spherical. Roundness comes from this, not from sharpness.
+    vec2 sph = uv / (0.45 + 0.78 * z);
+
     // Domain warping, three octaves. Warping the coordinates before sampling
     // is what turns concentric ripples into something that folds like liquid;
     // the third pass is small and fast and is where the fine detail lives.
-    vec2 p = uv * 1.55;
+    vec2 p = sph * 1.55;
     p += 0.42 * vec2(field(p + vec2(0.0, 1.7), t * 0.50),
                      field(p.yx + vec2(3.1, 0.0), t * 0.41));
     p += 0.24 * vec2(field(p * 1.9 + vec2(1.3, 0.0), t * 0.29),
@@ -71,28 +81,30 @@ void main() {
     col = mix(col, uFlow, smoothstep(0.42, 0.86, a) * 0.90);
     col = mix(col, uAccent, smoothstep(0.60, 0.98, b) * 0.85);
 
-    // Filaments: thin bright ridges along the folds. Raising a sine to a high
-    // power keeps only the crests, which is a hard line rather than a gradient
-    // - the one thing the blurred version had none of.
-    float ridge = pow(abs(sin(a * 8.0 + b * 3.0)), 8.0);
-    col += mix(uAccent, vec3(1.0), 0.55) * ridge * 0.34;
+    // Filaments along the folds, softened. At full strength these were etched
+    // lines of even weight across the whole disc, which reads as engraving on
+    // a flat surface; they fade towards the rim with everything else now.
+    float ridge = pow(abs(sin(a * 8.0 + b * 3.0)), 5.0);
+    col += mix(uAccent, vec3(1.0), 0.55) * ridge * 0.18 * (0.35 + 0.65 * z);
 
     // Diffuse, lit from the upper left.
     vec3 light = normalize(vec3(-0.45, -0.55, 0.70));
-    col *= 0.52 + 0.78 * clamp(dot(light, n), 0.0, 1.0);
+    col *= 0.50 + 0.80 * clamp(dot(light, n), 0.0, 1.0);
 
-    // The wet highlight, tight enough to read as a surface rather than a glow.
-    float spec = pow(clamp(dot(light, normalize(n + vec3(0.0, 0.0, 0.75))), 0.0, 1.0), 26.0);
-    col += vec3(1.0) * spec * 0.55;
+    // The wet highlight, broad enough to be a sheen on a surface rather than
+    // a hard dot stuck on top of one.
+    float spec = pow(clamp(dot(light, normalize(n + vec3(0.0, 0.0, 0.75))), 0.0, 1.0), 16.0);
+    col += vec3(1.0) * spec * 0.38;
 
-    // Rim light. Defines the silhouette from the inside, so the edge stays
-    // crisp without a drawn outline.
-    col += mix(uFlow, vec3(1.0), 0.45) * pow(1.0 - z, 3.2) * 0.24;
+    // Contact shading at the very edge, where a sphere turns away from every
+    // light in the room. Doing this *and* a rim light was the mistake - a
+    // bright ring all the way round is how a sticker catches light, not a ball.
+    col *= 1.0 - 0.32 * smoothstep(0.72, 1.0, r);
+    col += mix(uFlow, vec3(1.0), 0.45) * pow(1.0 - z, 4.5) * 0.10;
 
-    // A real edge: antialiased over a couple of pixels, not feathered over a
-    // third of the radius.
-    float px = 2.0 / min(uSize.x, uSize.y);
-    float alpha = 1.0 - smoothstep(1.0 - px * 2.0, 1.0, r);
+    // Soft enough to sit in the page, tight enough to keep a silhouette.
+    float px = 1.0 / min(uSize.x, uSize.y);
+    float alpha = 1.0 - smoothstep(1.0 - px * 6.0, 1.0, r);
 
     // Flutter composites premultiplied.
     fragColor = vec4(col * alpha, alpha);
