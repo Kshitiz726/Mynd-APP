@@ -179,9 +179,19 @@ class OurMyndApp extends StatelessWidget {
             home: SplashScreen(next: initialRoute),
             onGenerateRoute: AppRouter.onGenerateRoute,
             // Keep the Puter.js bridge alive app-wide, off-screen, above routes.
+            //
+            // The app content is Positioned.fill rather than a plain child: a
+            // bare Stack hands its children loose constraints, so any route
+            // that does not expand on its own collapses to the size of its
+            // biggest widget and sits in the top-left corner. Every screen
+            // with a ListView in it accidentally avoided that; the launch
+            // screen, being a logo in the middle of nothing, did not. Pinning
+            // it here fixes the class of bug rather than the one instance.
+            // PuterHost stays unpositioned - it is a zero-size offscreen
+            // webview and forcing it to fill would put it over the app.
             builder: (context, child) => Stack(
               children: [
-                if (child != null) child,
+                if (child != null) Positioned.fill(child: child),
                 PuterHost(navigatorKey: rootNavigatorKey),
               ],
             ),

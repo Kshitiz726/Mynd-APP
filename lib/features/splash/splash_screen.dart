@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:video_player/video_player.dart';
 
+import '../../core/routes/app_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../providers/settings_provider.dart';
 
@@ -94,10 +95,17 @@ class _SplashScreenState extends State<SplashScreen> {
     setState(() => _leaving = true);
     await Future<void>.delayed(_fadeOut);
     if (!mounted) return;
-    // Through the app's own router, so there stays exactly one place that
-    // knows what a route name maps to - and the destination arrives on the
-    // router's usual fade rather than a second, different-looking one.
-    Navigator.of(context).pushReplacementNamed(widget.next);
+    // Built straight from the router rather than pushed by name.
+    //
+    // Not a style choice: this screen is MaterialApp's `home`, and WidgetsApp
+    // registers `home` in its route table under '/'. AppRoutes.shell *is* '/',
+    // so pushReplacementNamed(shell) resolved back to this screen - which
+    // started another timer and pushed '/' again, forever, spawning a video
+    // decoder each time round. Handing the router the settings directly skips
+    // the table and lands on the screen we actually meant.
+    Navigator.of(context).pushReplacement(
+      AppRouter.onGenerateRoute(RouteSettings(name: widget.next)),
+    );
   }
 
   @override
@@ -111,9 +119,15 @@ class _SplashScreenState extends State<SplashScreen> {
     final c = context.omColors;
     return Scaffold(
       backgroundColor: c.bg,
-      body: Stack(
-        alignment: Alignment.center,
-        children: [
+      // Expanded explicitly. MaterialApp's builder wraps every route in a bare
+      // Stack, which hands its children *loose* constraints, so a screen whose
+      // content does not expand on its own collapses to the size of its
+      // largest child. Every other screen in the app hides this behind a
+      // ListView; this one is a logo in the middle of nothing.
+      body: SizedBox.expand(
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
           // The same ambient wash the rest of the app sits on, so the fade out
           // lands on a background that is already familiar rather than a cut
           // from a white card to a coloured page.
@@ -167,10 +181,11 @@ class _SplashScreenState extends State<SplashScreen> {
                       ),
                   ],
                 ),
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
