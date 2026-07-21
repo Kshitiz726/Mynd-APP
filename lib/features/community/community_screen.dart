@@ -12,6 +12,7 @@ import '../../models/community/post.dart';
 import '../../models/community/chat_models.dart';
 import '../../models/energy_level.dart';
 import '../../models/focus/focus_room.dart';
+import '../../providers/alerts_provider.dart';
 import '../../providers/community_provider.dart';
 import '../../providers/chat_provider.dart';
 import '../../providers/focus_room_provider.dart';
@@ -19,7 +20,8 @@ import '../../widgets/om_avatar.dart';
 import '../../widgets/om_card.dart';
 import '../../widgets/om_glass.dart';
 import '../../widgets/om_tappable.dart';
-import '../../widgets/om_top_bar.dart';
+import '../home/search/global_search_screen.dart';
+import '../notifications/notifications_screen.dart';
 import 'chat_screen.dart';
 import 'new_dm_sheet.dart';
 import 'widgets/post_comments_sheet.dart';
@@ -117,8 +119,9 @@ class _CommunityScreenState extends State<CommunityScreen> {
             children: [
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: AppSpacing.screenH),
-              child: OmTopBar(title: 'community', subtitle: 'a calm place for ADHD brains'),
+              child: _FeedHeader(),
             ),
+            const SizedBox(height: AppSpacing.lg),
             const Padding(padding: EdgeInsets.symmetric(horizontal: AppSpacing.screenH), child: _HeroCard()),
             const SizedBox(height: AppSpacing.lg),
             Padding(
@@ -155,7 +158,183 @@ class _CommunityScreenState extends State<CommunityScreen> {
             ],
           ),
         ),
+        // The reference's one primary action: a floating "+" that writes a post.
+        // It replaces the old inline composer, so the feed is nothing but feed.
+        if (_tab == _CmTab.feed)
+          Positioned(
+            right: AppSpacing.screenH + 2,
+            bottom: 96,
+            child: _NewPostFab(onTap: () => _ComposerSheet.open(context)),
+          ),
       ],
+    );
+  }
+}
+
+/// The reference's header: your face, a search pill, alerts, people. Icon-only
+/// and evenly weighted, so nothing here competes with the feed itself.
+class _FeedHeader extends StatelessWidget {
+  const _FeedHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.omColors;
+    final name = ApiConfig.instance.displayName ?? 'You';
+    final userId = ApiConfig.instance.userId ?? name;
+    final unread = context.watch<AlertsProvider>().alertsUnread;
+
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(2),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: c.surface,
+            boxShadow: [
+              BoxShadow(
+                color: c.shadow.withValues(alpha: context.isDark ? 0.45 : 0.12),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: OmAvatar(
+            userId: userId,
+            fallbackInitial: name.isNotEmpty ? name[0].toUpperCase() : 'Y',
+            fallbackColor: c.primary,
+            size: 40,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: OmTappable(
+            onTap: () {
+              Haptics.select();
+              GlobalSearchScreen.open(context);
+            },
+            feedback: OmTapFeedback.none,
+            pressedScale: 0.98,
+            child: OmGlass(
+              borderRadius: AppRadius.pill,
+              blur: 24,
+              opacity: context.isDark ? 0.34 : 0.72,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+              child: Row(
+                children: [
+                  Icon(OmIcons.byName('search'), size: 17, color: c.text2),
+                  const SizedBox(width: 8),
+                  Text(
+                    'search',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: c.text2, fontSize: 14.5),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        _HeaderIcon(
+          icon: 'bell',
+          dot: unread > 0,
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(builder: (_) => const NotificationsScreen()),
+          ),
+        ),
+        const SizedBox(width: 6),
+        _HeaderIcon(icon: 'users', onTap: () => NewDmSheet.show(context)),
+      ],
+    );
+  }
+}
+
+/// A glass disc in the header. The red dot is the same alerts count the nav bar
+/// shows, so the two never disagree.
+class _HeaderIcon extends StatelessWidget {
+  const _HeaderIcon({required this.icon, required this.onTap, this.dot = false});
+
+  final String icon;
+  final VoidCallback onTap;
+  final bool dot;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.omColors;
+    return OmTappable(
+      onTap: () {
+        Haptics.select();
+        onTap();
+      },
+      feedback: OmTapFeedback.none,
+      pressedScale: 0.9,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          OmGlass(
+            borderRadius: AppRadius.pill,
+            blur: 24,
+            opacity: context.isDark ? 0.34 : 0.72,
+            padding: const EdgeInsets.all(11),
+            child: Icon(OmIcons.byName(icon), size: 18, color: c.text),
+          ),
+          if (dot)
+            Positioned(
+              right: 9,
+              top: 9,
+              child: Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: c.error,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: c.surface, width: 1.5),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The floating compose button.
+class _NewPostFab extends StatelessWidget {
+  const _NewPostFab({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.omColors;
+    return OmTappable(
+      onTap: () {
+        Haptics.medium();
+        onTap();
+      },
+      feedback: OmTapFeedback.none,
+      pressedScale: 0.9,
+      child: Container(
+        width: 58,
+        height: 58,
+        decoration: BoxDecoration(
+          // Accent, not brand: the nav bar's centre "+" is already brand
+          // purple, and two identical discs on one screen is a coin toss.
+          // The reference's floating button is coral anyway.
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [c.accent, Color.lerp(c.accent, Colors.black, 0.14)!],
+          ),
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: c.accent.withValues(alpha: 0.45),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: const Icon(Icons.add_rounded, size: 30, color: Colors.white),
+      ),
     );
   }
 }
@@ -248,7 +427,7 @@ class _CmTabs extends StatelessWidget {
   final ValueChanged<_CmTab> onChanged;
 
   static const _labels = {
-    _CmTab.feed: 'Latest',
+    _CmTab.feed: 'Latest Activities',
     _CmTab.rooms: 'Focus rooms',
     // _CmTab.groups: 'Groups', _CmTab.chats: 'Chats',
   };
@@ -257,12 +436,18 @@ class _CmTabs extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.omColors;
     // Underlined text rather than a boxed segment: the reference leads with the
-    // words and marks the active one with a short brand rule beneath it.
+    // words and marks the active one with a short brand rule beneath it, with a
+    // count badge riding alongside the label it belongs to.
+    final counts = {
+      _CmTab.feed: context.watch<CommunityProvider>().posts.length,
+      _CmTab.rooms: context.watch<FocusRoomProvider>().rooms.length,
+    };
+
     return Row(
       children: [
         for (final t in _CmTab.values)
           Padding(
-            padding: const EdgeInsets.only(right: 20),
+            padding: const EdgeInsets.only(right: 18),
             child: OmTappable(
               onTap: () {
                 Haptics.select();
@@ -273,14 +458,38 @@ class _CmTabs extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  AnimatedDefaultTextStyle(
-                    duration: const Duration(milliseconds: 200),
-                    style: Theme.of(context).textTheme.titleMedium!.copyWith(
-                          color: t == current ? c.text : c.text2,
-                          fontSize: 16,
-                          fontWeight: t == current ? FontWeight.w800 : FontWeight.w600,
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      AnimatedDefaultTextStyle(
+                        duration: const Duration(milliseconds: 200),
+                        style: Theme.of(context).textTheme.titleMedium!.copyWith(
+                              color: t == current ? c.text : c.text2,
+                              fontSize: 15.5,
+                              fontWeight: t == current ? FontWeight.w800 : FontWeight.w600,
+                            ),
+                        child: Text(_labels[t]!),
+                      ),
+                      if ((counts[t] ?? 0) > 0) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                          decoration: BoxDecoration(
+                            gradient: t == current ? c.brandGradient : null,
+                            color: t == current ? null : c.primaryTint,
+                            borderRadius: BorderRadius.circular(AppRadius.pill),
+                          ),
+                          child: Text(
+                            '${counts[t]}',
+                            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                  color: t == current ? Colors.white : c.primary,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 10.5,
+                                ),
+                          ),
                         ),
-                    child: Text(_labels[t]!),
+                      ],
+                    ],
                   ),
                   const SizedBox(height: 6),
                   AnimatedContainer(
@@ -314,13 +523,8 @@ class _FeedTab extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Padding(padding: EdgeInsets.symmetric(horizontal: AppSpacing.screenH), child: _Composer()),
-        const SizedBox(height: AppSpacing.lg),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenH),
-          child: Text('latest posts', style: Theme.of(context).textTheme.titleSmall),
-        ),
-        const SizedBox(height: AppSpacing.sm),
+        // No inline composer: writing a post lives on the floating "+", so the
+        // feed opens straight into other people's words.
         if (posts.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenH, vertical: 24),
@@ -345,10 +549,14 @@ class _FeedTab extends StatelessWidget {
   }
 }
 
-class _Composer extends StatelessWidget {
-  const _Composer();
+/// The post composer: free text + an optional mood + tag chips. Posts to the
+/// backend via [CommunityProvider.createPost] and prepends to the feed.
+class _ComposerSheet extends StatefulWidget {
+  const _ComposerSheet();
 
-  void _open(BuildContext context) {
+  /// Opens the sheet carrying the live provider across the route boundary, so
+  /// a new post lands in the same feed you were just looking at.
+  static void open(BuildContext context) {
     final community = context.read<CommunityProvider>();
     showModalBottomSheet<void>(
       context: context,
@@ -360,110 +568,6 @@ class _Composer extends StatelessWidget {
       ),
     );
   }
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.omColors;
-    final name = ApiConfig.instance.displayName ?? 'You';
-    final userId = ApiConfig.instance.userId ?? name;
-    final initial = name.isNotEmpty ? name[0].toUpperCase() : 'Y';
-
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: c.shadow.withValues(alpha: context.isDark ? 0.4 : 0.09),
-            blurRadius: 24,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: OmGlass(
-        borderRadius: 24,
-        blur: 26,
-        opacity: context.isDark ? 0.38 : 0.82,
-        padding: const EdgeInsets.all(14),
-        child: Column(
-        children: [
-          Row(
-            children: [
-              OmAvatar(
-                userId: userId,
-                fallbackInitial: initial,
-                fallbackColor: c.primary,
-                size: 42,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: GestureDetector(
-                  onTap: () => _open(context),
-                  behavior: HitTestBehavior.opaque,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-                    decoration: BoxDecoration(
-                      color: c.surfaceAlt,
-                      borderRadius: BorderRadius.circular(AppRadius.pill),
-                      border: Border.all(color: c.border),
-                    ),
-                    child: Text("What's on your mind?",
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: c.text2, fontSize: 15)),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Divider(height: 1, color: c.border),
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              Expanded(child: _ComposerAction(icon: 'heart', label: 'Feeling', color: c.accent, onTap: () => _open(context))),
-              Expanded(child: _ComposerAction(icon: 'hash', label: 'Topic', color: c.flow, onTap: () => _open(context))),
-              Expanded(child: _ComposerAction(icon: 'edit', label: 'Post', color: c.primary, onTap: () => _open(context))),
-            ],
-          ),
-        ],
-        ),
-      ),
-    );
-  }
-}
-
-/// One affordance in the composer's bottom action row (Feeling / Topic / Post).
-class _ComposerAction extends StatelessWidget {
-  const _ComposerAction({required this.icon, required this.label, required this.color, required this.onTap});
-
-  final String icon;
-  final String label;
-  final Color color;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(OmIcons.byName(icon), size: 17, color: color),
-            const SizedBox(width: 7),
-            Text(label,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// The post composer: free text + an optional mood + tag chips. Posts to the
-/// backend via [CommunityProvider.createPost] and prepends to the feed.
-class _ComposerSheet extends StatefulWidget {
-  const _ComposerSheet();
 
   @override
   State<_ComposerSheet> createState() => _ComposerSheetState();
@@ -618,6 +722,10 @@ class _PostCard extends StatelessWidget {
 
   static const _order = [ReactionKind.relate, ReactionKind.support, ReactionKind.proud];
 
+  /// Relate lives in the card's top-right heart, so the footer carries the
+  /// other two.
+  static const _footer = [ReactionKind.support, ReactionKind.proud];
+
   @override
   Widget build(BuildContext context) {
     final c = context.omColors;
@@ -681,28 +789,17 @@ class _PostCard extends StatelessWidget {
                             ],
                           ),
                         ),
-                        if (mood != null)
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-                            decoration: BoxDecoration(
-                              color: moodColor.withValues(alpha: 0.16),
-                              borderRadius: BorderRadius.circular(AppRadius.pill),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(mood.icon, size: 12, color: moodColor),
-                                const SizedBox(width: 4),
-                                Text(
-                                  _moodLabel(mood),
-                                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                        color: moodColor,
-                                        fontSize: 10.5,
-                                      ),
-                                ),
-                              ],
-                            ),
-                          ),
+                        // The reference's one round button on the card: a heart
+                        // in the top-right. Here it is the real "relate"
+                        // reaction, not decoration.
+                        _RoundAction(
+                          iconName: 'heart',
+                          active: post.isActive(ReactionKind.relate),
+                          count: post.countOf(ReactionKind.relate),
+                          onTap: () => context
+                              .read<CommunityProvider>()
+                              .toggleReaction(post.id, ReactionKind.relate),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 14),
@@ -731,14 +828,13 @@ class _PostCard extends StatelessWidget {
                         ],
                       ),
                     ],
-                    const SizedBox(height: 14),
-                    // A hairline before the actions: the reference separates
-                    // what was said from what you can do about it.
-                    Container(height: 1, color: c.border.withValues(alpha: 0.6)),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 12),
+                    // The reference's footer: quiet icons at the two ends, no
+                    // rule between them. Support and proud sit left, the
+                    // comment thread right.
                     Row(
                       children: [
-                        for (final kind in _order)
+                        for (final kind in _footer)
                           _IconAction(
                             iconName: kind.iconName,
                             count: post.countOf(kind),
@@ -748,7 +844,7 @@ class _PostCard extends StatelessWidget {
                         const Spacer(),
                         if (reactions > 0)
                           Padding(
-                            padding: const EdgeInsets.only(right: 4),
+                            padding: const EdgeInsets.only(right: 6),
                             child: Text(
                               '$reactions ${reactions == 1 ? 'reaction' : 'reactions'}',
                               style: Theme.of(context).textTheme.labelSmall?.copyWith(color: c.text2),
@@ -784,11 +880,34 @@ class _PostCard extends StatelessWidget {
                     ),
                   ],
                 ),
-                child: OmAvatar(
-                  userId: post.authorName,
-                  fallbackInitial: post.initial,
-                  fallbackColor: _hex(post.avatarColor),
-                  size: 46,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    OmAvatar(
+                      userId: post.authorName,
+                      fallbackInitial: post.initial,
+                      fallbackColor: _hex(post.avatarColor),
+                      size: 46,
+                    ),
+                    // The reference's small coloured disc at the avatar's
+                    // corner. Ours carries the mood, so how they felt is
+                    // legible before you read a word.
+                    if (mood != null)
+                      Positioned(
+                        right: -2,
+                        bottom: -2,
+                        child: Container(
+                          width: 20,
+                          height: 20,
+                          decoration: BoxDecoration(
+                            color: moodColor,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: c.surface, width: 2),
+                          ),
+                          child: Icon(mood.icon, size: 10, color: Colors.white),
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ),
@@ -823,6 +942,48 @@ class _PostBody extends StatelessWidget {
     if (index < body.length) spans.add(TextSpan(text: body.substring(index)));
 
     return RichText(text: TextSpan(style: base, children: spans));
+  }
+}
+
+/// The circular ghost button in the card's top-right corner.
+class _RoundAction extends StatelessWidget {
+  const _RoundAction({
+    required this.iconName,
+    required this.active,
+    required this.count,
+    required this.onTap,
+  });
+
+  final String iconName;
+  final bool active;
+  final int count;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.omColors;
+    return OmTappable(
+      onTap: () {
+        Haptics.light();
+        onTap();
+      },
+      feedback: OmTapFeedback.none,
+      pressedScale: 0.85,
+      child: Container(
+        width: 36,
+        height: 36,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: active ? c.primaryTint : c.surfaceAlt.withValues(alpha: 0.7),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(
+          OmIcons.byName(iconName),
+          size: 17,
+          color: active ? c.primary : c.text2,
+        ),
+      ),
+    );
   }
 }
 

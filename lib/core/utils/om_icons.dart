@@ -86,6 +86,8 @@ abstract final class OmIcons {
     'clock': LucideIcons.clock,
     'list': LucideIcons.listTodo,
     'cornerUpLeft': LucideIcons.cornerUpLeft,
+    'share': LucideIcons.share2,
+    'bookmark': LucideIcons.bookmark,
     'userX': LucideIcons.userX,
   };
 
