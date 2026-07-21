@@ -15,11 +15,11 @@ import '../../../providers/task_provider.dart';
 import '../../../widgets/om_avatar.dart';
 import '../../../widgets/om_card.dart';
 import '../../../widgets/om_mascot.dart';
-import '../../../widgets/om_states.dart';
 import '../../../widgets/om_tappable.dart';
 import '../../../widgets/shimmer_swipe.dart';
 import '../search/global_search_screen.dart';
 import 'goal_sheet.dart';
+import 'home_illustrations.dart';
 import 'brain_dump_sheet.dart';
 import 'edit_task_sheet.dart';
 
@@ -489,7 +489,7 @@ class _QuickActionsState extends State<QuickActions> {
           duration: const Duration(milliseconds: 300),
           child: _displayTask != null
               ? _ActionCard(key: ValueKey(_displayTask!.id), task: _displayTask!)
-              : const OmEmptyState(key: ValueKey('empty'), message: 'take a breather - you’re all caught up!'),
+              : const AllCaughtUpArt(key: ValueKey('empty')),
         ),
       ),
     );
@@ -771,17 +771,9 @@ class _GoalsEmptyState extends StatelessWidget {
       onTap: () => showAddGoalSheet(context),
       child: Column(
         children: [
-          Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: LinearGradient(
-                colors: [c.primaryTint, c.primary.withValues(alpha: 0.12)],
-              ),
-            ),
-            child: Icon(OmIcons.byName('target'), color: c.primary, size: 30),
-          ),
+          // Spans the box rather than sitting in it as a 64px circle, which
+          // read as a placeholder waiting for the real thing to load.
+          const NoGoalsArt(),
           const SizedBox(height: 14),
           Text('No active goals',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
