@@ -149,7 +149,11 @@ class _MyndHeroState extends State<MyndHero> with TickerProviderStateMixin {
                             child: child,
                           );
                         },
-                        child: const FluidOrb(size: 124),
+                        // Still until you ask it to think. The orb moving is
+                        // now a statement - the app is re-reading you - rather
+                        // than ambient motion that says nothing and costs a
+                        // decoder to say it.
+                        child: FluidOrb(size: 124, playing: _busy),
                       ),
                       Positioned(
                         right: -14,
