@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/services/groq_service.dart';
 import '../models/energy_level.dart';
@@ -19,9 +20,47 @@ import 'task_provider.dart';
 /// goal-tagged tasks so they appear in the day's time-blocks (rendered
 /// distinctly), and rolled-up progress is tracked here.
 class GoalProvider extends ChangeNotifier {
-  GoalProvider(this._tasks);
+  GoalProvider(this._tasks) {
+    load();
+  }
 
   TaskProvider _tasks;
+
+  static const _kGoals = 'om_goals';
+
+  bool _loaded = false;
+
+  /// The day whose milestones are currently on the timeline. Auto-Schedule and
+  /// the week strip both move this, so planning next Tuesday puts *Tuesday's*
+  /// goal step on the day rather than today's.
+  DateTime _day = DateTime.now();
+  DateTime get day => _day;
+
+  Future<void> load() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      final raw = p.getString(_kGoals);
+      if (raw != null) {
+        _goals.addAll((jsonDecode(raw) as List)
+            .map((g) => Goal.fromJson((g as Map).cast<String, dynamic>())));
+      }
+    } catch (e) {
+      debugPrint('[goals] load failed: $e');
+    }
+    _loaded = true;
+    _injectFor(_day);
+    notifyListeners();
+  }
+
+  Future<void> _persist() async {
+    if (!_loaded) return;
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.setString(_kGoals, jsonEncode(_goals.map((g) => g.toJson()).toList()));
+    } catch (e) {
+      debugPrint('[goals] save failed: $e');
+    }
+  }
 
   /// Re-bound by the ProxyProvider so we always push tasks into the live
   /// [TaskProvider] instance.
@@ -93,7 +132,8 @@ class GoalProvider extends ChangeNotifier {
       );
       _goals.add(goal);
       _scheduleDeadlineReminder(goal);
-      _injectToday();
+      _injectFor(_day);
+      _persist();
       return null;
     } catch (e) {
       return 'Couldn’t break down the goal - please try again.';
@@ -105,7 +145,8 @@ class GoalProvider extends ChangeNotifier {
 
   void removeGoal(String id) {
     _goals.removeWhere((g) => g.id == id);
-    _injectToday();
+    _injectFor(_day);
+    _persist();
     notifyListeners();
   }
 
@@ -117,7 +158,8 @@ class GoalProvider extends ChangeNotifier {
     for (final m in g.milestones) {
       m.done = makeDone;
     }
-    _injectToday();
+    _injectFor(_day);
+    _persist();
     notifyListeners();
   }
 
@@ -139,6 +181,7 @@ class GoalProvider extends ChangeNotifier {
       for (final m in g.milestones) {
         if (m.id == milestoneId && m.done != done) {
           m.done = done;
+          _persist();
           notifyListeners();
           return;
         }
@@ -147,20 +190,34 @@ class GoalProvider extends ChangeNotifier {
   }
 
   /// Re-push today's milestones into the task list (call on app/home init).
-  void refreshTodayTasks() => _injectToday();
+  void refreshTodayTasks() => _injectFor(DateTime.now());
+
+  /// Put [day]'s goal steps on the timeline, and only [day]'s.
+  ///
+  /// Each goal was already broken into one dated step per day up to its
+  /// deadline, so planning a future day means surfacing that day's step in the
+  /// slot the user set aside for the goal - not dragging the whole remaining
+  /// plan forward into one afternoon.
+  void showDay(DateTime day) {
+    if (_sameDay(day, _day)) return;
+    _day = day;
+    _injectFor(day);
+    notifyListeners();
+  }
 
   // ─────────────────────────────────────────────────────────────────────────
 
-  void _injectToday() {
+  void _injectFor(DateTime day) {
+    _day = day;
     final now = DateTime.now();
     final out = <Task>[];
     for (final g in _goals) {
       for (final m in g.milestones) {
-        if (_sameDay(m.date, now)) {
+        if (_sameDay(m.date, day)) {
           // Land it in the slot the user set aside for this goal. Without a
           // slot it stays unscheduled and auto-schedule places it wherever it
           // fits, as before.
-          final slot = g.slotOn(now);
+          final slot = g.slotOn(day);
           out.add(Task(
             id: m.id,
             title: m.title,

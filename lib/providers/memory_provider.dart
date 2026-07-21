@@ -25,6 +25,30 @@ class MemoryProvider extends ChangeNotifier {
 
   static const _kMemory = 'om_user_memory';
   static const _kParked = 'om_parked_thoughts';
+  static const _kName = 'om_preferred_name';
+
+  /// What they asked to be called.
+  ///
+  /// Kept here rather than on the account because it is a preference about
+  /// being addressed, not an identity: the name on your Google account is
+  /// frequently not the name you want a coach using at 2am.
+  String? _preferredName;
+  String? get preferredName => _preferredName;
+
+  /// True until they have either given a name or dismissed the question, so
+  /// the coach asks exactly once.
+  bool get needsName => _loaded && _preferredName == null;
+
+  Future<void> setPreferredName(String name) async {
+    final trimmed = name.trim();
+    _preferredName = trimmed;
+    notifyListeners();
+    final p = await SharedPreferences.getInstance();
+    await p.setString(_kName, trimmed);
+  }
+
+  /// They would rather not say. Recorded as an empty string so we stop asking.
+  Future<void> declineName() => setPreferredName('');
 
   /// How many parked thoughts we keep. Older ones have already been folded into
   /// the memory prose by an earlier refresh.
@@ -52,6 +76,7 @@ class MemoryProvider extends ChangeNotifier {
       if (raw != null) {
         _memory = UserMemory.fromJson((jsonDecode(raw) as Map).cast<String, dynamic>());
       }
+      _preferredName = p.getString(_kName);
       final parkedRaw = p.getString(_kParked);
       if (parkedRaw != null) {
         _parked = (jsonDecode(parkedRaw) as List)
@@ -110,6 +135,19 @@ class MemoryProvider extends ChangeNotifier {
     await _persistMemory();
   }
 
+  /// Whether the memory is old enough to be worth rewriting.
+  ///
+  /// Once a day, on the first open, is the right rhythm: the memory should not
+  /// go stale while they keep using the app, and it should not burn a model
+  /// call every time Home rebuilds. A hand-edit resets the clock like any other
+  /// update, so their words get a full day before the AI folds them in.
+  bool get isStale {
+    if (!_loaded) return false;
+    final at = _memory.updatedAt;
+    if (at == null) return true;
+    return DateTime.now().difference(at) > const Duration(hours: 20);
+  }
+
   /// Ask the model to (re)write the memory from a snapshot of everything the
   /// app can see. [snapshot] is assembled by the caller because only the widget
   /// tree has the other providers to hand.
@@ -130,10 +168,19 @@ class MemoryProvider extends ChangeNotifier {
 You maintain a short profile of one user of an ADHD productivity app. The user
 reads this profile themselves and it is given to their AI coach as context.
 
-Write 3-5 short sentences of plain prose, second person ("You tend to..."),
+You are given everything the app has seen: their schedule and how much of it
+actually happened, their goals and whether they are keeping pace, their habits,
+what they say to their coach, what they park mid-focus, and what they engage
+with in the community. Read across all of it, not just the task list.
+
+Write 4-6 short sentences of plain prose, second person ("You tend to..."),
 warm and specific. Cover what they are working towards, when they actually have
-energy, what they keep avoiding or returning to, and anything that clearly
-helps them. No bullet points, no headings, no preamble, under 120 words.
+energy, what they keep avoiding or returning to, what is clearly weighing on
+them, and anything that visibly helps. Name real things: actual goals, actual
+recurring tasks, actual themes from their conversations.
+
+No bullet points, no headings, no preamble, under 150 words.
+NEVER use an em dash or en dash ("—", "–"). Use commas or full stops.
 
 Only state things the data supports. If the data is thin, say so briefly rather
 than inventing a personality.''',
@@ -175,8 +222,12 @@ than inventing a personality.''',
   /// What the coach is given. Empty string when there is nothing worth sending,
   /// so the prompt builder can skip the block entirely.
   String get promptBlock {
-    if (_memory.isEmpty && _parked.isEmpty) return '';
+    final named = _preferredName != null && _preferredName!.isNotEmpty;
+    if (_memory.isEmpty && _parked.isEmpty && !named) return '';
     final buffer = StringBuffer();
+    if (named) {
+      buffer.writeln('They asked to be called $_preferredName.\n');
+    }
     if (!_memory.isEmpty) {
       buffer.writeln('WHAT YOU KNOW ABOUT THIS USER:');
       buffer.writeln(_memory.text);

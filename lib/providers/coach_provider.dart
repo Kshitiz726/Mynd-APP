@@ -1,8 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/chat_message.dart';
+import '../core/services/api_config.dart';
 import '../core/services/coach_context_builder.dart';
 import '../core/services/coach_memory_service.dart';
 import '../core/services/coach_prompt_builder.dart';
@@ -53,7 +57,22 @@ class CoachProvider extends ChangeNotifier {
   final HabitProvider _habits;
   final FocusProvider _focus;
   final SettingsProvider _settings;
+
+  /// The account name, used only as a fallback. What the user asked to be
+  /// called always wins, and neither is ever invented.
   final String _userName;
+
+  String? _preferredName;
+
+  /// The name the coach may actually use. Empty means "we do not know", and the
+  /// prompt is explicit that an unknown name must stay unknown rather than
+  /// being guessed at.
+  String get _name {
+    final p = _preferredName;
+    if (p != null) return p; // may be '' - they declined, and that is an answer
+    if (_userName.isNotEmpty) return _userName;
+    return ApiConfig.instance.displayName ?? '';
+  }
 
   // final _groq = GroqService.instance; // swapped for Puter.js (free, in-app)
   final _ai = PuterService.instance;
@@ -65,6 +84,18 @@ class CoachProvider extends ChangeNotifier {
   void setUserMemory(String value) {
     if (value == _userMemory) return;
     _userMemory = value;
+  }
+
+  /// Pushed in from the widget tree when the user tells us what to call them.
+  /// If nothing has been said yet, the opening line is rewritten in place so
+  /// they are greeted properly rather than by a stale "hey".
+  void setPreferredName(String? value) {
+    if (value == _preferredName) return;
+    _preferredName = value;
+    if (_messages.length == 1 && _messages.first.id == 'welcome') {
+      _messages[0] = ChatMessage.welcome(_name);
+      notifyListeners();
+    }
   }
   final _contextBuilder = CoachContextBuilder.instance;
   final _promptBuilder = CoachPromptBuilder.instance;
@@ -88,10 +119,84 @@ class CoachProvider extends ChangeNotifier {
 
   // ─── Init ─────────────────────────────────────────────────────────────────
 
+  // ─── Persistence ──────────────────────────────────────────────────────────
+
+  static const _kLog = 'om_coach_log';
+
+  /// How much verbatim conversation we keep on disk. Everything older has
+  /// already been folded into the rolling summary, so it is not lost, just no
+  /// longer quoted word for word.
+  static const _logCap = 120;
+
+  /// How many messages can accumulate before we fold the conversation into the
+  /// long-term memory. The coach lives for the whole app session, so waiting
+  /// for dispose meant most conversations were never remembered at all.
+  static const _condenseEvery = 8;
+
+  int _sinceCondense = 0;
+
   Future<void> _init() async {
     await _memory.init();
-    _messages.add(ChatMessage.welcome(_userName));
+    await _restore();
+    if (_messages.isEmpty) _messages.add(ChatMessage.welcome(_name));
     notifyListeners();
+  }
+
+  Future<void> _restore() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      final raw = p.getString(_kLog);
+      if (raw == null) return;
+      _messages.addAll((jsonDecode(raw) as List)
+          .map((m) => ChatMessage.fromJson((m as Map).cast<String, dynamic>())));
+    } catch (e) {
+      debugPrint('[coach] restore failed: $e');
+    }
+  }
+
+  Future<void> _persistLog() async {
+    try {
+      final keep = _messages.where((m) => !m.isStreaming).toList();
+      final trimmed = keep.length > _logCap ? keep.sublist(keep.length - _logCap) : keep;
+      final p = await SharedPreferences.getInstance();
+      await p.setString(_kLog, jsonEncode(trimmed.map((m) => m.toJson()).toList()));
+    } catch (e) {
+      debugPrint('[coach] save failed: $e');
+    }
+  }
+
+  /// The last few exchanges in plain text, for the memory snapshot. This is how
+  /// what they actually say to the coach reaches the profile the coach reads.
+  String recentTranscript({int turns = 12}) {
+    final real = _messages.where((m) => !m.isStreaming && m.id != 'welcome').toList();
+    if (real.isEmpty) return '';
+    final tail = real.length > turns ? real.sublist(real.length - turns) : real;
+    return tail
+        .map((m) => '${m.fromUser ? 'THEM' : 'YOU'}: ${m.text.trim()}')
+        .join('\n');
+  }
+
+  /// Start over. The rolling summary survives, because forgetting the
+  /// conversation is not the same as forgetting the person.
+  Future<void> clearConversation() async {
+    _messages
+      ..clear()
+      ..add(ChatMessage.welcome(_name));
+    _sinceCondense = 0;
+    notifyListeners();
+    final p = await SharedPreferences.getInstance();
+    await p.remove(_kLog);
+  }
+
+  /// Fold the conversation so far into the long-term memo, in the background.
+  Future<void> _condense() async {
+    _sinceCondense = 0;
+    final turns = _messages
+        .where((m) => !m.isStreaming && m.id != 'welcome')
+        .map((m) => m.toGroqMessage())
+        .toList();
+    if (turns.isEmpty) return;
+    await _memory.finaliseSession(turns: turns, summarise: _ai.complete);
   }
 
   // ─── Send ─────────────────────────────────────────────────────────────────
@@ -135,7 +240,7 @@ class CoachProvider extends ChangeNotifier {
         habits: _habits,
         focus: _focus,
         settings: _settings,
-        userName: _userName,
+        userName: _name,
         userMemory: _userMemory,
       );
 
@@ -156,7 +261,11 @@ class CoachProvider extends ChangeNotifier {
       final stream = _ai.streamCompletion(messages);
       _streamSub = stream.listen(
         (chunk) {
-          assistantMsg.text += chunk.replaceAll('-', '-');
+          // The prompt forbids dashes; this is the belt to that braces. Models
+          // reach for an em dash under pressure however firmly you ask them not
+          // to, and one slipping through is the single clearest tell that the
+          // thing you are texting is not a person.
+          assistantMsg.text += _deDash(chunk);
           notifyListeners();
         },
         onError: (Object e) {
@@ -179,6 +288,7 @@ class CoachProvider extends ChangeNotifier {
           notifyListeners();
           _turnDone?.complete(assistantMsg.text);
           _turnDone = null;
+          _afterTurn();
         },
         cancelOnError: true,
       );
@@ -192,6 +302,24 @@ class CoachProvider extends ChangeNotifier {
       _turnDone?.complete(assistantMsg.text);
       _turnDone = null;
     }
+  }
+
+  /// Strips em and en dashes, keeping the sentence readable rather than just
+  /// deleting the character: a dash doing a comma's job becomes a comma, and a
+  /// dash doing a full stop's job becomes one.
+  static String _deDash(String s) => s
+      .replaceAll(' — ', ', ')
+      .replaceAll(' – ', ', ')
+      .replaceAll('—', ', ')
+      .replaceAll('–', ', ');
+
+  /// Housekeeping after a completed exchange: keep the log on disk, and every
+  /// so often fold it into the long-term memo so the coach remembers this
+  /// conversation tomorrow.
+  void _afterTurn() {
+    unawaited(_persistLog());
+    _sinceCondense += 2;
+    if (_sinceCondense >= _condenseEvery) unawaited(_condense());
   }
 
   /// Voice turn: send [text] and resolve with the full assistant reply once the
@@ -220,20 +348,9 @@ class CoachProvider extends ChangeNotifier {
   @override
   Future<void> dispose() async {
     await _streamSub?.cancel();
-
-    // Summarise this session in the background before we go.
-    final sessionTurns = _messages
-        .where((m) => !m.isStreaming && m.id != 'welcome')
-        .map((m) => m.toGroqMessage())
-        .toList();
-
-    unawaited(
-      _memory.finaliseSession(
-        turns: sessionTurns,
-        summarise: _ai.complete,
-      ),
-    );
-
+    unawaited(_persistLog());
+    // Anything since the last fold still deserves remembering.
+    if (_sinceCondense > 0) unawaited(_condense());
     super.dispose();
   }
 

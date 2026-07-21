@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/haptics.dart';
+import '../../../providers/goal_provider.dart';
 import '../../../providers/task_provider.dart';
 import '../../../widgets/om_tappable.dart';
 
@@ -41,6 +42,9 @@ class WeekStrip extends StatelessWidget {
                 onTap: () {
                   Haptics.select();
                   tasks.selectDate(day);
+                  // Swap in that day's goal step, so a future day shows what
+                  // the plan actually asks for on it.
+                  context.read<GoalProvider>().showDay(day);
                 },
               ),
             ),

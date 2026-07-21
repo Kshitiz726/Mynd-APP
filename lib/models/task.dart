@@ -8,6 +8,11 @@ class MicroStep {
 
   final String text;
   bool done;
+
+  Map<String, dynamic> toJson() => {'text': text, 'done': done};
+
+  factory MicroStep.fromJson(Map<String, dynamic> j) =>
+      MicroStep(text: j['text'] as String? ?? '', done: j['done'] as bool? ?? false);
 }
 
 /// A task in the backlog / timeline.
@@ -87,5 +92,56 @@ class Task {
   bool get isMissed {
     if (done || isAnchor || endTime == null) return false;
     return endTime!.isBefore(DateTime.now());
+  }
+
+  // ── Persistence ──
+  //
+  // A day that vanishes on relaunch reads as data loss, so the whole task list
+  // is written to disk. Everything the timeline needs to redraw a block is here;
+  // [expanded] is deliberately not, because a drawer left open is a UI mood
+  // rather than something worth restoring.
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'title': title,
+        'time': time,
+        'energy': energy.name,
+        'done': done,
+        'scheduled': scheduled,
+        if (startTime != null) 'startTime': startTime!.toIso8601String(),
+        if (duration != null) 'durationMin': duration!.inMinutes,
+        'isAnchor': isAnchor,
+        if (goalId != null) 'goalId': goalId,
+        if (goalTitle != null) 'goalTitle': goalTitle,
+        if (chunkOf != null) 'chunkOf': chunkOf,
+        'chunkIndex': chunkIndex,
+        'chunkCount': chunkCount,
+        if (steps.isNotEmpty) 'steps': steps.map((s) => s.toJson()).toList(),
+      };
+
+  factory Task.fromJson(Map<String, dynamic> j) {
+    final mins = j['durationMin'] as int?;
+    return Task(
+      id: j['id'] as String,
+      title: j['title'] as String? ?? '',
+      time: j['time'] as String? ?? 'today',
+      energy: EnergyLevel.values.firstWhere(
+        (e) => e.name == j['energy'],
+        orElse: () => EnergyLevel.low,
+      ),
+      done: j['done'] as bool? ?? false,
+      scheduled: j['scheduled'] as bool? ?? false,
+      startTime: j['startTime'] == null ? null : DateTime.parse(j['startTime'] as String),
+      duration: mins == null ? null : Duration(minutes: mins),
+      isAnchor: j['isAnchor'] as bool? ?? false,
+      goalId: j['goalId'] as String?,
+      goalTitle: j['goalTitle'] as String?,
+      chunkOf: j['chunkOf'] as String?,
+      chunkIndex: j['chunkIndex'] as int? ?? 0,
+      chunkCount: j['chunkCount'] as int? ?? 0,
+      steps: (j['steps'] as List?)
+          ?.map((s) => MicroStep.fromJson((s as Map).cast<String, dynamic>()))
+          .toList(),
+    );
   }
 }

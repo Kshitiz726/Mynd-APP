@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'core/routes/app_router.dart';
 import 'core/routes/app_routes.dart';
 import 'core/services/api_client.dart';
+import 'core/services/api_config.dart';
 import 'core/services/alarm_service.dart';
 import 'core/services/coach_memory_service.dart';
 import 'core/services/realtime_service.dart';
@@ -114,7 +115,10 @@ class OurMyndApp extends StatelessWidget {
             habits: ctx.read<HabitProvider>(),
             focus: ctx.read<FocusProvider>(),
             settings: ctx.read<SettingsProvider>(),
-            userName: 'Sam', // TODO: wire to user profile
+            // The signed-in account's name. The session is restored before
+            // runApp, so this is populated by the time the coach is built; if
+            // it is not, the coach stays nameless rather than inventing one.
+            userName: ApiConfig.instance.displayName ?? '',
           ),
           update: (_, energy, tasks, habits, focus, settings, previous) {
             // Provider instances are long-lived; the ProxyProvider just

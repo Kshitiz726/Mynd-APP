@@ -3,19 +3,20 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// How the day feels, on a five-point scale. Faces, not numbers - naming a
-/// feeling is already work, and picking one should not be.
+/// How the day feels, on a five-point scale. Rendered as gradient orbs rather
+/// than emoji or numbers: naming a feeling is already work, picking one should
+/// not be, and a system smiley is somebody else's art direction dropped into
+/// the middle of the app.
 enum Mood {
-  rough(label: 'rough', emoji: '😞'),
-  low(label: 'low', emoji: '😕'),
-  okay(label: 'okay', emoji: '😐'),
-  good(label: 'good', emoji: '🙂'),
-  great(label: 'great', emoji: '😄');
+  rough(label: 'rough'),
+  low(label: 'low'),
+  okay(label: 'okay'),
+  good(label: 'good'),
+  great(label: 'great');
 
-  const Mood({required this.label, required this.emoji});
+  const Mood({required this.label});
 
   final String label;
-  final String emoji;
 
   /// 0..1, for tinting and for the trend bar heights.
   double get value => (index + 1) / Mood.values.length;

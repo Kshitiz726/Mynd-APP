@@ -9,11 +9,13 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../core/utils/om_icons.dart';
 import '../../../core/utils/toast.dart';
+import '../../../providers/coach_provider.dart';
 import '../../../providers/community_provider.dart';
 import '../../../providers/energy_provider.dart';
 import '../../../providers/goal_provider.dart';
 import '../../../providers/habit_provider.dart';
 import '../../../providers/memory_provider.dart';
+import '../../../providers/mood_provider.dart';
 import '../../../providers/task_provider.dart';
 import '../../../widgets/om_glass.dart';
 import '../../../widgets/om_tappable.dart';
@@ -28,20 +30,31 @@ import '../../../widgets/text_editing_scope.dart';
 class MemoryCard extends StatelessWidget {
   const MemoryCard({super.key});
 
-  Future<void> _refresh(BuildContext context) async {
-    Haptics.medium();
+  /// Rewrite the memory from everything the app can currently see.
+  ///
+  /// Shared by the refresh button and by Home's once-a-day automatic pass, so
+  /// both read from exactly the same picture of the user.
+  static Future<void> refreshFrom(BuildContext context, {bool haptic = true}) async {
+    if (haptic) Haptics.medium();
     final memory = context.read<MemoryProvider>();
     final snapshot = buildMemorySnapshot(
-      userName: ApiConfig.instance.displayName ?? 'friend',
+      userName: memory.preferredName?.isNotEmpty == true
+          ? memory.preferredName!
+          : (ApiConfig.instance.displayName ?? 'friend'),
       tasks: context.read<TaskProvider>(),
       goals: context.read<GoalProvider>(),
       habits: context.read<HabitProvider>(),
       energy: context.read<EnergyProvider>(),
       community: context.read<CommunityProvider>(),
+      mood: context.read<MoodProvider>(),
+      // What they have actually been saying to the coach, in their own words.
+      recentChat: context.read<CoachProvider>().recentTranscript(),
     );
     await memory.refresh(snapshot);
     if (context.mounted && memory.error != null) Toast.show(context, memory.error!);
   }
+
+  Future<void> _refresh(BuildContext context) => refreshFrom(context);
 
   @override
   Widget build(BuildContext context) {

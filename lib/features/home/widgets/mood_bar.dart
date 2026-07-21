@@ -50,11 +50,8 @@ class MoodBar extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Text(
-                      today?.mood.emoji ?? '🫥',
-                      style: const TextStyle(fontSize: 22),
-                    ),
-                    const SizedBox(width: 10),
+                    MoodOrb(mood: today?.mood, size: 26),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Text(
                         today == null
@@ -97,6 +94,60 @@ class MoodBar extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// A mood as a soft gradient orb rather than a yellow face.
+///
+/// The light source sits off-centre, so the sphere reads as lit from the upper
+/// left rather than as a flat disc, and the fill runs coral at "rough" through
+/// to brand purple at "great". Emoji were the quick version of this and the
+/// wrong one: five system smileys are somebody else's art direction dropped
+/// into the middle of the app, and they render differently on every device.
+class MoodOrb extends StatelessWidget {
+  const MoodOrb({super.key, required this.mood, this.size = 28, this.glow = true});
+
+  /// null renders the "not logged yet" orb: the same shape, drained of colour.
+  final Mood? mood;
+  final double size;
+  final bool glow;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.omColors;
+    final m = mood;
+    final tint = m == null
+        ? Color.lerp(c.text2, c.surfaceAlt, 0.55)!
+        : Color.lerp(c.accent, c.primary, m.value)!;
+
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: RadialGradient(
+          // Offset, not centred: this is what makes it a sphere.
+          center: const Alignment(-0.38, -0.45),
+          radius: 0.95,
+          colors: [
+            Color.lerp(tint, Colors.white, 0.72)!,
+            tint,
+            Color.lerp(tint, const Color(0xFF1B1033), 0.34)!,
+          ],
+          stops: const [0.0, 0.52, 1.0],
+        ),
+        boxShadow: glow
+            ? [
+                BoxShadow(
+                  color: tint.withValues(alpha: m == null ? 0.14 : 0.42),
+                  blurRadius: size * 0.5,
+                  spreadRadius: -size * 0.12,
+                  offset: Offset(0, size * 0.22),
+                ),
+              ]
+            : null,
       ),
     );
   }
@@ -204,8 +255,16 @@ Future<void> showMoodCheckIn(BuildContext context, {Mood? replacing}) {
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Text(m.emoji, style: const TextStyle(fontSize: 24)),
-                              const SizedBox(height: 6),
+                              // The orb grows a little when picked, so the
+                              // choice registers physically before the border
+                              // and label catch up.
+                              AnimatedScale(
+                                duration: const Duration(milliseconds: 220),
+                                curve: Curves.easeOutBack,
+                                scale: selected == m ? 1.12 : 1.0,
+                                child: MoodOrb(mood: m, size: 28),
+                              ),
+                              const SizedBox(height: 8),
                               Text(
                                 m.label,
                                 style: Theme.of(ctx).textTheme.labelSmall?.copyWith(

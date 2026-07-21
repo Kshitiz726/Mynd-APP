@@ -27,12 +27,29 @@ class ChatMessage {
         'content': text,
       };
 
-  /// Factory for the welcome message shown before any user input.
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'text': text,
+        'fromUser': fromUser,
+        'at': timestamp.toIso8601String(),
+      };
+
+  factory ChatMessage.fromJson(Map<String, dynamic> j) => ChatMessage(
+        id: j['id'] as String,
+        text: j['text'] as String? ?? '',
+        fromUser: j['fromUser'] as bool? ?? false,
+        timestamp: DateTime.tryParse(j['at'] as String? ?? ''),
+      );
+
+  /// The opening line, shown before any user input.
+  ///
+  /// With no name it stays nameless rather than guessing one. Inventing a name
+  /// for someone is worse than not using one.
   factory ChatMessage.welcome(String userName) => ChatMessage(
         id: 'welcome',
-        text: userName.isNotEmpty
-            ? "hey $userName - I'm Mynd, your pocket coach. what's going on right now?"
-            : "hey - I'm Mynd, your pocket coach. what's going on right now?",
+        text: userName.trim().isNotEmpty
+            ? "hey ${userName.trim()}. i'm Mynd. what's going on right now?"
+            : "hey. i'm Mynd, your pocket coach. what's going on right now?",
         fromUser: false,
       );
 }

@@ -76,7 +76,13 @@ class _AppShellState extends State<AppShell> {
 
     return LowStimFilter(
       child: Scaffold(
-        extendBody: false, // Turn off extendBody so we control padding manually
+        // The nav bar is glass, and glass needs something behind it. Without
+        // extendBody the Scaffold reserves a strip of its own background colour
+        // under the bar, so the capsule floats on an opaque slab and the blur
+        // has nothing to blur. Letting the body run underneath is what makes it
+        // read as transparent; every screen already pads for it via
+        // AppSpacing.screenBottom.
+        extendBody: true,
         body: Stack(
           children: [
             SafeArea(

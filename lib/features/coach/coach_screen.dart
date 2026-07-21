@@ -9,8 +9,8 @@ import '../../core/utils/om_icons.dart';
 import '../../models/chat_message.dart';
 import '../../providers/coach_provider.dart';
 import '../../providers/memory_provider.dart';
+import '../../widgets/fluid_orb.dart';
 import '../../widgets/om_back_button.dart';
-import '../../widgets/om_mascot.dart';
 import '../../widgets/om_glass.dart';
 import '../../widgets/om_tappable.dart';
 import 'coach_voice_screen.dart';
@@ -78,11 +78,13 @@ class _CoachScreenState extends State<CoachScreen> {
     final c = context.omColors;
 
     // Every reply is written with the user's memory in hand: who they are,
-    // what they are working towards, what they parked. Watched rather than
-    // read once, so an edit takes effect on the next message, not next launch.
-    context.read<CoachProvider>().setUserMemory(
-          context.watch<MemoryProvider>().promptBlock,
-        );
+    // what they are working towards, what they parked, what they have been
+    // saying. Watched rather than read once, so an edit takes effect on the
+    // next message, not next launch.
+    final memory = context.watch<MemoryProvider>();
+    context.read<CoachProvider>()
+      ..setUserMemory(memory.promptBlock)
+      ..setPreferredName(memory.preferredName);
 
     return Consumer<CoachProvider>(
       builder: (context, coach, _) {
@@ -103,7 +105,9 @@ class _CoachScreenState extends State<CoachScreen> {
                   const SizedBox(width: 4),
                   Stack(
                     children: [
-                      const OmMascot(size: 42),
+                      // The same living orb as the hero, small. One face for
+                      // Mynd everywhere, not a mascot up here and a blob below.
+                      const FluidOrb.still(size: 42),
                       Positioned(
                         right: 0,
                         bottom: 0,
@@ -153,11 +157,17 @@ class _CoachScreenState extends State<CoachScreen> {
                 // bubble in the corner.
                 itemCount: coach.messages.length +
                     (coach.isLoading && !coach.isStreaming ? 1 : 0) +
-                    (coach.messages.length <= 1 ? 1 : 0),
+                    (coach.messages.length <= 1 ? (memory.needsName ? 2 : 1) : 0),
                 itemBuilder: (context, i) {
                   if (coach.messages.length <= 1) {
                     if (i == 0) return const _CoachHero();
                     i -= 1;
+                    // Before anything else is asked of them, the one question
+                    // we cannot answer ourselves.
+                    if (memory.needsName) {
+                      if (i == 0) return const _NameCard();
+                      i -= 1;
+                    }
                   }
                   if (i == coach.messages.length) {
                     return const _TypingBubble();
@@ -356,56 +366,44 @@ class _ChatBubble extends StatelessWidget {
   }
 }
 
-/// The opening state: an orb, a greeting, and nothing else to read.
+/// The opening state: the orb, a greeting, and nothing else to read.
+///
+/// Laid out like the reference - the blob carries the whole top of the screen
+/// and the question sits under it in two lines, the second one heavier, so the
+/// eye lands on "what's going on?" rather than on a wall of chrome.
 class _CoachHero extends StatelessWidget {
   const _CoachHero();
 
   @override
   Widget build(BuildContext context) {
     final c = context.omColors;
+    final name = context.watch<MemoryProvider>().preferredName;
+    final greeting = (name != null && name.isNotEmpty) ? 'hey $name,' : 'hey,';
+
     return Padding(
-      padding: const EdgeInsets.only(bottom: 26),
+      padding: const EdgeInsets.only(top: 8, bottom: 30),
       child: Column(
         children: [
-          Container(
-            width: 108,
-            height: 108,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: RadialGradient(
-                center: const Alignment(-0.3, -0.4),
-                colors: [
-                  Color.lerp(c.primary, Colors.white, 0.55)!,
-                  c.primary,
-                  Color.lerp(c.primary, Colors.black, 0.25)!,
-                ],
-                stops: const [0.0, 0.55, 1.0],
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: c.primary.withValues(alpha: 0.38),
-                  blurRadius: 34,
-                  spreadRadius: -2,
-                  offset: const Offset(0, 14),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
+          const FluidOrb(size: 132),
+          const SizedBox(height: 28),
           Text(
-            'how can I help you today?',
+            greeting,
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontSize: 21,
-                  fontWeight: FontWeight.w700,
-                  height: 1.3,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w500,
+                  height: 1.25,
+                  color: c.text2,
                 ),
           ),
-          const SizedBox(height: 8),
           Text(
-            'think out loud - I will keep up',
+            "what's going on?",
             textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: c.text2),
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w800,
+                  height: 1.3,
+                ),
           ),
         ],
       ),
@@ -413,6 +411,120 @@ class _CoachHero extends StatelessWidget {
   }
 }
 
+/// Asked once, the first time they open the coach: what should I call you?
+///
+/// The alternative was guessing from the account name, which is how the coach
+/// spent months calling everyone Sam. A name is the one piece of context you
+/// cannot infer, so it is the one thing worth interrupting for, exactly once.
+class _NameCard extends StatefulWidget {
+  const _NameCard();
+
+  @override
+  State<_NameCard> createState() => _NameCardState();
+}
+
+class _NameCardState extends State<_NameCard> {
+  final _field = TextEditingController();
+
+  @override
+  void dispose() {
+    _field.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    final v = _field.text.trim();
+    if (v.isEmpty) return;
+    Haptics.success();
+    final memory = context.read<MemoryProvider>();
+    memory.setPreferredName(v);
+    context.read<CoachProvider>().setPreferredName(v);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.omColors;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 22),
+      child: OmGlass(
+        borderRadius: 22,
+        blur: 24,
+        opacity: context.isDark ? 0.40 : 0.80,
+        padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('what should I call you?',
+                style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: 4),
+            Text('whatever you actually go by. I will stick to it.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: c.text2)),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: c.surfaceAlt,
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
+                    ),
+                    child: TextField(
+                      controller: _field,
+                      textCapitalization: TextCapitalization.words,
+                      onSubmitted: (_) => _save(),
+                      style: Theme.of(context).textTheme.bodyMedium,
+                      decoration: const InputDecoration(
+                        border: InputBorder.none,
+                        isCollapsed: true,
+                        hintText: 'your name',
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                OmTappable(
+                  onTap: _save,
+                  feedback: OmTapFeedback.none,
+                  pressedScale: 0.9,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+                    decoration: BoxDecoration(
+                      gradient: c.brandGradient,
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
+                    ),
+                    child: const Text("that's me",
+                        style: TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.w800, fontSize: 13)),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            // Not answering is an answer, and it stops the question coming back.
+            OmTappable(
+              onTap: () {
+                Haptics.light();
+                context.read<MemoryProvider>().declineName();
+                context.read<CoachProvider>().setPreferredName('');
+              },
+              feedback: OmTapFeedback.none,
+              pressedScale: 0.96,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Text('skip this',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(color: c.text2)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Thinking. The orb is the indicator - it is already alive, so it says
+/// "someone is there" better than the words "Mynd is typing" ever did.
 class _TypingBubble extends StatelessWidget {
   const _TypingBubble();
 
@@ -420,13 +532,16 @@ class _TypingBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.omColors;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10, left: 4),
-      child: Text(
-        'Mynd is typing…',
-        style: Theme.of(context)
-            .textTheme
-            .bodyMedium
-            ?.copyWith(color: c.text2, fontStyle: FontStyle.italic),
+      padding: const EdgeInsets.only(bottom: 12, left: 2),
+      child: Row(
+        children: [
+          const FluidOrb.still(size: 26),
+          const SizedBox(width: 10),
+          Text(
+            'thinking…',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: c.text2),
+          ),
+        ],
       ),
     );
   }
@@ -520,12 +635,14 @@ class _CoachInput extends StatelessWidget {
               controller: controller,
               textCapitalization: TextCapitalization.sentences,
               onSubmitted: onSend,
+              minLines: 1,
+              maxLines: 4,
               style: Theme.of(context)
                   .textTheme
                   .bodyMedium
                   ?.copyWith(color: c.text, fontSize: 15),
               decoration: InputDecoration(
-                hintText: "tell Mynd what's going on…",
+                hintText: 'ask anything…',
                 hintStyle: Theme.of(context)
                     .textTheme
                     .bodyMedium
@@ -537,30 +654,46 @@ class _CoachInput extends StatelessWidget {
           ),
           const SizedBox(width: 6),
           // Hands-free voice mode (Puter speech↔text + TTS).
-          GestureDetector(
+          OmTappable(
             onTap: onVoice,
+            feedback: OmTapFeedback.none,
+            pressedScale: 0.88,
+            child: SizedBox(
+              width: 40,
+              height: 42,
+              child: Icon(OmIcons.byName('mic'), color: c.text2, size: 19),
+            ),
+          ),
+          // The send key from the reference: a soft brand-tinted square with an
+          // arrow, not a hard coral disc. It belongs to the same family as the
+          // orb above it, which is the point.
+          OmTappable(
+            onTap: () => onSend(controller.text),
+            feedback: OmTapFeedback.none,
+            pressedScale: 0.88,
             child: Container(
               width: 42,
               height: 42,
               decoration: BoxDecoration(
-                color: c.primary.withValues(alpha: 0.12),
-                shape: BoxShape.circle,
+                borderRadius: BorderRadius.circular(15),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color.lerp(c.primary, Colors.white, 0.62)!,
+                    Color.lerp(c.primary, c.accent, 0.30)!,
+                  ],
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: c.primary.withValues(alpha: 0.30),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
               alignment: Alignment.center,
-              child: Icon(OmIcons.byName('mic'), color: c.primary, size: 19),
-            ),
-          ),
-          const SizedBox(width: 6),
-          GestureDetector(
-            onTap: () => onSend(controller.text),
-            child: Container(
-              width: 42,
-              height: 42,
-              decoration:
-                  BoxDecoration(color: c.accent, shape: BoxShape.circle),
-              alignment: Alignment.center,
-              child:
-                  Icon(OmIcons.byName('send'), color: Colors.white, size: 18),
+              child: const Icon(Icons.arrow_upward_rounded, color: Colors.white, size: 20),
             ),
           ),
         ],

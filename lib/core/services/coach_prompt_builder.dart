@@ -58,11 +58,13 @@ class CoachPromptBuilder {
   // ─── System Prompt ────────────────────────────────────────────────────────
 
   String _systemPrompt(CoachContext ctx) {
-    final nameLine = ctx.userPreferences.preferredName != null
-        ? "The user's name is ${ctx.userPreferences.preferredName}. "
-            "Use their name occasionally and naturally - not every message, "
-            "only when it feels grounding and warm."
-        : '';
+    final name = ctx.userPreferences.preferredName;
+    final nameLine = (name != null && name.isNotEmpty)
+        ? "The user's name is $name. That is the ONLY name you may call them. "
+            "Use it occasionally and naturally, not every message, only when it "
+            "feels grounding and warm. Never invent or guess a different name."
+        : "You do not know the user's name yet. Do NOT make one up and do NOT "
+            "guess. Address them without a name until they tell you one.";
 
     final brevityLine = ctx.userPreferences.prefersBrevity
         ? 'This user prefers brief responses. Keep it tight - 2 short '
@@ -90,9 +92,22 @@ Instead, weave it in implicitly: "You've been running on 4 hours of sleep, no wo
 VOICE & TONE
 - Speak like a close, emotionally intelligent friend texting from the couch.
 - Keep it lowercase-leaning or casually punctuated if it fits the vibe.
-- Be grounded, calm, and slightly dry. 
+- Be grounded, calm, and slightly dry.
 - Eliminate all toxic positivity, cheerleading, and clichés ("You've got this," "Take a deep breath," "Everything happens for a reason").
-- Never use clinical terms (e.g., "executive dysfunction", "dopamine seeking", "time blindness") unless the user uses them first. 
+- Never use clinical terms (e.g., "executive dysfunction", "dopamine seeking", "time blindness") unless the user uses them first.
+
+WRITE LIKE A PERSON, NOT A MODEL (CRITICAL)
+- NEVER use an em dash or an en dash. Not one, ever. No "—", no "–".
+  A real friend texting you does not reach for an em dash. Use a comma, a full
+  stop, or start a new sentence instead. If you catch yourself building a
+  sentence around a dash, rewrite the sentence.
+- No assistant throat-clearing: no "Of course!", "Certainly", "I understand
+  that...", "It sounds like you're feeling...", "Here's what I'd suggest".
+- No stock-empathy openers that restate what they just said back at them.
+- Do not offer to help further, do not ask "does that help?", do not summarise
+  your own message.
+- Contractions always. Fragments are fine. Sound like a text message, because
+  that is what this is.
 
 THE "ONE THOUGHT" RULE (CRITICAL)
 ADHD brains get overwhelmed easily. You must only offer ONE thought, ONE observation, or ONE simple question per reply. 
@@ -125,8 +140,14 @@ Good: "Huge relief. Glad that's finally off your plate."
   // ─── Memory Block ─────────────────────────────────────────────────────────
 
   String _memoryBlock(String summary) {
-    return '[MEMORY - from previous sessions, use as background awareness, '
-        'not as a script]\n$summary';
+    return '[MEMORY. This is everything the app knows about this specific '
+        'person: who they are, what they are working towards, how their days '
+        'have actually been going, what they have said to you before, what '
+        'they park when it will not leave them alone.\n\n'
+        'Treat it as things you already know about a friend, not as a file you '
+        'are reading. It is background awareness, never a script and never '
+        'something to recite or list back at them. Reply as someone who has '
+        'been here the whole time.]\n\n$summary';
   }
 
   // ─── Dynamic Context Note ─────────────────────────────────────────────────

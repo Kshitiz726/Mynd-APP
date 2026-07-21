@@ -25,6 +25,29 @@ class GoalMilestone {
   final EnergyLevel energy;
   bool done;
   final List<MicroStep> steps;
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'title': title,
+        'date': date.toIso8601String(),
+        'energy': energy.name,
+        'done': done,
+        if (steps.isNotEmpty) 'steps': steps.map((s) => s.toJson()).toList(),
+      };
+
+  factory GoalMilestone.fromJson(Map<String, dynamic> j) => GoalMilestone(
+        id: j['id'] as String,
+        title: j['title'] as String? ?? '',
+        date: DateTime.parse(j['date'] as String),
+        energy: EnergyLevel.values.firstWhere(
+          (e) => e.name == j['energy'],
+          orElse: () => EnergyLevel.low,
+        ),
+        done: j['done'] as bool? ?? false,
+        steps: (j['steps'] as List?)
+            ?.map((s) => MicroStep.fromJson((s as Map).cast<String, dynamic>()))
+            .toList(),
+      );
 }
 
 /// A user goal with a deadline, broken down into a day-by-day plan of
@@ -68,4 +91,29 @@ class Goal {
   int get doneCount => milestones.where((m) => m.done).length;
   double get progress => total == 0 ? 0 : doneCount / total;
   bool get isComplete => total > 0 && doneCount == total;
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'title': title,
+        'createdAt': createdAt.toIso8601String(),
+        'targetDate': targetDate.toIso8601String(),
+        'milestones': milestones.map((m) => m.toJson()).toList(),
+        if (dailyStart != null) 'dailyStart': dailyStart!.hour * 60 + dailyStart!.minute,
+        'dailyMinutes': dailyMinutes,
+      };
+
+  factory Goal.fromJson(Map<String, dynamic> j) {
+    final slot = j['dailyStart'] as int?;
+    return Goal(
+      id: j['id'] as String,
+      title: j['title'] as String? ?? '',
+      createdAt: DateTime.parse(j['createdAt'] as String),
+      targetDate: DateTime.parse(j['targetDate'] as String),
+      milestones: (j['milestones'] as List? ?? [])
+          .map((m) => GoalMilestone.fromJson((m as Map).cast<String, dynamic>()))
+          .toList(),
+      dailyStart: slot == null ? null : TimeOfDay(hour: slot ~/ 60, minute: slot % 60),
+      dailyMinutes: j['dailyMinutes'] as int? ?? 60,
+    );
+  }
 }

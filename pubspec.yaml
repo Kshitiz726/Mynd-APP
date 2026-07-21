@@ -63,6 +63,7 @@ flutter:
   assets:
     - assets/audio/
     - assets/puter/
+    - assets/video/
 
 # App-icon generation from the OurMynd logo.
 # Run: dart run flutter_launcher_icons

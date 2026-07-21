@@ -48,6 +48,12 @@ class NotificationService {
     });
   }
 
+  /// Drop a single pending alarm - used when a block leaves the timeline, so a
+  /// task pushed back to the backlog does not still ring at its old time.
+  Future<void> cancelAlarm(int id) async {
+    _scheduledTimers.remove(id)?.cancel();
+  }
+
   Future<void> cancelAll() async {
     for (final timer in _scheduledTimers.values) {
       timer.cancel();

@@ -104,7 +104,11 @@ Future<void> showAddGoalSheet(BuildContext context) async {
               });
             }
 
-            return Column(
+            // Scrollable, because this sheet is now tall enough that a raised
+            // keyboard leaves it no room: with the IME up it overflowed by
+            // ~110px and the duration chips were cut off mid-row.
+            return SingleChildScrollView(
+              child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -231,6 +235,7 @@ Future<void> showAddGoalSheet(BuildContext context) async {
                   onPressed: create,
                 ),
               ],
+              ),
             );
           },
         ),

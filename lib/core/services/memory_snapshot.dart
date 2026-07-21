@@ -4,6 +4,7 @@ import '../../providers/community_provider.dart';
 import '../../providers/energy_provider.dart';
 import '../../providers/goal_provider.dart';
 import '../../providers/habit_provider.dart';
+import '../../providers/mood_provider.dart';
 import '../../providers/task_provider.dart';
 import 'coach_memory_service.dart';
 
@@ -20,6 +21,8 @@ String buildMemorySnapshot({
   required HabitProvider habits,
   required EnergyProvider energy,
   required CommunityProvider community,
+  MoodProvider? mood,
+  String recentChat = '',
 }) {
   final b = StringBuffer();
   final fmt = DateFormat.jm();
@@ -85,7 +88,21 @@ String buildMemorySnapshot({
         '($habitDone of $habitTotal ticked today).');
   }
 
+  // ── How the days have actually felt ──
+  if (mood != null) {
+    final today = mood.today;
+    if (today != null) b.writeln('Today they logged their mood as: ${today.mood.label}.');
+    final logged = mood.recent.whereType<MoodEntry>().toList();
+    if (logged.length >= 3) {
+      final trail = logged.map((e) => e.mood.label).join(' → ');
+      b.writeln('Their last logged moods, oldest first: $trail.');
+    }
+  }
+
   // ── What they engage with in the community ──
+  //
+  // Who someone chooses to show up for says as much as their task list does,
+  // so reactions and their own posts both count.
   final mine = community.posts.where((p) => p.myReactions.isNotEmpty).toList();
   if (mine.isNotEmpty) {
     b.writeln('Posts they reacted to:');
@@ -99,6 +116,14 @@ String buildMemorySnapshot({
   final coachMemo = CoachMemoryService.instance.memorySummary;
   if (coachMemo.isNotEmpty) {
     b.writeln('From their coaching conversations:\n$coachMemo');
+  }
+
+  // ── What they said most recently, verbatim ──
+  //
+  // The rolling memo above is compressed and a little lossy; the last few
+  // exchanges are where anything new and still raw actually lives.
+  if (recentChat.isNotEmpty) {
+    b.writeln('Their most recent exchange with the coach:\n$recentChat');
   }
 
   return b.toString().trim();

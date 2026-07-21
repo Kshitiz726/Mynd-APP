@@ -1,5 +1,9 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/community/chat_models.dart';
 import '../models/energy_level.dart';
@@ -29,10 +33,77 @@ extension BacklogFilterX on BacklogFilter {
 /// Owns the task list and all task business logic. The UI never mutates a
 /// [Task] directly - it calls these methods so rebuilds stay correct.
 class TaskProvider extends ChangeNotifier {
-  TaskProvider() : _tasks = _seed();
+  TaskProvider() : _tasks = _seed() {
+    load();
+  }
 
   final List<Task> _tasks;
   BacklogFilter _filter = BacklogFilter.all;
+
+  // ─────────────────────── Persistence ───────────────────────
+  //
+  // The day survives a relaunch. Every mutation in this class ends in
+  // [notifyListeners], so rather than sprinkling save calls through thirty
+  // methods we hook the notification itself and debounce the write - a drag
+  // gesture fires dozens of notifications a second and none of them deserve
+  // their own disk round-trip.
+
+  static const _kTasks = 'om_tasks';
+
+  bool _loaded = false;
+  bool get loaded => _loaded;
+
+  Timer? _saveDebounce;
+
+  Future<void> load() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      final raw = p.getString(_kTasks);
+      if (raw != null) {
+        final restored = (jsonDecode(raw) as List)
+            .map((t) => Task.fromJson((t as Map).cast<String, dynamic>()))
+            .toList();
+        // Goal-derived tasks are re-injected from GoalProvider on launch, so
+        // restoring them here too would duplicate every milestone.
+        _tasks
+          ..clear()
+          ..addAll(restored.where((t) => !t.isGoalTask));
+      }
+    } catch (e) {
+      debugPrint('[tasks] load failed: $e');
+    }
+    _loaded = true;
+    // Deliberately not the overridden [notifyListeners]: nothing changed that
+    // storage does not already know about, so scheduling a save here would
+    // write the file back to itself on every cold start.
+    super.notifyListeners();
+  }
+
+  @override
+  void notifyListeners() {
+    super.notifyListeners();
+    if (!_loaded) return; // never write back over storage we have not read yet
+    _saveDebounce?.cancel();
+    _saveDebounce = Timer(const Duration(milliseconds: 400), _persist);
+  }
+
+  Future<void> _persist() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.setString(_kTasks, jsonEncode(_tasks.map((t) => t.toJson()).toList()));
+    } catch (e) {
+      debugPrint('[tasks] save failed: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    _saveDebounce?.cancel();
+    // A pending debounce would be lost, and the last edit before backgrounding
+    // is exactly the one worth keeping.
+    _persist();
+    super.dispose();
+  }
 
   BacklogFilter get filter => _filter;
   List<Task> get all => List.unmodifiable(_tasks);
@@ -738,6 +809,21 @@ class TaskProvider extends ChangeNotifier {
     }
     task.startTime = proposedStart;
     task.scheduled = true;
+  }
+
+  /// "Not today." Pulls [task] off the timeline and drops it back in the
+  /// backlog, free of a time.
+  ///
+  /// Deliberately not the same as ticking it and not the same as deleting it:
+  /// the honest answer to most blocks at the end of a day is "it did not
+  /// happen", and the thing an ADHD brain needs then is for the task to still
+  /// exist without a failed timestamp attached to it.
+  void dismissToBacklog(Task task) {
+    task.scheduled = false;
+    task.startTime = null;
+    task.done = false;
+    NotificationService().cancelAlarm(task.id.hashCode);
+    notifyListeners();
   }
 
   /// Roll a goal task's completion back into the timeline (used by the timeline

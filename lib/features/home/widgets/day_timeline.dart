@@ -374,15 +374,29 @@ class _TimelineBlock extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // The rail: a check per block, joined by a dashed line so the day
-          // reads as one continuous thread.
+          // The rail: a node per block, joined by a dashed line so the day reads
+          // as one continuous thread. On an actionable block it is a marker
+          // only - the tick lives in the card next to the dismiss, because a
+          // choice between two answers has to be presented as two answers side
+          // by side, not as one control here and another over there.
           SizedBox(
             width: 34,
             child: Column(
               children: [
                 const SizedBox(height: 18),
-                pinned && !task.done
-                    ? Container(
+                task.done
+                    ? _CheckCircle(
+                        done: true,
+                        color: const Color(0xFF22C55E),
+                        onTap: () {
+                          Haptics.medium();
+                          context.read<TaskProvider>().toggleDone(task);
+                          if (task.isGoalTask) {
+                            context.read<GoalProvider>().markMilestoneDone(task.id, task.done);
+                          }
+                        },
+                      )
+                    : Container(
                         width: 24,
                         height: 24,
                         alignment: Alignment.center,
@@ -391,19 +405,6 @@ class _TimelineBlock extends StatelessWidget {
                           shape: BoxShape.circle,
                         ),
                         child: Icon(taskIcon(task.title), size: 13, color: accent),
-                      )
-                    : _CheckCircle(
-                        done: task.done,
-                        color: task.done ? const Color(0xFF22C55E) : c.border.withValues(alpha: 0.9),
-                        // Tapping again un-ticks it: a mis-tap should cost one
-                        // tap to undo, not a trip through an edit sheet.
-                        onTap: () {
-                          Haptics.medium();
-                          context.read<TaskProvider>().toggleDone(task);
-                          if (task.isGoalTask) {
-                            context.read<GoalProvider>().markMilestoneDone(task.id, task.done);
-                          }
-                        },
                       ),
                 const SizedBox(height: 6),
                 if (!isLast) Expanded(child: _DashedRail(color: c.border)),
@@ -465,18 +466,52 @@ class _TimelineBlock extends StatelessWidget {
                           ],
                         ),
                       ),
-                      const SizedBox(width: 10),
-                      // The glyph sits opposite the title, the way the reference
-                      // puts an illustration on the right of every card.
-                      Container(
-                        width: 46,
-                        height: 46,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.55),
-                          shape: BoxShape.circle,
+                      const SizedBox(width: 8),
+                      // Two answers, side by side, in the order you actually
+                      // reach for them.
+                      //
+                      // "Not today" strips the time and returns the task to the
+                      // backlog: the honest end of most blocks, and the task
+                      // should survive it without a failed timestamp attached.
+                      // "Done" strikes it through in place rather than deleting
+                      // it, so the day still shows what the day was.
+                      if (!pinned && !task.done) ...[
+                        _BlockAction(
+                          icon: 'x',
+                          tooltip: 'not today, back to the backlog',
+                          tint: c.text2,
+                          onTap: () {
+                            Haptics.light();
+                            context.read<TaskProvider>().dismissToBacklog(task);
+                          },
                         ),
-                        child: Icon(taskIcon(task.title), size: 22, color: accent),
-                      ),
+                        const SizedBox(width: 8),
+                        _BlockAction(
+                          icon: 'check',
+                          tooltip: 'done',
+                          tint: const Color(0xFF16A34A),
+                          filled: true,
+                          onTap: () {
+                            Haptics.medium();
+                            context.read<TaskProvider>().toggleDone(task);
+                            if (task.isGoalTask) {
+                              context.read<GoalProvider>().markMilestoneDone(task.id, task.done);
+                            }
+                          },
+                        ),
+                      ] else
+                        // Nothing left to decide: the glyph sits opposite the
+                        // title, the way the reference puts an illustration on
+                        // the right of every card.
+                        Container(
+                          width: 46,
+                          height: 46,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.55),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(taskIcon(task.title), size: 22, color: accent),
+                        ),
                       if (dragIndex != null)
                         ReorderableDragStartListener(
                           index: dragIndex!,
@@ -519,6 +554,50 @@ class _TimelineBlock extends StatelessWidget {
     }
 
     return block;
+  }
+}
+
+/// One of the two verdicts on a block. Sized for a thumb (36pt) and set on a
+/// pale disc so both read as controls, with the affirmative one tinted so the
+/// pair is not two identical grey circles you have to read to tell apart.
+class _BlockAction extends StatelessWidget {
+  const _BlockAction({
+    required this.icon,
+    required this.tooltip,
+    required this.tint,
+    required this.onTap,
+    this.filled = false,
+  });
+
+  final String icon;
+  final String tooltip;
+  final Color tint;
+  final VoidCallback onTap;
+  final bool filled;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: OmTappable(
+        onTap: onTap,
+        feedback: OmTapFeedback.none,
+        pressedScale: 0.84,
+        child: Container(
+          width: 36,
+          height: 36,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: filled
+                ? tint.withValues(alpha: 0.16)
+                : Colors.white.withValues(alpha: 0.55),
+            shape: BoxShape.circle,
+            border: filled ? Border.all(color: tint.withValues(alpha: 0.40)) : null,
+          ),
+          child: Icon(OmIcons.byName(icon), size: 17, color: tint),
+        ),
+      ),
+    );
   }
 }
 

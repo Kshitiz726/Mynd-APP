@@ -299,7 +299,10 @@ class _HeaderIcon extends StatelessWidget {
             blur: 24,
             opacity: context.isDark ? 0.30 : 0.52,
             padding: const EdgeInsets.all(11),
-            child: Icon(OmIcons.byName(icon), size: 18, color: c.text),
+            // Solid, brand-tinted glyphs. A hairline outline icon on frosted
+            // glass all but disappears, which is how the header ended up
+            // reading as grey furniture rather than as controls.
+            child: Icon(OmIcons.solid(icon), size: 19, color: c.primary),
           ),
           if (dot)
             Positioned(
@@ -461,13 +464,9 @@ class _CmTabs extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.omColors;
     // Underlined text rather than a boxed segment: the reference leads with the
-    // words and marks the active one with a short brand rule beneath it, with a
-    // count badge riding alongside the label it belongs to.
-    final counts = {
-      _CmTab.feed: context.watch<CommunityProvider>().posts.length,
-      _CmTab.rooms: context.watch<FocusRoomProvider>().rooms.length,
-    };
-
+    // words and marks the active one with a short brand rule beneath it. No
+    // count badge - "Latest Activities 3" tells you nothing you wanted to know
+    // and turns a clean header into a notification tray.
     return Row(
       children: [
         for (final t in _CmTab.values)
@@ -483,38 +482,14 @@ class _CmTabs extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      AnimatedDefaultTextStyle(
-                        duration: const Duration(milliseconds: 200),
-                        style: Theme.of(context).textTheme.titleMedium!.copyWith(
-                              color: t == current ? c.text : c.text2,
-                              fontSize: 15.5,
-                              fontWeight: t == current ? FontWeight.w800 : FontWeight.w600,
-                            ),
-                        child: Text(_labels[t]!),
-                      ),
-                      if ((counts[t] ?? 0) > 0) ...[
-                        const SizedBox(width: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                          decoration: BoxDecoration(
-                            gradient: t == current ? c.brandGradient : null,
-                            color: t == current ? null : c.primaryTint,
-                            borderRadius: BorderRadius.circular(AppRadius.pill),
-                          ),
-                          child: Text(
-                            '${counts[t]}',
-                            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                  color: t == current ? Colors.white : c.primary,
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 10.5,
-                                ),
-                          ),
+                  AnimatedDefaultTextStyle(
+                    duration: const Duration(milliseconds: 200),
+                    style: Theme.of(context).textTheme.titleMedium!.copyWith(
+                          color: t == current ? c.text : c.text2,
+                          fontSize: 15.5,
+                          fontWeight: t == current ? FontWeight.w800 : FontWeight.w600,
                         ),
-                      ],
-                    ],
+                    child: Text(_labels[t]!),
                   ),
                   const SizedBox(height: 6),
                   AnimatedContainer(
@@ -994,18 +969,61 @@ class _RoundAction extends StatelessWidget {
       },
       feedback: OmTapFeedback.none,
       pressedScale: 0.85,
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
         width: 36,
         height: 36,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: active ? c.primaryTint : c.surfaceAlt.withValues(alpha: 0.7),
+          gradient: active ? c.brandGradient : null,
+          color: active ? null : c.surfaceAlt.withValues(alpha: 0.7),
           shape: BoxShape.circle,
+          boxShadow: active
+              ? [
+                  BoxShadow(
+                    color: c.primary.withValues(alpha: 0.34),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ]
+              : null,
         ),
+        child: _PopIcon(iconName: iconName, active: active, size: 17),
+      ),
+    );
+  }
+}
+
+/// An icon that fills in and gives a small kick when it turns on.
+///
+/// Colour alone does not carry a state change at this size - the glyph has to
+/// change weight - and the scale pop is the receipt for the tap.
+class _PopIcon extends StatelessWidget {
+  const _PopIcon({
+    required this.iconName,
+    required this.active,
+    required this.size,
+    this.color,
+  });
+
+  final String iconName;
+  final bool active;
+  final double size;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeOutBack,
+      tween: Tween(end: active ? 1.0 : 0.0),
+      builder: (context, t, _) => Transform.scale(
+        scale: 1 + (t * 0.14),
         child: Icon(
-          OmIcons.byName(iconName),
-          size: 17,
-          color: active ? c.primary : c.text2,
+          active ? OmIcons.solid(iconName) : OmIcons.byName(iconName),
+          size: size,
+          color: color ?? (active ? Colors.white : context.omColors.text2),
         ),
       ),
     );
@@ -1042,7 +1060,7 @@ class _IconAction extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(OmIcons.byName(iconName), size: 18, color: color),
+            _PopIcon(iconName: iconName, active: active, size: 18, color: color),
             if (count > 0) ...[
               const SizedBox(width: 4),
               Text(

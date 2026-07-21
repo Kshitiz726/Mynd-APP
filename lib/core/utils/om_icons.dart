@@ -1,4 +1,4 @@
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Maps the prototype's named icons (`data-icon="..."`) to the **Lucide** icon
@@ -92,4 +92,29 @@ abstract final class OmIcons {
   };
 
   static IconData byName(String name) => _map[name] ?? LucideIcons.circle;
+
+  /// Solid counterparts, for the *active* state of a toggle.
+  ///
+  /// Lucide is an outline family, so a reacted post and an un-reacted one differ
+  /// only in colour, which at 17px is nearly nothing. Filling the glyph is what
+  /// makes "I pressed this" legible at a glance, so the pair is outline for off
+  /// and solid for on. Material's rounded set is used here because its solid
+  /// weights sit closest to Lucide's geometry.
+  static const Map<String, IconData> _solid = {
+    'heart': Icons.favorite_rounded,
+    'clap': Icons.celebration_rounded,
+    'hug': Icons.volunteer_activism_rounded,
+    'message': Icons.mode_comment_rounded,
+    'bookmark': Icons.bookmark_rounded,
+    'bell': Icons.notifications_rounded,
+    'star': Icons.star_rounded,
+    'users': Icons.groups_rounded,
+    'check': Icons.check_rounded,
+    'flame': Icons.local_fire_department_rounded,
+    'sparkles': Icons.auto_awesome_rounded,
+  };
+
+  /// The solid form of [name], falling back to the outline one when there is
+  /// no filled twin worth using.
+  static IconData solid(String name) => _solid[name] ?? byName(name);
 }
