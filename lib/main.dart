@@ -11,6 +11,7 @@ import 'core/services/realtime_service.dart';
 import 'core/services/session_store.dart';
 import 'core/theme/app_theme.dart';
 import 'core/utils/om_scroll_behavior.dart';
+import 'features/splash/splash_screen.dart';
 import 'providers/alerts_provider.dart';
 import 'providers/alarms_provider.dart';
 import 'providers/coach_provider.dart';
@@ -155,7 +156,11 @@ class OurMyndApp extends StatelessWidget {
             themeMode: settings.themeMode,
             theme: AppTheme.light(hyperlegible: hyperlegible),
             darkTheme: AppTheme.dark(hyperlegible: hyperlegible),
-            initialRoute: initialRoute,
+            // The animated launch screen owns the first frame and hands over to
+            // [initialRoute] once it has played. `home` rather than
+            // `initialRoute` because the splash needs to be told where it is
+            // going, and a named initial route has nowhere to carry that.
+            home: SplashScreen(next: initialRoute),
             onGenerateRoute: AppRouter.onGenerateRoute,
             // Keep the Puter.js bridge alive app-wide, off-screen, above routes.
             builder: (context, child) => Stack(

@@ -2,6 +2,7 @@
 /// Tab destinations are handled by [NavProvider], not the router.
 abstract final class AppRoutes {
   static const String shell = '/';
+  static const String splash = '/splash';
   static const String login = '/login';
   static const String profile = '/profile';
   static const String paywall = '/paywall';

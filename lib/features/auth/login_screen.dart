@@ -1,8 +1,10 @@
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
+import '../../core/constants/legal.dart';
 import '../../core/routes/app_routes.dart';
 import '../../core/services/api_client.dart';
 import '../../core/services/google_auth.dart';
@@ -29,6 +31,13 @@ class _LoginScreenState extends State<LoginScreen>
   bool _showAuth = false;
   late final AnimationController _intro;
 
+  /// Recognisers are long-lived objects that have to be disposed, so they are
+  /// built once here rather than inline in build().
+  late final TapGestureRecognizer _terms = TapGestureRecognizer()
+    ..onTap = () => Legal.openTerms(context);
+  late final TapGestureRecognizer _privacy = TapGestureRecognizer()
+    ..onTap = () => Legal.openPrivacy(context);
+
   static const _desktopClientId =
       String.fromEnvironment('GOOGLE_DESKTOP_CLIENT_ID');
 
@@ -43,8 +52,14 @@ class _LoginScreenState extends State<LoginScreen>
         vsync: this, duration: const Duration(milliseconds: 1100))
       ..forward();
 
-    // Delayed animation to show the auth options (Splash -> Login transition)
-    Future.delayed(const Duration(milliseconds: 2500), () {
+    // Reveal the auth options once the logo has settled.
+    //
+    // This used to wait 2.5s, because this screen was doing double duty as the
+    // splash. It is not any more - SplashScreen has already held the logo for
+    // its own beat before this is even built - so the old delay stacked into
+    // nearly five seconds of staring at a logo before you could press
+    // anything. Just long enough now for the intro to land.
+    Future.delayed(const Duration(milliseconds: 650), () {
       if (mounted) setState(() => _showAuth = true);
     });
 
@@ -78,6 +93,8 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   void dispose() {
     _intro.dispose();
+    _terms.dispose();
+    _privacy.dispose();
     super.dispose();
   }
 
@@ -248,8 +265,41 @@ class _LoginScreenState extends State<LoginScreen>
                     _AppleButton(
                         loading: _loading, onTap: _showAuth ? () {} : null),
                     const SizedBox(height: 48),
-                    Text(
-                      'By continuing you agree to our Terms & Privacy Policy.',
+                    // The acceptance line was a sentence *about* two documents
+                    // with no way to reach either of them, on the one screen
+                    // where agreeing to them is the thing being asked. Both
+                    // halves are now the links they always claimed to be.
+                    Text.rich(
+                      TextSpan(
+                        children: [
+                          const TextSpan(
+                              text: 'By continuing you agree to our '),
+                          TextSpan(
+                            text: 'Terms',
+                            style: TextStyle(
+                              color: c.primary,
+                              fontWeight: FontWeight.w700,
+                              decoration: TextDecoration.underline,
+                              decorationColor:
+                                  c.primary.withValues(alpha: 0.4),
+                            ),
+                            recognizer: _terms,
+                          ),
+                          const TextSpan(text: ' & '),
+                          TextSpan(
+                            text: 'Privacy Policy',
+                            style: TextStyle(
+                              color: c.primary,
+                              fontWeight: FontWeight.w700,
+                              decoration: TextDecoration.underline,
+                              decorationColor:
+                                  c.primary.withValues(alpha: 0.4),
+                            ),
+                            recognizer: _privacy,
+                          ),
+                          const TextSpan(text: '.'),
+                        ],
+                      ),
                       textAlign: TextAlign.center,
                       style: t.labelSmall?.copyWith(
                           color: c.text2,
