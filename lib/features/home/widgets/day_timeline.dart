@@ -14,6 +14,7 @@ import '../../../providers/settings_provider.dart';
 import '../../../providers/task_provider.dart';
 import '../../../widgets/om_states.dart';
 import '../../../widgets/om_tappable.dart';
+import '../../../models/energy_level.dart';
 import '../../../models/task.dart';
 import 'edit_task_sheet.dart';
 
@@ -433,7 +434,7 @@ class _TimelineBlock extends StatelessWidget {
                             ),
                             const SizedBox(height: 8),
                             OmTappable(
-                              onTap: pinned ? null : () => _editBlockTime(context, task),
+                              onTap: pinned ? null : () => _showTimeSheet(context, task),
                               feedback: OmTapFeedback.none,
                               pressedScale: 0.97,
                               child: Row(
@@ -487,12 +488,54 @@ class _TimelineBlock extends StatelessWidget {
       );
     }
 
+    // Two blocks that touch have no gap to tap, so the seam between them is the
+    // way in: it inserts at this block's end and pushes the rest down.
+    if (!pinned && !isLast && task.endTime != null) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [block, _InsertSeam(at: task.endTime!)],
+      );
+    }
+
     return block;
   }
 }
 
+/// The day's editable window: after waking, before wind-down. Everything the
+/// ripple does is clamped to it, so no edit can push work into the night or
+/// back before the user is up.
+({DateTime start, DateTime end}) _dayWindow(BuildContext context, DateTime day) {
+  final tasks = context.read<TaskProvider>();
+  final settings = context.read<SettingsProvider>();
+  final schedule = tasks.scheduleOn(day);
+  final wake = schedule.where((t) => t.id == 'wake_anchor').firstOrNull;
+  final sleep = schedule.where((t) => t.id == 'sleep_anchor').firstOrNull;
+  return (
+    start: wake?.endTime ??
+        DateTime(day.year, day.month, day.day, settings.wakeUpTime.hour, settings.wakeUpTime.minute),
+    end: sleep?.startTime ??
+        DateTime(day.year, day.month, day.day, settings.sleepTime.hour, settings.sleepTime.minute),
+  );
+}
+
+/// Says how far past bedtime the day now runs, when a ripple pushed it there.
+void _reportOverrun(BuildContext context, Duration overrun) {
+  if (overrun == Duration.zero) {
+    Haptics.success();
+    return;
+  }
+  Haptics.medium();
+  final h = overrun.inHours;
+  final m = overrun.inMinutes % 60;
+  final label = h > 0 ? '${h}h ${m}m' : '${m}m';
+  Toast.show(context, 'Moved. Your day now runs $label past wind-down.');
+}
+
 /// Lets the user re-time a block: pick a new start, then a new end. Validates
 /// that end follows start (treats an earlier end as crossing midnight).
+///
+/// Nothing is rejected for overlapping any more - the rest of the day moves out
+/// of the way instead. See [TaskProvider.rippleTaskTime].
 Future<void> _editBlockTime(BuildContext context, Task task) async {
   final base = task.startTime ?? DateTime.now();
   final start = await showTimePicker(
@@ -514,21 +557,435 @@ Future<void> _editBlockTime(BuildContext context, Task task) async {
   var e = DateTime(base.year, base.month, base.day, end.hour, end.minute);
   if (!e.isAfter(s)) e = e.add(const Duration(days: 1)); // crosses midnight
 
-  final tasks = context.read<TaskProvider>();
-  // Only let a block move into a genuinely free slot - otherwise tell the user
-  // exactly what it would collide with instead of silently double-booking.
-  final clash = tasks.conflictFor(task, s, e);
-  if (clash != null) {
+  final window = _dayWindow(context, base);
+  final overrun = context.read<TaskProvider>().rippleTaskTime(
+        task,
+        s,
+        e,
+        window.start,
+        window.end,
+        ringtone: context.read<SettingsProvider>().selectedRingtone,
+      );
+  if (context.mounted) _reportOverrun(context, overrun);
+}
+
+/// Nudge a block earlier or later by [delta], carrying the rest of the day with
+/// it. This is the fast path: no dialog, just a tap and the day re-flows.
+void _nudgeBlock(BuildContext context, Task task, Duration delta) {
+  final s = task.startTime;
+  if (s == null) return;
+  final window = _dayWindow(context, s);
+  final newStart = s.add(delta);
+  if (newStart.isBefore(window.start)) {
     Haptics.medium();
-    final cs = clash.startTime != null ? DateFormat.jm().format(clash.startTime!) : '';
-    final ce = clash.endTime != null ? DateFormat.jm().format(clash.endTime!) : '';
-    Toast.show(context, 'That overlaps "${clash.title}" ($cs-$ce). Pick a free slot.');
+    Toast.show(context, "That is before you're up.");
     return;
   }
+  final overrun = context.read<TaskProvider>().rippleTaskTime(
+        task,
+        newStart,
+        newStart.add(task.duration ?? const Duration(hours: 1)),
+        window.start,
+        window.end,
+        ringtone: context.read<SettingsProvider>().selectedRingtone,
+      );
+  _reportOverrun(context, overrun);
+}
 
+/// Grow or shrink a block by [delta], keeping its start where it is. Later
+/// blocks slide to make room (or close the gap).
+void _resizeBlock(BuildContext context, Task task, Duration delta) {
+  final s = task.startTime;
+  if (s == null) return;
+  var dur = (task.duration ?? const Duration(hours: 1)) + delta;
+  if (dur < const Duration(minutes: 5)) dur = const Duration(minutes: 5);
+  final window = _dayWindow(context, s);
+  final overrun = context.read<TaskProvider>().rippleTaskTime(
+        task,
+        s,
+        s.add(dur),
+        window.start,
+        window.end,
+        ringtone: context.read<SettingsProvider>().selectedRingtone,
+      );
+  _reportOverrun(context, overrun);
+}
+
+/// The block's time controls, in one sheet: nudge the whole thing earlier or
+/// later, make it longer or shorter, or pick exact times. Every control ripples
+/// the rest of the day, and the sheet re-reads the provider after each tap so
+/// the numbers you are looking at are the numbers that are stored.
+Future<void> _showTimeSheet(BuildContext context, Task task) async {
+  final tasks = context.read<TaskProvider>();
+  await showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    builder: (sheetContext) => ChangeNotifierProvider.value(
+      value: tasks,
+      child: _TimeSheet(task: task),
+    ),
+  );
+}
+
+class _TimeSheet extends StatelessWidget {
+  const _TimeSheet({required this.task});
+
+  final Task task;
+
+  static const _step = Duration(minutes: 15);
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.omColors;
+    // Watch, so every nudge redraws the times from the provider itself.
+    context.watch<TaskProvider>();
+    final start = task.startTime;
+    final end = task.endTime;
+    final dur = task.duration ?? const Duration(hours: 1);
+    final h = dur.inHours;
+    final m = dur.inMinutes % 60;
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(task.title, style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 4),
+            Text(
+              start != null && end != null
+                  ? '${DateFormat.jm().format(start)} - ${DateFormat.jm().format(end)}'
+                  : 'not on the timeline yet',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            _StepperRow(
+              label: 'move it',
+              value: start != null ? DateFormat.jm().format(start) : '-',
+              onMinus: () => _nudgeBlock(context, task, -_step),
+              onPlus: () => _nudgeBlock(context, task, _step),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            _StepperRow(
+              label: 'how long',
+              value: h > 0 ? '${h}h ${m}m' : '${m}m',
+              onMinus: () => _resizeBlock(context, task, -_step),
+              onPlus: () => _resizeBlock(context, task, _step),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              'Everything after this block shifts to keep the day continuous.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: c.text2),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            OmTappable(
+              onTap: () async {
+                Navigator.of(context).pop();
+                await _editBlockTime(context, task);
+              },
+              pressedScale: 0.98,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: c.primaryTint,
+                  borderRadius: BorderRadius.circular(AppRadius.control),
+                ),
+                child: Text('pick exact times',
+                    style: TextStyle(color: c.primary, fontWeight: FontWeight.w700)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A "- value +" row. Big targets, because this gets tapped repeatedly.
+class _StepperRow extends StatelessWidget {
+  const _StepperRow({
+    required this.label,
+    required this.value,
+    required this.onMinus,
+    required this.onPlus,
+  });
+
+  final String label;
+  final String value;
+  final VoidCallback onMinus;
+  final VoidCallback onPlus;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.omColors;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 10, 10, 10),
+      decoration: BoxDecoration(
+        color: c.surfaceAlt,
+        borderRadius: BorderRadius.circular(AppRadius.control),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: c.text2)),
+                const SizedBox(height: 2),
+                Text(value,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(fontSize: 17)),
+              ],
+            ),
+          ),
+          _StepButton(icon: Icons.remove_rounded, onTap: onMinus),
+          const SizedBox(width: 8),
+          _StepButton(icon: Icons.add_rounded, onTap: onPlus),
+        ],
+      ),
+    );
+  }
+}
+
+class _StepButton extends StatelessWidget {
+  const _StepButton({required this.icon, required this.onTap});
+
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.omColors;
+    return OmTappable(
+      onTap: onTap,
+      feedback: OmTapFeedback.none,
+      pressedScale: 0.88,
+      child: Container(
+        width: 42,
+        height: 42,
+        decoration: BoxDecoration(color: c.surface, shape: BoxShape.circle),
+        child: Icon(icon, size: 20, color: c.primary),
+      ),
+    );
+  }
+}
+
+/// The seam between two touching blocks: tap it to slide your own task in and
+/// push the rest of the day down. Auto-scheduling gives you a shape for the
+/// day; this is how you put your own thing inside it.
+class _InsertSeam extends StatelessWidget {
+  const _InsertSeam({required this.at});
+
+  final DateTime at;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.omColors;
+    return Padding(
+      padding: const EdgeInsets.only(left: 34, bottom: AppSpacing.sm),
+      child: OmTappable(
+        onTap: () => _showNewBlockSheet(context, at: at),
+        feedback: OmTapFeedback.light,
+        pressedScale: 0.97,
+        child: Row(
+          children: [
+            Container(
+              width: 22,
+              height: 22,
+              decoration: BoxDecoration(
+                color: c.primary.withValues(alpha: 0.10),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(OmIcons.byName('plus'), size: 13, color: c.primary),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'add something here',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: c.primary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 11.5,
+                  ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Write a task and drop it into the day at [at]. When [maxDuration] is given
+/// (a tapped Free slot) the default length is trimmed to the gap; otherwise the
+/// block is inserted and everything after it moves down.
+Future<void> _showNewBlockSheet(
+  BuildContext context, {
+  required DateTime at,
+  Duration? maxDuration,
+}) async {
+  final tasks = context.read<TaskProvider>();
   final settings = context.read<SettingsProvider>();
-  tasks.setTaskTime(task, s, e, ringtone: settings.selectedRingtone);
-  Haptics.success();
+  final window = _dayWindow(context, at);
+
+  await showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder: (sheetContext) => Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(sheetContext).viewInsets.bottom),
+      child: _NewBlockSheet(
+        at: at,
+        maxDuration: maxDuration,
+        onCreate: (title, energy, duration) {
+          final task = Task(
+            id: 'task-${DateTime.now().microsecondsSinceEpoch}',
+            title: title,
+            time: DateFormat.jm().format(at),
+            energy: energy,
+            duration: duration,
+          );
+          final overrun = tasks.insertTaskAt(
+            task,
+            at,
+            duration,
+            window.start,
+            window.end,
+            ringtone: settings.selectedRingtone,
+          );
+          Navigator.of(sheetContext).pop();
+          _reportOverrun(context, overrun);
+        },
+      ),
+    ),
+  );
+}
+
+class _NewBlockSheet extends StatefulWidget {
+  const _NewBlockSheet({required this.at, required this.onCreate, this.maxDuration});
+
+  final DateTime at;
+  final Duration? maxDuration;
+  final void Function(String title, EnergyLevel energy, Duration duration) onCreate;
+
+  @override
+  State<_NewBlockSheet> createState() => _NewBlockSheetState();
+}
+
+class _NewBlockSheetState extends State<_NewBlockSheet> {
+  final _ctrl = TextEditingController();
+  EnergyLevel _energy = EnergyLevel.high;
+  late int _minutes = _initialMinutes;
+
+  static const _options = [15, 30, 45, 60, 90, 120];
+
+  int get _initialMinutes {
+    final cap = widget.maxDuration?.inMinutes;
+    if (cap == null) return 30;
+    return _options.lastWhere((m) => m <= cap, orElse: () => 15);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.omColors;
+    final can = _ctrl.text.trim().isNotEmpty;
+    final ends = widget.at.add(Duration(minutes: _minutes));
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('add your own block', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 4),
+            Text(
+              '${DateFormat.jm().format(widget.at)} - ${DateFormat.jm().format(ends)}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+              decoration: BoxDecoration(
+                color: c.surfaceAlt,
+                borderRadius: BorderRadius.circular(AppRadius.control),
+              ),
+              child: TextField(
+                controller: _ctrl,
+                autofocus: true,
+                textCapitalization: TextCapitalization.sentences,
+                onChanged: (_) => setState(() {}),
+                decoration: const InputDecoration(
+                  border: InputBorder.none,
+                  hintText: 'What are you doing?',
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Text('how long', style: Theme.of(context).textTheme.bodySmall),
+            const SizedBox(height: AppSpacing.sm),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final m in _options)
+                  ChoiceChip(
+                    selected: _minutes == m,
+                    label: Text(m >= 60 ? '${m ~/ 60}h${m % 60 == 0 ? '' : ' ${m % 60}m'}' : '${m}m'),
+                    onSelected: (_) => setState(() => _minutes = m),
+                  ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Text('energy it needs', style: Theme.of(context).textTheme.bodySmall),
+            const SizedBox(height: AppSpacing.sm),
+            Wrap(
+              spacing: 8,
+              children: [
+                for (final e in EnergyLevel.values)
+                  ChoiceChip(
+                    selected: _energy == e,
+                    avatar: Icon(e.icon, size: 16, color: e.color(context)),
+                    label: Text(e.label.toLowerCase()),
+                    onSelected: (_) => setState(() => _energy = e),
+                  ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: can
+                    ? () {
+                        Haptics.success();
+                        widget.onCreate(
+                          _ctrl.text.trim(),
+                          _energy,
+                          Duration(minutes: _minutes),
+                        );
+                      }
+                    : null,
+                style: FilledButton.styleFrom(
+                  backgroundColor: c.primary,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
+                child: const Text('slot it in'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 /// A locked "Available" gap in the timeline. The slot itself can't be dragged
@@ -641,8 +1098,35 @@ Future<void> _showFillSheet(BuildContext context, DateTime start, Duration gap) 
               Text('${DateFormat.jm().format(start)} · $gapStr free - pick something to slot in.',
                   style: Theme.of(sheetContext).textTheme.bodySmall),
               const SizedBox(height: AppSpacing.lg),
+              // Writing your own comes first: the backlog is a list of things
+              // you already thought of, and this is for the thing you just did.
+              OmTappable(
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  _showNewBlockSheet(context, at: start, maxDuration: gap);
+                },
+                pressedScale: 0.98,
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    gradient: c.brandGradient,
+                    borderRadius: BorderRadius.circular(AppRadius.control),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(OmIcons.byName('plus'), size: 18, color: Colors.white),
+                      const SizedBox(width: AppSpacing.md),
+                      const Expanded(
+                        child: Text('write a new task',
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
               if (items.isEmpty)
-                const OmEmptyState(message: 'nothing in the backlog to slot in right now.')
+                const OmEmptyState(message: 'nothing else in the backlog right now.')
               else
                 ConstrainedBox(
                   constraints: BoxConstraints(maxHeight: MediaQuery.of(sheetContext).size.height * 0.5),

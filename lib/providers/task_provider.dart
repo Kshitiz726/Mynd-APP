@@ -527,6 +527,136 @@ class TaskProvider extends ChangeNotifier {
     return null;
   }
 
+  /// Move (or resize) [task] to [start]-[end] and let the rest of the day give
+  /// way, instead of refusing the edit because something is in the way.
+  ///
+  /// The moved block is a pin: it lands exactly where the user put it. Every
+  /// other block keeps its own duration and slides:
+  ///
+  /// * blocks that were **after** the pin sweep forward from the pin's new end,
+  ///   each keeping the gap it already had from the block before it. A run of
+  ///   touching blocks therefore stays touching and follows the pin in *both*
+  ///   directions, while a block with real free time in front of it keeps its
+  ///   own time and only moves if the pin would actually collide with it - so
+  ///   nudging the morning never quietly drags a 5pm appointment earlier;
+  /// * blocks that were **before** the pin sweep backward from the pin's new
+  ///   start, so dragging a block earlier pulls its predecessors back rather
+  ///   than double-booking them;
+  /// * a predecessor that no longer fits before [windowStart] is not dropped -
+  ///   it is re-queued after the pin, which is the only rearrangement that
+  ///   keeps the day both continuous and lossless.
+  ///
+  /// Returns how far the day now runs past [windowEnd] (zero when it still
+  /// fits), so the caller can say so rather than silently booking past bedtime.
+  Duration rippleTaskTime(
+    Task task,
+    DateTime start,
+    DateTime end,
+    DateTime windowStart,
+    DateTime windowEnd, {
+    String ringtone = 'Default',
+  }) {
+    if (!end.isAfter(start)) return Duration.zero;
+
+    // Everything else on the day, in the order it currently sits.
+    final others = scheduleOn(start)
+        .where((t) => t.id != task.id && !t.isAnchor)
+        .toList();
+
+    final before = <Task>[];
+    final after = <Task>[];
+    for (final t in others) {
+      (t.startTime!.isBefore(start) ? before : after).add(t);
+    }
+
+    // The gap each following block had in front of it, measured before anything
+    // moves. Zero means it was flush against its predecessor (or against the
+    // pin), which is what makes a run of blocks travel together.
+    final gapBefore = <String, Duration>{};
+    var prevEnd = task.endTime ?? start;
+    for (final t in after) {
+      final gap = t.startTime!.difference(prevEnd);
+      gapBefore[t.id] = gap.isNegative ? Duration.zero : gap;
+      prevEnd = t.endTime!;
+    }
+
+    task.startTime = start;
+    task.duration = end.difference(start);
+    task.scheduled = true;
+
+    // ── Backward sweep: predecessors end no later than the pin starts. ──
+    final displaced = <Task>[];
+    var cursor = start;
+    for (final t in before.reversed) {
+      final dur = t.duration ??= const Duration(hours: 1);
+      final newEnd = t.endTime!.isAfter(cursor) ? cursor : t.endTime!;
+      final newStart = newEnd.subtract(dur);
+      if (newStart.isBefore(windowStart)) {
+        // No room left in the morning: this one goes after the pin instead.
+        displaced.add(t);
+        continue;
+      }
+      t.startTime = newStart;
+      cursor = newStart;
+    }
+
+    // ── Forward sweep: everything after the pin, back-to-back but never
+    // earlier than where it already was. ──
+    cursor = end;
+    for (final t in [...displaced.reversed, ...after]) {
+      final dur = t.duration ??= const Duration(hours: 1);
+      // No recorded gap means the block came from the morning (displaced), so
+      // it lands flush against the cursor.
+      final gap = gapBefore[t.id] ?? Duration.zero;
+      final DateTime newStart;
+      if (gap == Duration.zero) {
+        // Flush: travels with the block in front of it, forwards or back.
+        newStart = cursor;
+      } else {
+        // It had breathing room, so it keeps its time unless the cursor has
+        // caught up with it; the gap absorbs the rest of the shift.
+        newStart = t.startTime!.isBefore(cursor) ? cursor : t.startTime!;
+      }
+      t.startTime = newStart;
+      t.scheduled = true;
+      cursor = newStart.add(dur);
+    }
+
+    // Alarms are keyed by task id, so re-arm every block we touched.
+    _scheduleAlarm(task, start, ringtone);
+    for (final t in others) {
+      _scheduleAlarm(t, t.startTime!, ringtone);
+    }
+
+    notifyListeners();
+    return cursor.isAfter(windowEnd) ? cursor.difference(windowEnd) : Duration.zero;
+  }
+
+  /// Insert a brand-new block at [start] and push the rest of the day down.
+  /// This is how a user drops their own task into the middle of an
+  /// auto-scheduled day without re-planning it by hand.
+  Duration insertTaskAt(
+    Task task,
+    DateTime start,
+    Duration duration,
+    DateTime windowStart,
+    DateTime windowEnd, {
+    String ringtone = 'Default',
+  }) {
+    task.duration = duration;
+    task.startTime = start;
+    task.scheduled = true;
+    if (_firstById(task.id) == null) _tasks.insert(0, task);
+    return rippleTaskTime(
+      task,
+      start,
+      start.add(duration),
+      windowStart,
+      windowEnd,
+      ringtone: ringtone,
+    );
+  }
+
   /// User-driven edit of a scheduled block's start/end. Keeps the task on the
   /// timeline and reschedules its alarm.
   void setTaskTime(Task task, DateTime start, DateTime end, {String ringtone = 'Default'}) {

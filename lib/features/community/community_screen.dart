@@ -91,21 +91,46 @@ class _CommunityScreenState extends State<CommunityScreen> {
 
     return Stack(
       children: [
-        // The glass cards need something to refract: peach at the top cooling
-        // into brand lilac, so every card sits on colour rather than on grey.
+        // Glass is only glass if there is colour behind it. The reference puts
+        // a saturated peach→pink→lilac wash under the whole feed and lets the
+        // cards refract it, so this stays deliberately strong: washing it out
+        // toward the surface colour is what made the cards read as flat white.
         Positioned.fill(
           child: DecoratedBox(
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
+                colors: context.isDark
+                    ? [
+                        Color.lerp(const Color(0xFFFF9E64), c.bg, 0.74)!,
+                        Color.lerp(const Color(0xFFFF6E9C), c.bg, 0.78)!,
+                        Color.lerp(c.primary, c.bg, 0.72)!,
+                        c.bg,
+                      ]
+                    : const [
+                        Color(0xFFFFD3B4),
+                        Color(0xFFFFBCCF),
+                        Color(0xFFD9CDFB),
+                        Color(0xFFEFE7FF),
+                      ],
+                stops: const [0.0, 0.3, 0.66, 1.0],
+              ),
+            ),
+          ),
+        ),
+        // A second, softer light source in the top-right corner: without it the
+        // wash reads as a flat ramp rather than lit glass.
+        Positioned.fill(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: RadialGradient(
+                center: const Alignment(0.9, -0.85),
+                radius: 1.1,
                 colors: [
-                  Color.lerp(const Color(0xFFFFD9BE), c.surface, context.isDark ? 0.84 : 0.42)!,
-                  Color.lerp(const Color(0xFFFFC9D6), c.surface, context.isDark ? 0.86 : 0.58)!,
-                  Color.lerp(c.primary, c.surface, context.isDark ? 0.88 : 0.72)!,
-                  c.surface,
+                  Colors.white.withValues(alpha: context.isDark ? 0.06 : 0.55),
+                  Colors.white.withValues(alpha: 0.0),
                 ],
-                stops: const [0.0, 0.26, 0.62, 1.0],
               ),
             ),
           ),
@@ -217,7 +242,7 @@ class _FeedHeader extends StatelessWidget {
             child: OmGlass(
               borderRadius: AppRadius.pill,
               blur: 24,
-              opacity: context.isDark ? 0.34 : 0.72,
+              opacity: context.isDark ? 0.30 : 0.52,
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
               child: Row(
                 children: [
@@ -272,7 +297,7 @@ class _HeaderIcon extends StatelessWidget {
           OmGlass(
             borderRadius: AppRadius.pill,
             blur: 24,
-            opacity: context.isDark ? 0.34 : 0.72,
+            opacity: context.isDark ? 0.30 : 0.52,
             padding: const EdgeInsets.all(11),
             child: Icon(OmIcons.byName(icon), size: 18, color: c.text),
           ),
@@ -364,7 +389,7 @@ class _HeroCard extends StatelessWidget {
         child: OmGlass(
           borderRadius: 24,
           blur: 26,
-          opacity: context.isDark ? 0.38 : 0.8,
+          opacity: context.isDark ? 0.32 : 0.55,
           padding: const EdgeInsets.all(16),
           child: Row(
           children: [
@@ -760,7 +785,7 @@ class _PostCard extends StatelessWidget {
               child: OmGlass(
                 borderRadius: 28,
                 blur: 28,
-                opacity: context.isDark ? 0.38 : 0.82,
+                opacity: context.isDark ? 0.34 : 0.58,
                 padding: const EdgeInsets.fromLTRB(20, 34, 18, 14),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1135,7 +1160,7 @@ class _RoomTile extends StatelessWidget {
         child: OmGlass(
           borderRadius: 24,
           blur: 26,
-          opacity: context.isDark ? 0.4 : 0.78,
+          opacity: context.isDark ? 0.34 : 0.56,
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

@@ -120,6 +120,108 @@ void main() {
     }
   });
 
+  // ── The ripple: moving a block re-flows the day instead of being refused ──
+
+  /// Three touching hour-long blocks, 9:00, 10:00, 11:00, on a free day.
+  ({Task a, Task b, Task cc, DateTime dayStart, DateTime dayEnd}) threeInARow() {
+    final a = make('a', 60), b = make('b', 60), cc = make('c', 60);
+    tasks.addTasks([a, b, cc]);
+    final at = (int h) => DateTime(tomorrow.year, tomorrow.month, tomorrow.day, h, 0);
+    tasks.setTaskTime(a, at(9), at(10));
+    tasks.setTaskTime(b, at(10), at(11));
+    tasks.setTaskTime(cc, at(11), at(12));
+    return (a: a, b: b, cc: cc, dayStart: at(8), dayEnd: at(22));
+  }
+
+  test('stretching a block pushes the ones after it, and cascades', () {
+    final d = threeInARow();
+    final at = (int h) => DateTime(tomorrow.year, tomorrow.month, tomorrow.day, h, 0);
+
+    // A was 9-10; make it 9-11, the case from the report.
+    final overrun = tasks.rippleTaskTime(d.a, at(9), at(11), d.dayStart, d.dayEnd);
+
+    expect(overrun, Duration.zero);
+    expect(d.a.endTime, at(11));
+    expect(d.b.startTime, at(11), reason: 'B did not give way');
+    expect(d.b.endTime, at(12));
+    expect(d.cc.startTime, at(12), reason: 'the push did not cascade to C');
+    // Durations are preserved: the day moves, it does not compress.
+    expect(d.b.duration, const Duration(minutes: 60));
+    expect(d.cc.duration, const Duration(minutes: 60));
+  });
+
+  test('dragging a block earlier pulls its predecessor back', () {
+    final d = threeInARow();
+    final at = (int h, [int m = 0]) =>
+        DateTime(tomorrow.year, tomorrow.month, tomorrow.day, h, m);
+
+    // B moves from 10:00 up to 9:30, straight into A.
+    tasks.rippleTaskTime(d.b, at(9, 30), at(10, 30), d.dayStart, d.dayEnd);
+
+    expect(d.b.startTime, at(9, 30));
+    expect(d.a.endTime, at(9, 30), reason: 'A was not pulled back off B');
+    expect(d.a.startTime, at(8, 30));
+    expect(d.a.duration, const Duration(minutes: 60), reason: 'A was squashed');
+    expect(d.cc.startTime, at(10, 30), reason: 'C did not follow B');
+  });
+
+  test('no two blocks overlap after any ripple', () {
+    final d = threeInARow();
+    final at = (int h, [int m = 0]) =>
+        DateTime(tomorrow.year, tomorrow.month, tomorrow.day, h, m);
+
+    tasks.rippleTaskTime(d.cc, at(9, 15), at(10, 45), d.dayStart, d.dayEnd);
+
+    final day = tasks.scheduleOn(tomorrow).where((t) => !t.isAnchor).toList();
+    expect(day.length, 3, reason: 'a block fell off the day');
+    for (var i = 0; i < day.length - 1; i++) {
+      expect(day[i].endTime!.isAfter(day[i + 1].startTime!), isFalse,
+          reason: '${day[i].title} overlaps ${day[i + 1].title}');
+    }
+  });
+
+  test('a predecessor with nowhere to go is re-queued, never dropped', () {
+    final d = threeInARow();
+    final at = (int h, [int m = 0]) =>
+        DateTime(tomorrow.year, tomorrow.month, tomorrow.day, h, m);
+
+    // B lands at 8:00 - the very start of the day - so A cannot fit before it.
+    tasks.rippleTaskTime(d.b, at(8), at(9), d.dayStart, d.dayEnd);
+
+    expect(d.b.startTime, at(8));
+    expect(d.a.scheduled, isTrue, reason: 'A was dropped from the day');
+    expect(d.a.startTime!.isBefore(at(9)), isFalse, reason: 'A still overlaps B');
+    expect(d.a.duration, const Duration(minutes: 60));
+  });
+
+  test('pushing the day past wind-down is reported, not silently allowed', () {
+    final d = threeInARow();
+    final at = (int h, [int m = 0]) =>
+        DateTime(tomorrow.year, tomorrow.month, tomorrow.day, h, m);
+
+    // Stretching A by an hour runs the chain to 13:00. Against a day that ends
+    // at 12:30 that is exactly half an hour of overflow - and it is reported
+    // rather than refused.
+    final overrun = tasks.rippleTaskTime(d.a, at(9), at(11), d.dayStart, at(12, 30));
+
+    expect(overrun, const Duration(minutes: 30));
+  });
+
+  test('inserting your own block slots it in and pushes the rest down', () {
+    final d = threeInARow();
+    final at = (int h) => DateTime(tomorrow.year, tomorrow.month, tomorrow.day, h, 0);
+    final mine = make('mine', 30);
+
+    tasks.insertTaskAt(mine, at(10), const Duration(minutes: 30), d.dayStart, d.dayEnd);
+
+    expect(mine.startTime, at(10));
+    expect(mine.scheduled, isTrue);
+    expect(tasks.scheduleOn(tomorrow).map((t) => t.id), contains('mine'));
+    expect(d.a.startTime, at(9), reason: 'the block before the insert moved');
+    expect(d.b.startTime, at(10).add(const Duration(minutes: 30)));
+    expect(d.cc.startTime, at(11).add(const Duration(minutes: 30)));
+  });
+
   test('the past cannot be planned', () {
     final yesterday = tomorrow.subtract(const Duration(days: 2));
     tasks.addTasks([make('a', 60)]);
