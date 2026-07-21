@@ -1429,12 +1429,13 @@ class _PresenceStack extends StatelessWidget {
 /// new room appears in everyone's list over the socket.
 void _openCreateRoom(BuildContext context) {
   final fr = context.read<FocusRoomProvider>();
-  showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: Colors.transparent,
+  // Its own screen, like the other forms. A name field, six icons, five
+  // ambience chips and a toggle is not a sheet's worth of content, and with
+  // the keyboard up it was shoved halfway off the top of the display.
+  Navigator.of(context).push(MaterialPageRoute<void>(
+    fullscreenDialog: true,
     builder: (_) => ChangeNotifierProvider.value(value: fr, child: const _CreateRoomSheet()),
-  );
+  ));
 }
 
 class _CreateRoomSheet extends StatefulWidget {
@@ -1492,28 +1493,30 @@ class _CreateRoomSheetState extends State<_CreateRoomSheet> {
   Widget build(BuildContext context) {
     final c = context.omColors;
     final canCreate = _ctrl.text.trim().isNotEmpty && !_creating;
-    return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: c.bg,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+    return OmFormPage(
+      title: 'create a focus room',
+      subtitle: 'somewhere to sit and work alongside people.',
+      footer: (_) => SizedBox(
+        width: double.infinity,
+        child: FilledButton(
+          onPressed: canCreate ? _create : null,
+          style: FilledButton.styleFrom(
+            backgroundColor: c.primary,
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          ),
+          child: _creating
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+              : const Text('Create & start'),
         ),
-        child: SingleChildScrollView(
-          child: Column(
+      ),
+      child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-            Center(
-              child: Container(
-                width: 40, height: 4,
-                decoration: BoxDecoration(color: c.border, borderRadius: BorderRadius.circular(2)),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text('create a focus room', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
               decoration: BoxDecoration(color: c.surface, borderRadius: BorderRadius.circular(16)),
@@ -1585,26 +1588,8 @@ class _CreateRoomSheetState extends State<_CreateRoomSheet> {
                 ],
               ),
             ),
-            const SizedBox(height: 18),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: canCreate ? _create : null,
-                style: FilledButton.styleFrom(
-                  backgroundColor: c.primary,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                ),
-                child: _creating
-                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                    : const Text('Create & start'),
-              ),
-            ),
-            const SizedBox(height: 8),
           ],
         ),
-        ),
-      ),
     );
   }
 }

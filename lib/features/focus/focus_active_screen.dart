@@ -5,9 +5,7 @@ import '../../core/constants/app_spacing.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/haptics.dart';
 import '../../core/utils/om_icons.dart';
-import '../../core/utils/toast.dart';
 import '../../providers/focus_provider.dart';
-import '../../providers/nav_provider.dart';
 import '../../providers/task_provider.dart';
 import '../../widgets/om_tappable.dart';
 import 'focus_help.dart';
@@ -35,23 +33,22 @@ class FocusActiveScreen extends StatelessWidget {
               child: Column(
                 children: [
                   const SizedBox(height: AppSpacing.sm),
-                  // Top row: a Back exit that LEAVES the session running (it keeps
-                  // ticking and the live pill brings you back), plus body-doubling status.
-                  Row(
-                    children: [
-                      _RoundIconButton(
-                        icon: 'chevL',
-                        label: 'back',
-                        onTap: () {
-                          Haptics.light();
-                          context.read<NavProvider>().select(AppTab.today);
-                        },
-                      ),
-                      const Spacer(),
-                      if (focus.partnerName != null) 
-                        Text('focusing with ${focus.partnerName}', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: context.omColors.primary)),
-                    ],
-                  ),
+                  // No back control here. This screen is only ever reached as a
+                  // pushed route, and RouteHost already draws one in the same
+                  // corner - the pill under it was a second button doing the
+                  // identical job (leave, session keeps ticking, the live pill
+                  // brings you back), which just read as a bug.
+                  if (focus.partnerName != null)
+                    Row(
+                      children: [
+                        const Spacer(),
+                        Text('focusing with ${focus.partnerName}',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(color: context.omColors.primary)),
+                      ],
+                    ),
                   const SizedBox(height: AppSpacing.xl),
                   Text('locked in on',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -141,44 +138,6 @@ class FocusActiveScreen extends StatelessWidget {
           ),
         );
       },
-    );
-  }
-}
-
-/// A pill back/exit button. Leaving here does NOT end the session.
-class _RoundIconButton extends StatelessWidget {
-  const _RoundIconButton({required this.icon, required this.label, required this.onTap});
-
-  final String icon;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.omColors;
-    return OmTappable(
-      onTap: onTap,
-      feedback: OmTapFeedback.none,
-      pressedScale: 0.94,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-        decoration: BoxDecoration(
-          color: c.surface,
-          borderRadius: BorderRadius.circular(AppRadius.pill),
-          boxShadow: [
-            BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4)),
-          ],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(OmIcons.byName(icon), size: 18, color: c.text),
-            const SizedBox(width: 4),
-            Text(label,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w700)),
-          ],
-        ),
-      ),
     );
   }
 }

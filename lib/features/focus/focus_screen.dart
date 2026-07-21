@@ -341,7 +341,9 @@ class _FocusGreeting extends StatelessWidget {
     final c = context.omColors;
     final name = ApiConfig.instance.displayName ?? 'friend';
     final stats = context.watch<TaskProvider>().statsFor(DateTime.now());
-    final focused = stats.focused;
+    // Real seconds on the clock, not the sum of the durations of whatever was
+    // ticked off. Those are very different numbers and only one of them is true.
+    final focused = context.watch<FocusProvider>().focusedToday;
     final focusedLabel = focused.inMinutes >= 60
         ? '${focused.inHours}h ${focused.inMinutes % 60}m focused'
         : '${focused.inMinutes}m focused';

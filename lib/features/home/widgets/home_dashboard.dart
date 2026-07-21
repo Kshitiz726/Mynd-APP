@@ -569,15 +569,74 @@ class GoalsList extends StatelessWidget {
     final gp = context.watch<GoalProvider>();
     if (gp.goals.isEmpty) return const _GoalsEmptyState();
 
-    final active = gp.goals.where((g) => !g.isComplete).toList();
-    final done = gp.goals.where((g) => g.isComplete).toList();
+    final active = gp.active;
+    final done = gp.finished;
 
     return Column(
       children: [
         for (final g in active) _GoalRow(goal: g),
-        for (final g in done) _GoalRow(goal: g),
+        // Finished goals fold away. A goal you have completed is a record, not
+        // a task, and leaving it in the list means the thing you achieved
+        // spends the rest of its life adding to the pile you are looking at.
+        if (done.isNotEmpty) _FinishedGoals(goals: done),
         const SizedBox(height: AppSpacing.sm),
         const _AddGoalButton(),
+      ],
+    );
+  }
+}
+
+/// A one-line disclosure for goals that are done.
+class _FinishedGoals extends StatefulWidget {
+  const _FinishedGoals({required this.goals});
+
+  final List<Goal> goals;
+
+  @override
+  State<_FinishedGoals> createState() => _FinishedGoalsState();
+}
+
+class _FinishedGoalsState extends State<_FinishedGoals> {
+  bool _open = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.omColors;
+    final n = widget.goals.length;
+    return Column(
+      children: [
+        OmTappable(
+          onTap: () {
+            Haptics.light();
+            setState(() => _open = !_open);
+          },
+          feedback: OmTapFeedback.none,
+          pressedScale: 0.98,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            child: Row(
+              children: [
+                Icon(OmIcons.solid('check'), size: 15, color: c.success),
+                const SizedBox(width: 8),
+                Text(
+                  '$n finished',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: c.text2,
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+                const Spacer(),
+                AnimatedRotation(
+                  duration: const Duration(milliseconds: 200),
+                  turns: _open ? 0.25 : 0,
+                  child: Icon(OmIcons.byName('chevR'), size: 15, color: c.text2),
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (_open)
+          for (final g in widget.goals) _GoalRow(goal: g),
       ],
     );
   }

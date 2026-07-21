@@ -61,6 +61,9 @@ class Goal {
     required this.milestones,
     this.dailyStart,
     this.dailyMinutes = 60,
+    this.completedAt,
+    this.archivedTotal = 0,
+    this.archivedDone = 0,
   });
 
   final String id;
@@ -87,10 +90,40 @@ class Goal {
     return DateTime(day.year, day.month, day.day, s.hour, s.minute);
   }
 
-  int get total => milestones.length;
-  int get doneCount => milestones.where((m) => m.done).length;
+  /// When the last step was ticked. Non-null means this goal is finished and
+  /// has been compacted.
+  final DateTime? completedAt;
+
+  /// Step counts kept after [compact] throws the per-day plan away.
+  ///
+  /// A finished 60-day goal is sixty milestone objects, each with a title, a
+  /// date and micro-steps, held in memory and written to disk on every save,
+  /// for a thing you are never going to open again. Once it is done the only
+  /// facts worth keeping are that you did it, when, and how many steps it
+  /// took.
+  final int archivedTotal;
+  final int archivedDone;
+
+  bool get isArchived => completedAt != null;
+
+  int get total => isArchived ? archivedTotal : milestones.length;
+  int get doneCount => isArchived ? archivedDone : milestones.where((m) => m.done).length;
   double get progress => total == 0 ? 0 : doneCount / total;
-  bool get isComplete => total > 0 && doneCount == total;
+  bool get isComplete => isArchived || (total > 0 && doneCount == total);
+
+  /// Drop the day-by-day plan, keep the record.
+  Goal compact() => Goal(
+        id: id,
+        title: title,
+        createdAt: createdAt,
+        targetDate: targetDate,
+        milestones: const [],
+        dailyStart: dailyStart,
+        dailyMinutes: dailyMinutes,
+        completedAt: completedAt ?? DateTime.now(),
+        archivedTotal: total,
+        archivedDone: doneCount,
+      );
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -100,6 +133,9 @@ class Goal {
         'milestones': milestones.map((m) => m.toJson()).toList(),
         if (dailyStart != null) 'dailyStart': dailyStart!.hour * 60 + dailyStart!.minute,
         'dailyMinutes': dailyMinutes,
+        if (completedAt != null) 'completedAt': completedAt!.toIso8601String(),
+        if (archivedTotal > 0) 'archivedTotal': archivedTotal,
+        if (archivedDone > 0) 'archivedDone': archivedDone,
       };
 
   factory Goal.fromJson(Map<String, dynamic> j) {
@@ -114,6 +150,11 @@ class Goal {
           .toList(),
       dailyStart: slot == null ? null : TimeOfDay(hour: slot ~/ 60, minute: slot % 60),
       dailyMinutes: j['dailyMinutes'] as int? ?? 60,
+      completedAt: j['completedAt'] == null
+          ? null
+          : DateTime.parse(j['completedAt'] as String),
+      archivedTotal: j['archivedTotal'] as int? ?? 0,
+      archivedDone: j['archivedDone'] as int? ?? 0,
     );
   }
 }

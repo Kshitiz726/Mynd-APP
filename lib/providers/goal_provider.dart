@@ -158,6 +158,7 @@ class GoalProvider extends ChangeNotifier {
     for (final m in g.milestones) {
       m.done = makeDone;
     }
+    if (makeDone) _compactFinished();
     _injectFor(_day);
     _persist();
     notifyListeners();
@@ -181,6 +182,7 @@ class GoalProvider extends ChangeNotifier {
       for (final m in g.milestones) {
         if (m.id == milestoneId && m.done != done) {
           m.done = done;
+          _compactFinished();
           _persist();
           notifyListeners();
           return;
@@ -188,6 +190,30 @@ class GoalProvider extends ChangeNotifier {
       }
     }
   }
+
+  /// Fold any goal whose last step just got ticked down to a record.
+  ///
+  /// Done exactly once, at the moment it completes, so the plan is available
+  /// right up until it stops being useful and never after.
+  void _compactFinished() {
+    for (var i = 0; i < _goals.length; i++) {
+      final g = _goals[i];
+      if (!g.isArchived && g.total > 0 && g.doneCount == g.total) {
+        _goals[i] = g.compact();
+      }
+    }
+  }
+
+  /// Finished goals, newest first. Home keeps these behind a disclosure rather
+  /// than in the main list.
+  List<Goal> get finished {
+    final out = _goals.where((g) => g.isComplete).toList();
+    out.sort((a, b) =>
+        (b.completedAt ?? b.targetDate).compareTo(a.completedAt ?? a.targetDate));
+    return out;
+  }
+
+  List<Goal> get active => _goals.where((g) => !g.isComplete).toList();
 
   /// Re-push today's milestones into the task list (call on app/home init).
   void refreshTodayTasks() => _injectFor(DateTime.now());
@@ -212,6 +238,8 @@ class GoalProvider extends ChangeNotifier {
     final now = DateTime.now();
     final out = <Task>[];
     for (final g in _goals) {
+      // A finished goal has no plan left to put on the day.
+      if (g.isComplete) continue;
       for (final m in g.milestones) {
         if (_sameDay(m.date, day)) {
           // Land it in the slot the user set aside for this goal. Without a

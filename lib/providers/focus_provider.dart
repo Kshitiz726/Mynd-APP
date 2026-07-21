@@ -12,6 +12,7 @@ import '../models/saved_focus.dart';
 class FocusProvider extends ChangeNotifier {
   FocusProvider() {
     _loadSaved();
+    _loadFocusSeconds();
   }
 
   FocusMode? _activeMode;
@@ -223,6 +224,11 @@ class FocusProvider extends ChangeNotifier {
 
   void end() {
     _timer?.cancel();
+    // The session is over, so bank the seconds now rather than waiting out the
+    // debounce - ending a focus is exactly when someone closes the app.
+    _focusSaveDebounce?.cancel();
+    _focusSaveDebounce = null;
+    _persistFocusSeconds();
     _endBodyDoubling();
     _activeMode = null;
     _activeTaskTitle = null;
@@ -232,11 +238,70 @@ class FocusProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ─────────────── Time actually spent focusing ───────────────
+  //
+  // Home used to report this as the sum of the scheduled durations of every
+  // task ticked off, so checking eight one-hour blocks claimed "8h focused"
+  // even if the timer had never run. That is not a statistic, it is flattery.
+  // This counts real seconds, one per tick, only while the clock is running.
+
+  static const _kFocusSeconds = 'om_focus_seconds';
+
+  /// Seconds focused, keyed by 'yyyy-mm-dd'.
+  Map<String, int> _focusedByDay = {};
+
+  static String _dayKey(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  /// Real time on the clock today.
+  Duration get focusedToday =>
+      Duration(seconds: _focusedByDay[_dayKey(DateTime.now())] ?? 0);
+
+  Duration focusedOn(DateTime day) =>
+      Duration(seconds: _focusedByDay[_dayKey(day)] ?? 0);
+
+  Timer? _focusSaveDebounce;
+
+  void _countSecond() {
+    final key = _dayKey(DateTime.now());
+    _focusedByDay[key] = (_focusedByDay[key] ?? 0) + 1;
+    // One disk write a second would be absurd; the loss window is 10s.
+    _focusSaveDebounce ??= Timer(const Duration(seconds: 10), () {
+      _focusSaveDebounce = null;
+      _persistFocusSeconds();
+    });
+  }
+
+  Future<void> _loadFocusSeconds() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      final raw = p.getString(_kFocusSeconds);
+      if (raw == null) return;
+      _focusedByDay = (jsonDecode(raw) as Map).map((k, v) => MapEntry(k as String, v as int));
+      notifyListeners();
+    } catch (e) {
+      debugPrint('[focus] focus seconds failed to load: $e');
+    }
+  }
+
+  Future<void> _persistFocusSeconds() async {
+    try {
+      // A month of history is plenty for any view we show.
+      final cutoff = _dayKey(DateTime.now().subtract(const Duration(days: 31)));
+      _focusedByDay.removeWhere((k, _) => k.compareTo(cutoff) < 0);
+      final p = await SharedPreferences.getInstance();
+      await p.setString(_kFocusSeconds, jsonEncode(_focusedByDay));
+    } catch (e) {
+      debugPrint('[focus] focus seconds failed to save: $e');
+    }
+  }
+
   void _startTimer() {
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (_secondsRemaining > 0) {
         _secondsRemaining--;
+        _countSecond();
         notifyListeners();
       } else {
         end();
@@ -248,6 +313,8 @@ class FocusProvider extends ChangeNotifier {
   void dispose() {
     _timer?.cancel();
     _bdHeartbeat?.cancel();
+    _focusSaveDebounce?.cancel();
+    _persistFocusSeconds();
     super.dispose();
   }
 }

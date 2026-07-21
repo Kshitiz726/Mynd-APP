@@ -25,7 +25,9 @@ abstract final class AppRouter {
       AppRoutes.paywall => (_) => const PaywallScreen(),
       AppRoutes.notes => (_) => const NotesScreen(),
       AppRoutes.reminders => (_) => const RemindersScreen(),
-      AppRoutes.focusActive => (_) => const FocusActiveScreen(),
+      // Wrapped, like every other pushed screen: it paints no background of
+      // its own, so bare it renders transparent over whatever is beneath.
+      AppRoutes.focusActive => (_) => const RouteHost(child: FocusActiveScreen()),
       AppRoutes.focus => (_) => const RouteHost(child: FocusTabShell()),
       AppRoutes.coach => (_) => const RouteHost(showBack: false, child: CoachScreen()),
       _ => (_) => const AppShell(),
