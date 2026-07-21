@@ -1,6 +1,8 @@
 import 'dart:convert';
 
+import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:flutter/foundation.dart';
+import 'package:intl/intl.dart';
 
 import '../core/services/groq_service.dart';
 import '../models/energy_level.dart';
@@ -73,6 +75,8 @@ class GoalProvider extends ChangeNotifier {
     required String title,
     required DateTime targetDate,
     EnergyLevel? currentEnergy,
+    TimeOfDay? dailyStart,
+    int dailyMinutes = 60,
   }) async {
     _busy = true;
     notifyListeners();
@@ -84,6 +88,8 @@ class GoalProvider extends ChangeNotifier {
         createdAt: DateTime.now(),
         targetDate: targetDate,
         milestones: milestones,
+        dailyStart: dailyStart,
+        dailyMinutes: dailyMinutes,
       );
       _goals.add(goal);
       _scheduleDeadlineReminder(goal);
@@ -151,15 +157,22 @@ class GoalProvider extends ChangeNotifier {
     for (final g in _goals) {
       for (final m in g.milestones) {
         if (_sameDay(m.date, now)) {
+          // Land it in the slot the user set aside for this goal. Without a
+          // slot it stays unscheduled and auto-schedule places it wherever it
+          // fits, as before.
+          final slot = g.slotOn(now);
           out.add(Task(
             id: m.id,
             title: m.title,
-            time: 'goal',
+            time: slot != null ? DateFormat.jm().format(slot) : 'goal',
             energy: m.energy,
             done: m.done,
             goalId: g.id,
             goalTitle: g.title,
             steps: m.steps.map((s) => MicroStep(text: s.text, done: s.done)).toList(),
+            scheduled: slot != null,
+            startTime: slot,
+            duration: slot != null ? g.dailyDuration : null,
           ));
         } else if (m.date.isBefore(now) && !m.done) {
           out.add(Task(

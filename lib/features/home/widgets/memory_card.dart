@@ -17,6 +17,7 @@ import '../../../providers/memory_provider.dart';
 import '../../../providers/task_provider.dart';
 import '../../../widgets/om_glass.dart';
 import '../../../widgets/om_tappable.dart';
+import '../../../widgets/text_editing_scope.dart';
 
 /// "what I know about you" - the profile the AI keeps, shown to the person it
 /// is about.
@@ -187,25 +188,31 @@ class _MiniAction extends StatelessWidget {
 }
 
 /// Hand-edit the memory. The whole point is that the user gets the last word.
+///
+/// The controller is owned by a [TextEditingScope], not by this function: the
+/// sheet's future completes when the pop *begins*, so disposing it here would
+/// pull the controller out from under a field that is still mounted and still
+/// rebuilding as the keyboard slides away.
 Future<void> showMemoryEditor(BuildContext context) async {
   final memory = context.read<MemoryProvider>();
-  final controller = TextEditingController(text: memory.memory.text);
 
   await showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
-    builder: (sheetContext) {
-      final c = sheetContext.omColors;
-      return Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(sheetContext).viewInsets.bottom),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+    builder: (sheetContext) => TextEditingScope(
+      text: memory.memory.text,
+      builder: (sheetContext, controller) {
+        final c = sheetContext.omColors;
+        return Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(sheetContext).viewInsets.bottom),
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                 Text('your memory', style: Theme.of(sheetContext).textTheme.titleLarge),
                 const SizedBox(height: 4),
                 Text(
@@ -250,14 +257,14 @@ Future<void> showMemoryEditor(BuildContext context) async {
                     child: const Text('save'),
                   ),
                 ),
-              ],
+                ],
+              ),
             ),
           ),
-        ),
-      );
-    },
+        );
+      },
+    ),
   );
-  controller.dispose();
 }
 
 /// Everything the user parked mid-focus, so it is somewhere they can actually

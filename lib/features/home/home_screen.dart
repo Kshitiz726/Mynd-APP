@@ -8,6 +8,7 @@ import '../../core/utils/om_icons.dart';
 import '../../models/task.dart';
 import '../../providers/energy_provider.dart';
 import '../../providers/goal_provider.dart';
+import '../../providers/mood_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../providers/task_provider.dart';
 import '../../widgets/om_chip.dart';
@@ -19,6 +20,8 @@ import 'widgets/energy_sheet.dart';
 import 'widgets/home_banners.dart';
 import 'widgets/home_dashboard.dart';
 import 'widgets/memory_card.dart';
+import 'widgets/mood_bar.dart';
+import 'widgets/progress_bars.dart';
 import 'widgets/task_tile.dart';
 import 'widgets/week_strip.dart';
 
@@ -44,30 +47,69 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  /// The check-in is asked once, on the first open of the day. [_asked] guards
+  /// against re-prompting when Home rebuilds, and the provider's own
+  /// [MoodProvider.needsCheckIn] guards against asking again tomorrow morning
+  /// if they already logged one.
+  bool _asked = false;
+
+  void _maybeAskMood(BuildContext context) {
+    if (_asked) return;
+    final mood = context.read<MoodProvider>();
+    if (!mood.needsCheckIn) return;
+    _asked = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) showMoodCheckIn(context);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final energy = context.watch<EnergyProvider>().current;
     final c = context.omColors;
+    // Watched, so the prompt fires as soon as stored moods have loaded.
+    context.watch<MoodProvider>();
+    _maybeAskMood(context);
 
     return Stack(
       children: [
-        // A single soft, radiant peach glow blooming from the top - no hard
-        // circles, just a clean radial wash that melts into the surface.
+        // Home is the app's face, so it carries the brand rather than a neutral
+        // wash: coral warming the top where the mascot sits, brand purple
+        // cooling the bottom, and two off-centre blooms so the colour has a
+        // direction instead of sitting there as a flat ramp.
         Positioned.fill(
           child: DecoratedBox(
             decoration: BoxDecoration(
-              gradient: RadialGradient(
-                center: const Alignment(0, -1.05),
-                radius: 1.25,
-                colors: [
-                  const Color(0xFFFFE6D0), // warm peach core
-                  Color.lerp(const Color(0xFFFFE6D0), c.surface, 0.55)!,
-                  c.surface,
-                ],
-                stops: const [0.0, 0.42, 0.85],
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: context.isDark
+                    ? [
+                        Color.lerp(c.accent, c.bg, 0.80)!,
+                        Color.lerp(c.primary, c.bg, 0.84)!,
+                        c.bg,
+                      ]
+                    : [
+                        const Color(0xFFFFD9C2), // coral, warm
+                        const Color(0xFFEADEFF), // brand lilac
+                        const Color(0xFFF6F2FF),
+                      ],
+                stops: const [0.0, 0.55, 1.0],
               ),
             ),
           ),
+        ),
+        // Coral bloom behind the mascot.
+        Positioned(
+          top: -80,
+          right: -60,
+          child: _Bloom(color: c.accent, size: 300, alpha: context.isDark ? 0.22 : 0.42),
+        ),
+        // Brand bloom low-left, so the page is lit from two sides.
+        Positioned(
+          top: 260,
+          left: -90,
+          child: _Bloom(color: c.primary, size: 320, alpha: context.isDark ? 0.20 : 0.30),
         ),
         ListView(
           padding: const EdgeInsets.fromLTRB(
@@ -85,6 +127,8 @@ class _HomeScreenState extends State<HomeScreen> {
               child: VibePill(energy: energy, onTap: () => showEnergyPicker(context)),
             ),
             const SizedBox(height: AppSpacing.xl),
+            const ProgressBars(),
+            const MoodBar(),
             const MemoryCard(),
 
             const OmSectionHeader('your goals'),
@@ -319,6 +363,38 @@ class TimePillX extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A soft radial bloom of brand colour. Blurring is expensive on a scrolling
+/// page, so the softness comes from the gradient's own falloff.
+class _Bloom extends StatelessWidget {
+  const _Bloom({required this.color, required this.size, required this.alpha});
+
+  final Color color;
+  final double size;
+  final double alpha;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: RadialGradient(
+              colors: [
+                color.withValues(alpha: alpha),
+                color.withValues(alpha: 0.0),
+              ],
+              stops: const [0.0, 1.0],
+            ),
+          ),
         ),
       ),
     );
