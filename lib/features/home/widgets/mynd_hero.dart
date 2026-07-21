@@ -10,6 +10,7 @@ import '../../../core/utils/om_icons.dart';
 import '../../../providers/goal_provider.dart';
 import '../../../providers/task_provider.dart';
 import '../../../widgets/fluid_orb.dart';
+import '../../../widgets/om_glass.dart';
 import '../../../widgets/om_tappable.dart';
 import '../../memory/memory_actions.dart';
 
@@ -218,11 +219,17 @@ class _StreakBadge extends StatelessWidget {
   }
 }
 
-/// "Catch up" - re-read everything and rewrite what the app thinks.
+/// "Refresh memory" - re-read everything and rewrite what the app thinks.
 ///
 /// A glass pill rather than a bare icon, and it says what it does. A lone
 /// circular arrow on a home screen reads as "reload the page", which is a
 /// browser idea and would promise the wrong thing.
+///
+/// It used to say "catch up", which was vaguer than the thing it actually
+/// does: this calls refreshMemory and then re-reads your mood, so the honest
+/// label is the one naming the memory it rewrites. It is also the only control
+/// that starts the orb moving, and "catch up" gave no hint that pressing it
+/// would make the app think.
 class _ReloadButton extends StatelessWidget {
   const _ReloadButton({
     required this.busy,
@@ -243,12 +250,12 @@ class _ReloadButton extends StatelessWidget {
       pressedScale: 0.95,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 240),
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
         decoration: BoxDecoration(
-          color: c.surface.withValues(alpha: busy ? 0.92 : 0.72),
           borderRadius: BorderRadius.circular(AppRadius.pill),
-          border: Border.all(color: c.primary.withValues(alpha: 0.22)),
           boxShadow: [
+            // The brand-coloured lift stays on the outside of the glass: a
+            // BackdropFilter is clipped, so a shadow drawn inside it would be
+            // cut off at the pill's own edge.
             BoxShadow(
               color: c.primary.withValues(alpha: busy ? 0.26 : 0.12),
               blurRadius: busy ? 20 : 12,
@@ -256,29 +263,39 @@ class _ReloadButton extends StatelessWidget {
             ),
           ],
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AnimatedBuilder(
-              animation: spin,
-              builder: (context, child) => Transform.rotate(
-                // Eased, not linear. A constant-speed spinner is the
-                // mechanical thing; this leans into the turn and settles out
-                // of it, like something being wound.
-                angle: Curves.easeInOutCubic.transform(spin.value) * math.pi * 2,
-                child: child,
+        child: OmGlass(
+          borderRadius: AppRadius.pill,
+          blur: 18,
+          // Opaque enough while working that the label stays readable over
+          // whatever the page is doing behind it.
+          opacity: busy ? 0.86 : 0.60,
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AnimatedBuilder(
+                animation: spin,
+                builder: (context, child) => Transform.rotate(
+                  // Eased, not linear. A constant-speed spinner is the
+                  // mechanical thing; this leans into the turn and settles out
+                  // of it, like something being wound.
+                  angle:
+                      Curves.easeInOutCubic.transform(spin.value) * math.pi * 2,
+                  child: child,
+                ),
+                child:
+                    Icon(OmIcons.byName('refresh'), size: 17, color: c.primary),
               ),
-              child: Icon(OmIcons.byName('refresh'), size: 17, color: c.primary),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              busy ? 'catching up' : 'catch up',
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: c.primary,
-                    fontWeight: FontWeight.w800,
-                  ),
-            ),
-          ],
+              const SizedBox(width: 8),
+              Text(
+                busy ? 'refreshing' : 'refresh memory',
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: c.primary,
+                      fontWeight: FontWeight.w800,
+                    ),
+              ),
+            ],
+          ),
         ),
       ),
     );

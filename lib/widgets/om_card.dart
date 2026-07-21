@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../core/constants/app_spacing.dart';
 import '../core/theme/app_colors.dart';
 import '../providers/settings_provider.dart';
+import 'om_glass.dart';
 import 'om_tappable.dart';
 
 /// The standard rounded surface used everywhere. In low-stimulation mode the
@@ -27,7 +28,37 @@ class OmCard extends StatelessWidget {
     this.onTap,
     this.onLongPress,
     this.pressedScale = 0.98,
+    this.glass = false,
+    this.tint,
   });
+
+  /// A real frosted-glass card, blur and all.
+  ///
+  /// Reserved for the prominent, non-repeating surfaces - a hero card, an
+  /// empty state, a primary control. Repeating rows deliberately stay on the
+  /// cheap faked frost below, because a live [BackdropFilter] per list item is
+  /// how a scrolling page starts dropping frames, and a glass system nobody
+  /// can scroll is not a glass system.
+  factory OmCard.glass({
+    Key? key,
+    required Widget child,
+    Color? tint,
+    EdgeInsetsGeometry padding = const EdgeInsets.all(18),
+    double radius = AppRadius.card,
+    VoidCallback? onTap,
+    VoidCallback? onLongPress,
+  }) {
+    return OmCard(
+      key: key,
+      padding: padding,
+      radius: radius,
+      onTap: onTap,
+      onLongPress: onLongPress,
+      glass: true,
+      tint: tint,
+      child: child,
+    );
+  }
 
   /// A tinted, softly-glowing feature card - the premium look the dashboard's
   /// hero surfaces used to get from stacked blurs, now cheap. [tint] colours a
@@ -73,12 +104,41 @@ class OmCard extends StatelessWidget {
   final VoidCallback? onLongPress;
   final double pressedScale;
 
+  /// Render as real frosted glass rather than the faked frost. See
+  /// [OmCard.glass].
+  final bool glass;
+
+  /// Brand colour washed through the glass fill.
+  final Color? tint;
+
   @override
   Widget build(BuildContext context) {
     final c = context.omColors;
     final lowStim = context.select<SettingsProvider, bool>((s) => s.lowStim);
 
     final dark = context.isDark;
+
+    if (glass) {
+      final pane = OmGlass(
+        borderRadius: radius,
+        tint: tint,
+        padding: padding,
+        elevated: true,
+        // A brand-tinted pane wants to be more transparent than neutral
+        // chrome: the tint is doing the work of separating it from the page,
+        // so the frost can stay thin enough to see the gradient move behind it.
+        opacity: tint == null ? null : (dark ? 0.34 : 0.46),
+        child: child,
+      );
+      if (onTap == null && onLongPress == null) return pane;
+      return OmTappable(
+        onTap: onTap,
+        onLongPress: onLongPress,
+        feedback: OmTapFeedback.light,
+        pressedScale: pressedScale,
+        child: pane,
+      );
+    }
     final glow = glowColor;
     final card = AnimatedContainer(
       duration: const Duration(milliseconds: 250),

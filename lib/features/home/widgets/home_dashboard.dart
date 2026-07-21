@@ -508,7 +508,7 @@ class _ActionCard extends StatelessWidget {
     final timeStr = task.startTime != null ? DateFormat.jm().format(task.startTime!) : 'anytime';
 
     return ShimmerSwipe(
-      child: OmCard.hero(
+      child: OmCard.glass(
         tint: color,
         padding: const EdgeInsets.all(12),
         onLongPress: () => showEditTaskSheet(context, task),
@@ -765,7 +765,8 @@ class _GoalsEmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.omColors;
-    return OmCard(
+    return OmCard.glass(
+      tint: c.primary,
       padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 18),
       onTap: () => showAddGoalSheet(context),
       child: Column(
@@ -817,7 +818,7 @@ class BrainDumpCard extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.only(top: AppSpacing.md),
-      child: OmCard.hero(
+      child: OmCard.glass(
         tint: c.primary,
         onTap: () => showBrainDumpSheet(context),
         child: Row(
