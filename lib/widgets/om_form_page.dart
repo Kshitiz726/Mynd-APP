@@ -98,21 +98,22 @@ class OmFormPage extends StatelessWidget {
             ),
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.screenH, AppSpacing.md, AppSpacing.screenH, AppSpacing.xl),
+                padding: const EdgeInsets.fromLTRB(AppSpacing.screenH,
+                    AppSpacing.md, AppSpacing.screenH, AppSpacing.xl),
                 child: child,
               ),
             ),
             if (footer != null)
               Padding(
-                padding: EdgeInsets.fromLTRB(
-                  AppSpacing.screenH,
-                  8,
-                  AppSpacing.screenH,
-                  // Sits directly above the keyboard when one is up, so the
-                  // primary action never hides behind it.
-                  MediaQuery.of(context).viewInsets.bottom + 12,
-                ),
+                // No keyboard inset here. resizeToAvoidBottomInset already
+                // shrinks the whole body by the keyboard's height, so adding
+                // it again cost the form a second keyboard's worth of space -
+                // and the only flexible child, the scroll view above, is what
+                // paid for it. On the focus-room form that collapsed it to
+                // roughly one field: the name and the button survived and the
+                // icon, ambience and public toggle simply vanished.
+                padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.screenH, 8, AppSpacing.screenH, 12),
                 child: footer!(context),
               ),
           ],

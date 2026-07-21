@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_spacing.dart';
-
+import '../../core/theme/app_colors.dart';
 import '../../core/utils/haptics.dart';
 import '../../core/utils/toast.dart';
 import '../../widgets/om_switch.dart';
 import '../../widgets/om_tappable.dart';
 
-/// The paywall, built on the reference: a dark, quiet screen with the benefits
-/// as a short tick list, a trial toggle, two priced cards, and one button.
+/// The paywall, built on the reference: a quiet screen with the benefits as a
+/// short tick list, a trial toggle, two priced cards, and one button.
 ///
 /// Two screens, in the order the reference has them. Tapping Continue with the
 /// trial on does not charge anything; it explains what is about to happen and
@@ -48,21 +48,13 @@ const _benefits = [
   'No ads, ever',
 ];
 
-/// The palette is fixed rather than themed: this screen stays the same deep
-/// indigo in light mode and dark, because a paywall that restyles itself reads
-/// as a different app at exactly the moment you are asking someone to trust you
-/// with money.
+/// This screen takes its colours from the app, like every other screen.
 ///
-/// Fixed, but not foreign. These are OurMynd's own brand violets darkened into
-/// a night version of the app, not a borrowed cyan - the moment you ask for
-/// money is the worst possible moment to look like somebody else's product.
-const _bgTop = Color(0xFF231F45);
-const _bgBottom = Color(0xFF15132B);
-const _brand = Color(0xFF9D93F0);
-
-/// The CTA runs a shade deeper than [_brand] so white sits on it legibly.
-const _ctaTop = Color(0xFF7C72DF);
-const _ctaBottom = Color(0xFF5A5FC2);
+/// It used to be a fixed dark slab, on the theory that a paywall should look
+/// deliberate. In practice it looked like a different product bolted on at the
+/// exact moment you are asking someone to trust you with money. Continuity is
+/// the more valuable signal: the offer arrives in the same room as everything
+/// else, so the only thing that changes is what is being said.
 
 class _PaywallScreenState extends State<PaywallScreen> {
   String _selected = 'yearly';
@@ -74,7 +66,8 @@ class _PaywallScreenState extends State<PaywallScreen> {
     Haptics.medium();
     if (_trial) {
       Navigator.of(context).push(
-        MaterialPageRoute<void>(builder: (_) => _TrialExplainer(plan: _selectedPlan)),
+        MaterialPageRoute<void>(
+            builder: (_) => _TrialExplainer(plan: _selectedPlan)),
       );
     } else {
       Toast.show(context, 'Billing is not wired up yet');
@@ -83,14 +76,15 @@ class _PaywallScreenState extends State<PaywallScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.omColors;
     return Scaffold(
-      backgroundColor: _bgTop,
+      backgroundColor: c.bg,
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [_bgTop, _bgBottom],
+            colors: [c.bg, c.primaryTint],
           ),
         ),
         child: SafeArea(
@@ -98,18 +92,19 @@ class _PaywallScreenState extends State<PaywallScreen> {
             children: [
               Align(
                 alignment: Alignment.centerRight,
-                child: _CloseButton(onTap: () => Navigator.of(context).maybePop()),
+                child:
+                    _CloseButton(onTap: () => Navigator.of(context).maybePop()),
               ),
               Expanded(
                 child: ListView(
                   padding: const EdgeInsets.fromLTRB(28, 8, 28, 16),
                   children: [
                     const SizedBox(height: 12),
-                    const Text(
+                    Text(
                       'Unlock Premium',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        color: Colors.white,
+                        color: c.text,
                         fontSize: 30,
                         fontWeight: FontWeight.w800,
                         letterSpacing: -0.5,
@@ -120,7 +115,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
                       'Enjoy these benefits when you upgrade\nto the premium plan.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.62),
+                        color: c.text2,
                         fontSize: 14,
                         height: 1.45,
                       ),
@@ -131,12 +126,13 @@ class _PaywallScreenState extends State<PaywallScreen> {
                         padding: const EdgeInsets.only(bottom: 14),
                         child: Row(
                           children: [
-                            const Icon(Icons.check_circle_rounded, size: 20, color: _brand),
+                            Icon(Icons.check_circle_rounded,
+                                size: 20, color: c.primary),
                             const SizedBox(width: 12),
                             Text(
                               b,
-                              style: const TextStyle(
-                                color: Colors.white,
+                              style: TextStyle(
+                                color: c.text,
                                 fontSize: 15,
                                 fontWeight: FontWeight.w500,
                               ),
@@ -147,11 +143,11 @@ class _PaywallScreenState extends State<PaywallScreen> {
                     const SizedBox(height: 22),
                     Row(
                       children: [
-                        const Expanded(
+                        Expanded(
                           child: Text(
                             'Enable 7-day free trial',
                             style: TextStyle(
-                              color: Colors.white,
+                              color: c.text,
                               fontSize: 15.5,
                               fontWeight: FontWeight.w600,
                             ),
@@ -181,10 +177,12 @@ class _PaywallScreenState extends State<PaywallScreen> {
                       ),
                     const SizedBox(height: 14),
                     Text(
-                      _trial ? 'No charges yet. Cancel anytime.' : 'Cancel anytime.',
+                      _trial
+                          ? 'No charges yet. Cancel anytime.'
+                          : 'Cancel anytime.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.55),
+                        color: c.text2,
                         fontSize: 12.5,
                       ),
                     ),
@@ -211,14 +209,15 @@ class _TrialExplainer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.omColors;
     return Scaffold(
-      backgroundColor: _bgTop,
+      backgroundColor: c.bg,
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [_bgTop, _bgBottom],
+            colors: [c.bg, c.primaryTint],
           ),
         ),
         child: SafeArea(
@@ -237,11 +236,11 @@ class _TrialExplainer extends StatelessWidget {
                   padding: const EdgeInsets.fromLTRB(28, 8, 28, 16),
                   children: [
                     const SizedBox(height: 16),
-                    const Text(
+                    Text(
                       'How your free\ntrial works',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        color: Colors.white,
+                        color: c.text,
                         fontSize: 30,
                         height: 1.2,
                         fontWeight: FontWeight.w800,
@@ -270,7 +269,7 @@ class _TrialExplainer extends StatelessWidget {
                       'Free access for 7 days, then ${plan.price.replaceAll('/', ' per ')}',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.72),
+                        color: c.text2,
                         fontSize: 13,
                       ),
                     ),
@@ -288,12 +287,13 @@ class _TrialExplainer extends StatelessWidget {
                         onTap: () => Navigator.of(context).maybePop(),
                         feedback: OmTapFeedback.none,
                         pressedScale: 0.96,
-                        child: const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              vertical: 8, horizontal: 16),
                           child: Text(
                             'View All Plans',
                             style: TextStyle(
-                              color: _brand,
+                              color: c.primary,
                               fontSize: 14.5,
                               fontWeight: FontWeight.w700,
                             ),
@@ -328,68 +328,70 @@ class _Step extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Column(
-            children: [
+    final c = context.omColors;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Column(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: c.primaryTint,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(icon, size: 20, color: c.primary),
+            ),
+            // A fixed rail, not an Expanded one. Expanded inside an
+            // IntrinsicHeight makes the row's height a guess, and the guess
+            // is short whenever the body text wraps.
+            if (!last)
               Container(
-                width: 44,
-                height: 44,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(icon, size: 20, color: Colors.white),
+                width: 2,
+                height: 34,
+                margin: const EdgeInsets.symmetric(vertical: 6),
+                color: c.border,
               ),
-              if (!last)
-                Expanded(
-                  child: Container(
-                    width: 2,
-                    margin: const EdgeInsets.symmetric(vertical: 6),
-                    color: Colors.white.withValues(alpha: 0.14),
+          ],
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Padding(
+            padding: EdgeInsets.only(top: 4, bottom: last ? 0 : 26),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: c.text,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
-            ],
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Padding(
-              padding: EdgeInsets.only(top: 4, bottom: last ? 0 : 26),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                    ),
+                const SizedBox(height: 4),
+                Text(
+                  body,
+                  style: TextStyle(
+                    color: c.text2,
+                    fontSize: 13.5,
+                    height: 1.4,
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    body,
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.62),
-                      fontSize: 13.5,
-                      height: 1.4,
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
 
 class _PlanCard extends StatelessWidget {
-  const _PlanCard({required this.plan, required this.selected, required this.onTap});
+  const _PlanCard(
+      {required this.plan, required this.selected, required this.onTap});
 
   final _Plan plan;
   final bool selected;
@@ -397,6 +399,7 @@ class _PlanCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.omColors;
     return OmTappable(
       onTap: onTap,
       feedback: OmTapFeedback.none,
@@ -405,10 +408,10 @@ class _PlanCard extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: selected ? 0.10 : 0.05),
+          color: selected ? c.primaryTint : c.surface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: selected ? _brand : Colors.white.withValues(alpha: 0.12),
+            color: selected ? c.primary : c.border,
             width: selected ? 1.6 : 1,
           ),
         ),
@@ -417,13 +420,13 @@ class _PlanCard extends StatelessWidget {
             Icon(
               selected ? Icons.check_circle_rounded : Icons.circle_outlined,
               size: 22,
-              color: selected ? _brand : Colors.white.withValues(alpha: 0.35),
+              color: selected ? c.primary : c.text2,
             ),
             const SizedBox(width: 12),
             Text(
               plan.label,
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: c.text,
                 fontSize: 15.5,
                 fontWeight: FontWeight.w700,
               ),
@@ -433,13 +436,13 @@ class _PlanCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: _brand.withValues(alpha: 0.20),
+                  color: c.primary.withValues(alpha: 0.16),
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
                   plan.badge!,
-                  style: const TextStyle(
-                    color: _brand,
+                  style: TextStyle(
+                    color: c.primary,
                     fontSize: 11,
                     fontWeight: FontWeight.w800,
                   ),
@@ -450,7 +453,7 @@ class _PlanCard extends StatelessWidget {
             Text(
               plan.price,
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.85),
+                color: c.text,
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
               ),
@@ -470,6 +473,7 @@ class _CtaButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.omColors;
     return OmTappable(
       onTap: onTap,
       feedback: OmTapFeedback.none,
@@ -482,11 +486,11 @@ class _CtaButton extends StatelessWidget {
           // one control that takes money looks like every other control the
           // person has already learned to trust. Dark-on-bright was a holdover
           // from the cyan reference and read as a disabled button here.
-          gradient: const LinearGradient(colors: [_ctaTop, _ctaBottom]),
+          gradient: c.brandGradient,
           borderRadius: BorderRadius.circular(AppRadius.pill),
           boxShadow: [
             BoxShadow(
-              color: _ctaBottom.withValues(alpha: 0.45),
+              color: c.primary.withValues(alpha: 0.34),
               blurRadius: 20,
               offset: const Offset(0, 8),
             ),
@@ -511,7 +515,7 @@ class _LegalRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final style = TextStyle(
-      color: Colors.white.withValues(alpha: 0.45),
+      color: context.omColors.text2,
       fontSize: 11.5,
     );
     return Row(
@@ -544,7 +548,7 @@ class _CloseButton extends StatelessWidget {
         child: Icon(
           Icons.close_rounded,
           size: 24,
-          color: Colors.white.withValues(alpha: 0.75),
+          color: context.omColors.text2,
         ),
       ),
     );

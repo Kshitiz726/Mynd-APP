@@ -107,7 +107,13 @@ class _CoachScreenState extends State<CoachScreen> {
                     children: [
                       // The same living orb as the hero, small. One face for
                       // Mynd everywhere, not a mascot up here and a blob below.
-                      const FluidOrb.still(size: 42),
+                      //
+                      // This plays. It used to be .still(), which skips the
+                      // video and paints the gradient fallback, so the header
+                      // showed a peach blob that read as a missing image rather
+                      // than as Mynd. The avatar is the one place the face has
+                      // to be recognisable, so it gets the decoder.
+                      const FluidOrb(size: 42, glow: false),
                       Positioned(
                         right: 0,
                         bottom: 0,

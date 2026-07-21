@@ -15,6 +15,7 @@ import '../../providers/settings_provider.dart';
 import '../../widgets/om_avatar.dart';
 import '../../widgets/om_switch.dart';
 import '../../widgets/om_tappable.dart';
+import '../memory/memory_screen.dart';
 import 'about_screen.dart';
 import 'activity_history_screen.dart';
 
@@ -30,9 +31,11 @@ import 'activity_history_screen.dart';
 ///
 /// What stayed had to earn it. The sensory toggles are not decoration in an
 /// ADHD app, they are the accessibility layer, so low-stim, dark mode,
-/// hyperlegible type, haptics and reduced motion all remain. Notes and activity
-/// history stayed because this screen is their only entrance; deleting the row
-/// would delete the feature.
+/// hyperlegible type, haptics and reduced motion all remain. Memory and
+/// activity history are here because this screen is their only entrance;
+/// deleting the row would delete the feature. Notes went the other way: it was
+/// a second, worse place to write things down next to the coach and the
+/// backlog, so it is gone rather than kept out of politeness.
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
@@ -45,12 +48,16 @@ class ProfileScreen extends StatelessWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Sign out?'),
-        content: const Text("You'll need to continue with Google again to come back in."),
+        content: const Text(
+            "You'll need to continue with Google again to come back in."),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text('Sign out', style: TextStyle(color: ctx.omColors.error)),
+            child:
+                Text('Sign out', style: TextStyle(color: ctx.omColors.error)),
           ),
         ],
       ),
@@ -77,8 +84,8 @@ class ProfileScreen extends StatelessWidget {
       backgroundColor: c.bg,
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(
-              AppSpacing.screenH, 4, AppSpacing.screenH, AppSpacing.screenBottom),
+          padding: const EdgeInsets.fromLTRB(AppSpacing.screenH, 4,
+              AppSpacing.screenH, AppSpacing.screenBottom),
           children: [
             // ── Header: back, title, nothing else ──
             Row(
@@ -97,7 +104,10 @@ class ProfileScreen extends StatelessWidget {
                   child: Text(
                     'Settings',
                     textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 19),
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleLarge
+                        ?.copyWith(fontSize: 19),
                   ),
                 ),
                 // Balances the back button so the title sits truly centred.
@@ -112,16 +122,24 @@ class ProfileScreen extends StatelessWidget {
                 children: [
                   OmAvatar(
                     userId: ApiConfig.instance.userId ?? '',
-                    fallbackInitial: name.isNotEmpty ? name[0].toUpperCase() : '?',
+                    fallbackInitial:
+                        name.isNotEmpty ? name[0].toUpperCase() : '?',
                     fallbackColor: c.primary,
                     size: 92,
                   ),
                   const SizedBox(height: 14),
-                  Text(name, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 20)),
+                  Text(name,
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleLarge
+                          ?.copyWith(fontSize: 20)),
                   if (handle != null) ...[
                     const SizedBox(height: 3),
                     Text(handle,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(color: c.text2)),
+                        style: Theme.of(context)
+                            .textTheme
+                            .bodySmall
+                            ?.copyWith(color: c.text2)),
                   ],
                 ],
               ),
@@ -129,7 +147,9 @@ class ProfileScreen extends StatelessWidget {
             const SizedBox(height: AppSpacing.xl),
 
             // ── The plan ──
-            _PlanCard(onTap: () => Navigator.of(context).pushNamed(AppRoutes.paywall)),
+            _PlanCard(
+                onTap: () =>
+                    Navigator.of(context).pushNamed(AppRoutes.paywall)),
             const SizedBox(height: AppSpacing.xl),
 
             const _GroupLabel('Account'),
@@ -142,18 +162,22 @@ class ProfileScreen extends StatelessWidget {
               _Row(
                 icon: Icons.notifications_none_rounded,
                 label: 'Reminders',
-                onTap: () => Navigator.of(context).pushNamed(AppRoutes.reminders),
+                onTap: () =>
+                    Navigator.of(context).pushNamed(AppRoutes.reminders),
               ),
               _Row(
-                icon: Icons.description_outlined,
-                label: 'Notes',
-                onTap: () => Navigator.of(context).pushNamed(AppRoutes.notes),
+                icon: Icons.psychology_outlined,
+                label: 'Memory',
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(builder: (_) => const MemoryScreen()),
+                ),
               ),
               _Row(
                 icon: Icons.history_rounded,
                 label: 'Activity history',
                 onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(builder: (_) => const ActivityHistoryScreen()),
+                  MaterialPageRoute<void>(
+                      builder: (_) => const ActivityHistoryScreen()),
                 ),
                 last: true,
               ),
@@ -255,6 +279,12 @@ class _PlanCard extends StatelessWidget {
 
   final VoidCallback onTap;
 
+  /// Nobody has paid yet, because there is nothing to pay with yet. Until
+  /// billing exists this is false, and the card tells the truth: you are on the
+  /// free plan. Calling everyone Premium while charging nobody trains people to
+  /// ignore the one label that will eventually mean something.
+  static const bool _isPremium = false;
+
   @override
   Widget build(BuildContext context) {
     final c = context.omColors;
@@ -268,15 +298,19 @@ class _PlanCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
         decoration: BoxDecoration(
-          gradient: c.brandGradient,
+          gradient: _isPremium ? c.brandGradient : null,
+          color: _isPremium ? null : c.surface,
           borderRadius: BorderRadius.circular(18),
-          boxShadow: [
-            BoxShadow(
-              color: c.primary.withValues(alpha: 0.34),
-              blurRadius: 20,
-              offset: const Offset(0, 8),
-            ),
-          ],
+          border: _isPremium ? null : Border.all(color: c.border),
+          boxShadow: _isPremium
+              ? [
+                  BoxShadow(
+                    color: c.primary.withValues(alpha: 0.34),
+                    blurRadius: 20,
+                    offset: const Offset(0, 8),
+                  ),
+                ]
+              : null,
         ),
         child: Row(
           children: [
@@ -285,26 +319,48 @@ class _PlanCard extends StatelessWidget {
               height: 40,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.22),
+                color: _isPremium
+                    ? Colors.white.withValues(alpha: 0.22)
+                    : c.primaryTint,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Icon(Icons.workspace_premium_rounded, color: Colors.white, size: 21),
+              child: Icon(
+                _isPremium
+                    ? Icons.workspace_premium_rounded
+                    : Icons.auto_awesome_outlined,
+                color: _isPremium ? Colors.white : c.primary,
+                size: 21,
+              ),
             ),
             const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Premium Account',
-                      style: TextStyle(
-                          color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15.5)),
+                  Text(
+                    _isPremium ? 'Premium Account' : 'Free plan',
+                    style: TextStyle(
+                        color: _isPremium ? Colors.white : c.text,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15.5),
+                  ),
                   const SizedBox(height: 2),
-                  Text('Enjoy your premium features',
-                      style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.82), fontSize: 12.5)),
+                  Text(
+                    _isPremium
+                        ? 'Enjoy your premium features'
+                        : 'See what Premium adds',
+                    style: TextStyle(
+                      color: _isPremium
+                          ? Colors.white.withValues(alpha: 0.82)
+                          : c.text2,
+                      fontSize: 12.5,
+                    ),
+                  ),
                 ],
               ),
             ),
+            if (!_isPremium)
+              Icon(Icons.chevron_right_rounded, color: c.text2, size: 20),
           ],
         ),
       ),
@@ -383,7 +439,8 @@ class _Row extends StatelessWidget {
         decoration: BoxDecoration(
           border: last
               ? null
-              : Border(bottom: BorderSide(color: c.border.withValues(alpha: 0.5))),
+              : Border(
+                  bottom: BorderSide(color: c.border.withValues(alpha: 0.5))),
         ),
         child: Row(
           children: [
@@ -391,7 +448,10 @@ class _Row extends StatelessWidget {
             const SizedBox(width: 14),
             Expanded(
               child: Text(label,
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: tint)),
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodyLarge
+                      ?.copyWith(color: tint)),
             ),
             Icon(Icons.chevron_right_rounded, size: 20, color: c.text2),
           ],
@@ -422,8 +482,10 @@ class _ToggleRow extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
       decoration: BoxDecoration(
-        border:
-            last ? null : Border(bottom: BorderSide(color: c.border.withValues(alpha: 0.5))),
+        border: last
+            ? null
+            : Border(
+                bottom: BorderSide(color: c.border.withValues(alpha: 0.5))),
       ),
       child: Row(
         children: [
