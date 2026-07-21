@@ -18,6 +18,7 @@ import 'widgets/day_timeline.dart';
 import 'widgets/energy_sheet.dart';
 import 'widgets/home_banners.dart';
 import 'widgets/home_dashboard.dart';
+import 'widgets/memory_card.dart';
 import 'widgets/task_tile.dart';
 import 'widgets/week_strip.dart';
 
@@ -84,6 +85,8 @@ class _HomeScreenState extends State<HomeScreen> {
               child: VibePill(energy: energy, onTap: () => showEnergyPicker(context)),
             ),
             const SizedBox(height: AppSpacing.xl),
+            const MemoryCard(),
+
             const OmSectionHeader('your goals'),
             const GoalAchievementCard(),
             const GoalsList(),

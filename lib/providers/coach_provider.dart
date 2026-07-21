@@ -58,6 +58,14 @@ class CoachProvider extends ChangeNotifier {
   // final _groq = GroqService.instance; // swapped for Puter.js (free, in-app)
   final _ai = PuterService.instance;
   final _memory = CoachMemoryService.instance;
+
+  /// The user's editable memory, pushed in from the widget tree. Kept as a
+  /// plain string so the coach does not have to depend on another provider.
+  String _userMemory = '';
+  void setUserMemory(String value) {
+    if (value == _userMemory) return;
+    _userMemory = value;
+  }
   final _contextBuilder = CoachContextBuilder.instance;
   final _promptBuilder = CoachPromptBuilder.instance;
 
@@ -128,6 +136,7 @@ class CoachProvider extends ChangeNotifier {
         focus: _focus,
         settings: _settings,
         userName: _userName,
+        userMemory: _userMemory,
       );
 
       // Get the conversation history excluding the placeholder we just added.

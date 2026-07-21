@@ -11,6 +11,7 @@ import '../../providers/nav_provider.dart';
 import '../../providers/task_provider.dart';
 import '../../widgets/om_tappable.dart';
 import 'focus_help.dart';
+import 'park_thought_sheet.dart';
 
 class FocusActiveScreen extends StatelessWidget {
   const FocusActiveScreen({super.key});
@@ -104,10 +105,7 @@ class FocusActiveScreen extends StatelessWidget {
                   _ActionButton(
                     label: 'park a thought',
                     icon: 'edit',
-                    onTap: () {
-                      Haptics.light();
-                      Toast.show(context, 'Thought parked!');
-                    },
+                    onTap: () => showParkThoughtSheet(context),
                   ),
                   const SizedBox(height: AppSpacing.md),
                   OmTappable(

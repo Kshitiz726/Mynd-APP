@@ -8,6 +8,7 @@ import '../../core/utils/haptics.dart';
 import '../../core/utils/om_icons.dart';
 import '../../models/chat_message.dart';
 import '../../providers/coach_provider.dart';
+import '../../providers/memory_provider.dart';
 import '../../widgets/om_back_button.dart';
 import '../../widgets/om_mascot.dart';
 import '../../widgets/om_glass.dart';
@@ -75,6 +76,13 @@ class _CoachScreenState extends State<CoachScreen> {
   @override
   Widget build(BuildContext context) {
     final c = context.omColors;
+
+    // Every reply is written with the user's memory in hand: who they are,
+    // what they are working towards, what they parked. Watched rather than
+    // read once, so an edit takes effect on the next message, not next launch.
+    context.read<CoachProvider>().setUserMemory(
+          context.watch<MemoryProvider>().promptBlock,
+        );
 
     return Consumer<CoachProvider>(
       builder: (context, coach, _) {

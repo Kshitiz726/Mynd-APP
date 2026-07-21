@@ -26,6 +26,7 @@ class CoachContextBuilder {
     required FocusProvider focus,
     required SettingsProvider settings,
     required String userName,
+    String userMemory = '',
   }) {
     final memory = CoachMemoryService.instance;
 
@@ -37,7 +38,13 @@ class CoachContextBuilder {
       todayTasks: _buildTaskSummaries(tasks),
       habitProgress: _buildHabitProgress(habits),
       focusStatistics: _buildFocusStats(focus),
-      previousConversationSummary: memory.memorySummary,
+      // The user's own memory leads: it is the durable picture of who they
+      // are, where the session memo is only what was said last time.
+      previousConversationSummary: [
+        if (userMemory.isNotEmpty) userMemory,
+        if (memory.memorySummary.isNotEmpty)
+          'From your last sessions together:\n${memory.memorySummary}',
+      ].join('\n\n'),
       userPreferences: CoachUserPreferences(
         prefersBrevity: settings.lowStim,
         preferredName: userName.isNotEmpty ? userName : null,

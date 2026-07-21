@@ -20,6 +20,7 @@ import 'providers/focus_provider.dart';
 import 'providers/focus_room_provider.dart';
 import 'providers/goal_provider.dart';
 import 'providers/habit_provider.dart';
+import 'providers/memory_provider.dart';
 import 'providers/nav_provider.dart';
 import 'providers/notes_provider.dart';
 import 'providers/settings_provider.dart';
@@ -88,6 +89,9 @@ class OurMyndApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => ChatProvider()),
         ChangeNotifierProvider(create: (_) => AlertsProvider()),
         ChangeNotifierProvider(create: (_) => AlarmsProvider()),
+        // What the app knows about the user: written by the AI, editable by
+        // them, and read back into every coach reply.
+        ChangeNotifierProvider(create: (_) => MemoryProvider()),
         ChangeNotifierProvider(create: (_) => NotesProvider(ApiClient.instance)),
         // Goals depend on TaskProvider (they push today's milestones into it).
         ChangeNotifierProxyProvider<TaskProvider, GoalProvider>(
