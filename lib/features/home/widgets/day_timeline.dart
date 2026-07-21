@@ -97,6 +97,7 @@ class DayTimeline extends StatelessWidget {
                 gapAfter: gapAfter,
                 gapStart: gapStart,
                 isLast: sleep == null && index == movable.length - 1,
+                dragIndex: index,
               ),
             );
           },
@@ -333,11 +334,17 @@ class _TimelineBlock extends StatelessWidget {
     this.gapStart,
     this.pinned = false,
     this.isLast = false,
+    this.dragIndex,
   });
 
   final Task task;
   final Duration? gapAfter;
   final DateTime? gapStart;
+
+  /// Position in the reorderable list. When set, the block grows a grip that
+  /// starts a drag on touch-down - long-pressing the card still works, but a
+  /// gesture you cannot see is a gesture nobody finds.
+  final int? dragIndex;
 
   /// Fixed blocks (wake, sleep, and everything on a past day): no editing, no
   /// dragging, and visually quieter so they read as the frame of the day.
@@ -387,7 +394,9 @@ class _TimelineBlock extends StatelessWidget {
                       )
                     : _CheckCircle(
                         done: task.done,
-                        color: task.done ? accent : c.border.withValues(alpha: 0.9),
+                        color: task.done ? const Color(0xFF22C55E) : c.border.withValues(alpha: 0.9),
+                        // Tapping again un-ticks it: a mis-tap should cost one
+                        // tap to undo, not a trip through an edit sheet.
                         onTap: () {
                           Haptics.medium();
                           context.read<TaskProvider>().toggleDone(task);
@@ -468,6 +477,18 @@ class _TimelineBlock extends StatelessWidget {
                         ),
                         child: Icon(taskIcon(task.title), size: 22, color: accent),
                       ),
+                      if (dragIndex != null)
+                        ReorderableDragStartListener(
+                          index: dragIndex!,
+                          child: Padding(
+                            padding: const EdgeInsets.only(left: 4),
+                            child: Icon(
+                              Icons.drag_indicator_rounded,
+                              size: 20,
+                              color: c.text2.withValues(alpha: 0.45),
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ),

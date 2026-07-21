@@ -11,6 +11,7 @@ import '../../core/constants/app_spacing.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/haptics.dart';
 import '../../core/utils/om_icons.dart';
+import '../../core/utils/toast.dart';
 import '../../models/focus/room_participant.dart';
 import '../../providers/focus_room_provider.dart';
 import '../../widgets/om_avatar.dart';
@@ -189,11 +190,14 @@ class _FocusRoomScreenState extends State<FocusRoomScreen> {
                   backgroundColor: Colors.transparent,
                   elevation: 0,
                   automaticallyImplyLeading: false,
+                  // Backing out is not leaving. You stay in the room, still
+                  // counted in it, and can go do something else in the app and
+                  // come back - only "Leave Room" takes you out.
                   leading: OmBackButton(
-                    onTap: () async {
-                      Haptics.medium();
-                      await fr.leaveRoom();
-                      if (context.mounted) Navigator.of(context).maybePop();
+                    onTap: () {
+                      Haptics.light();
+                      fr.minimiseRoom();
+                      Toast.show(context, "Still in the room - tap the pill to come back.");
                     },
                   ),
                   title: Text(fr.activeRoom?.title ?? 'Focus Room', style: Theme.of(context).textTheme.titleMedium),

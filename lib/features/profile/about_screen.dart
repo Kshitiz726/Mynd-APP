@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../core/constants/app_spacing.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/om_icons.dart';
+import '../../widgets/om_back_button.dart';
 import '../../widgets/om_top_bar.dart';
 import '../../widgets/om_tappable.dart';
 
@@ -37,15 +38,10 @@ class AboutScreen extends StatelessWidget {
                 AppSpacing.screenBottom,
               ),
               children: [
-                OmTopBar(
-                  title: 'about',
-                  actions: [
-                    OmTopBarAction(
-                      icon: OmIcons.byName('close'),
-                      onTap: () => Navigator.of(context).pop(),
-                    ),
-                  ],
-                ),
+                // A chevron on the left, not a cross on the right: this is a
+                // pushed page like any other, and dismissal should not have two
+                // different shapes depending on which page you are on.
+                const OmTopBar(title: 'about', leading: OmBackButton()),
                 const SizedBox(height: AppSpacing.lg),
                 
                 const _AboutCard(title: 'App Version', subtitle: 'v1.0.0 (Build 42)', icon: 'smartphone'),

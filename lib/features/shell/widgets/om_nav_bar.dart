@@ -57,8 +57,10 @@ class OmNavBar extends StatelessWidget {
           ),
           child: OmGlass(
             borderRadius: 28,
-            blur: 36,
-            opacity: dark ? 0.34 : 0.55,
+            // Heavier blur over a thinner fill: the bar should look like frosted
+            // glass laid on the page, not a light-grey slab drawn over it.
+            blur: 44,
+            opacity: dark ? 0.26 : 0.42,
             child: DecoratedBox(
               // Real glass is lit from above: a top-down sheen sells the depth
               // that blur alone cannot.
@@ -187,9 +189,21 @@ class _Lens extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(19),
-          color: dark
-              ? Colors.white.withValues(alpha: 0.13)
-              : Colors.white.withValues(alpha: 0.78),
+          // A whisper of brand in the puck, so the lens belongs to the app
+          // rather than being a neutral white pill.
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: dark
+                ? [
+                    Colors.white.withValues(alpha: 0.18),
+                    Colors.white.withValues(alpha: 0.08),
+                  ]
+                : [
+                    Colors.white.withValues(alpha: 0.92),
+                    Color.lerp(Colors.white, c.primary, 0.10)!.withValues(alpha: 0.86),
+                  ],
+          ),
           // A brighter hairline than the bar's own edge, so the puck reads as a
           // separate pane of glass sitting on top rather than a painted shape.
           border: Border.all(
@@ -259,21 +273,29 @@ class _NavIcon extends StatelessWidget {
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        // Colour animates rather than the glyph swapping, so the icon never
-        // pops between states.
-        // Without labels the icon has to carry the destination on its own, so
-        // it is large, and the active one grows a touch further.
+        // Outline and solid are cross-faded on top of each other rather than
+        // swapped, so the glyph fills in instead of popping. Without labels the
+        // icon carries the destination alone, so it is large and the active one
+        // grows a touch further.
         TweenAnimationBuilder<double>(
-          duration: const Duration(milliseconds: 260),
+          duration: const Duration(milliseconds: 300),
           curve: Curves.easeOutBack,
           tween: Tween(end: active ? 1.0 : 0.0),
           builder: (context, t, _) => TweenAnimationBuilder<Color?>(
             duration: const Duration(milliseconds: 240),
             tween: ColorTween(end: color),
-            builder: (context, value, _) => Icon(
-              tab.icon,
-              color: value,
-              size: 25 + (t * 2),
+            builder: (context, value, _) => Stack(
+              alignment: Alignment.center,
+              children: [
+                Opacity(
+                  opacity: (1 - t).clamp(0.0, 1.0),
+                  child: Icon(tab.icon, color: value, size: 25),
+                ),
+                Opacity(
+                  opacity: t.clamp(0.0, 1.0),
+                  child: Icon(tab.activeIcon, color: value, size: 26 + (t * 2)),
+                ),
+              ],
             ),
           ),
         ),

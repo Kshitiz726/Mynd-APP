@@ -65,7 +65,11 @@ class _AppShellState extends State<AppShell> {
 
     // Immersive surfaces hide the bottom nav so they read full-screen: a live
     // focus room, an open DM / group chat, and the keyboard being up.
-    final inFocusRoom = context.watch<FocusRoomProvider>().activeRoomId != null;
+    // A minimised room still counts as being *in* a room, but the app is
+    // navigable again, so the nav bar comes back and the room waits behind a
+    // pill instead of covering everything.
+    final rooms = context.watch<FocusRoomProvider>();
+    final inFocusRoom = rooms.roomVisible;
     final inChat = context.watch<ChatProvider>().activeConversationId != null;
     final keyboardUp = MediaQuery.of(context).viewInsets.bottom != 0;
     final hideNav = inFocusRoom || inChat || keyboardUp;
@@ -84,12 +88,13 @@ class _AppShellState extends State<AppShell> {
                     reduceMotion: context.select<SettingsProvider, bool>((s) => s.reduceMotion),
                     children: _tabs,
                   ),
-                  if (context.watch<FocusRoomProvider>().activeRoomId != null)
-                    const Positioned.fill(child: FocusRoomScreen()),
+                  if (rooms.roomVisible) const Positioned.fill(child: FocusRoomScreen()),
                 ],
               ),
             ),
-            if (showLivePill)
+            // One pill slot. A minimised room outranks a solo session, because
+            // other people are waiting in it.
+            if (rooms.minimised || showLivePill)
               Positioned(
                 top: 0,
                 left: 0,
@@ -99,11 +104,17 @@ class _AppShellState extends State<AppShell> {
                   child: Padding(
                     padding: const EdgeInsets.only(top: 8),
                     child: Center(
-                      child: LiveFocusPill(
-                        time: focus.timeString,
-                        modeName: focus.activeMode!.name,
-                        onTap: () => Navigator.of(context).pushNamed(AppRoutes.focus),
-                      ),
+                      child: rooms.minimised
+                          ? LiveFocusPill(
+                              time: '${rooms.participantCount}',
+                              modeName: rooms.activeRoom?.title ?? 'focus room',
+                              onTap: rooms.restoreRoom,
+                            )
+                          : LiveFocusPill(
+                              time: focus.timeString,
+                              modeName: focus.activeMode!.name,
+                              onTap: () => Navigator.of(context).pushNamed(AppRoutes.focus),
+                            ),
                     ),
                   ),
                 ),

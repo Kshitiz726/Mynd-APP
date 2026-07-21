@@ -1,4 +1,4 @@
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// The primary bottom-navigation destinations, mirroring the prototype's
@@ -7,25 +7,29 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 /// Focus and the coach are no longer destinations: they are things you *start*,
 /// so they live behind the centre (+) and open as full-screen routes.
 ///
-/// Icons come from **Lucide** - the one icon family used everywhere else in the
-/// app - so the tab bar matches the rest of the UI. The selected tab is
-/// distinguished by the nav bar's tinted "expanding pill" (icon + label), not by
-/// swapping to a filled glyph, so [activeIcon] mirrors [icon].
+/// Resting icons come from **Lucide** - the one icon family used everywhere
+/// else in the app. The *selected* tab swaps to a solid glyph: an outline that
+/// only changes colour is easy to lose at a glance, and a filled shape reads as
+/// "you are here" from the corner of the eye, which is the whole job of a tab
+/// bar. The pair is drawn as a cross-fade so nothing pops.
 enum AppTab {
-  today(label: 'home', icon: LucideIcons.house),
-  schedule(label: 'schedule', icon: LucideIcons.calendarDays),
-  community(label: 'community', icon: LucideIcons.users),
-  settings(label: 'settings', icon: LucideIcons.settings);
+  today(label: 'home', icon: LucideIcons.house, activeIcon: Icons.home_rounded),
+  schedule(
+      label: 'schedule',
+      icon: LucideIcons.calendarDays,
+      activeIcon: Icons.calendar_month_rounded),
+  community(label: 'community', icon: LucideIcons.users, activeIcon: Icons.people_rounded),
+  settings(label: 'settings', icon: LucideIcons.settings, activeIcon: Icons.settings_rounded);
 
-  const AppTab({required this.label, required this.icon});
+  const AppTab({required this.label, required this.icon, required this.activeIcon});
 
   final String label;
 
-  /// The tab's Lucide glyph (same for active/inactive - the pill marks active).
+  /// The resting (outline) glyph.
   final IconData icon;
 
-  /// Kept for API compatibility with call sites; identical to [icon].
-  IconData get activeIcon => icon;
+  /// The solid glyph shown while this tab is selected.
+  final IconData activeIcon;
 }
 
 /// Holds the selected tab so both the nav bar and in-content shortcuts (e.g.

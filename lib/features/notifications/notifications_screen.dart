@@ -12,6 +12,7 @@ import '../../providers/nav_provider.dart';
 import '../../widgets/om_avatar.dart';
 import '../../widgets/om_card.dart';
 import '../../widgets/om_tappable.dart';
+import '../../widgets/om_back_button.dart';
 import '../../widgets/om_top_bar.dart';
 import '../community/chat_screen.dart';
 
@@ -75,6 +76,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           OmTopBar(
             title: 'alerts',
             subtitle: _summary(requests.length, comments.length),
+            // Same chevron, same corner, as every other pushed screen. It draws
+            // nothing when alerts is shown as a tab rather than pushed.
+            leading: const OmBackButton(),
           ),
 
           if (alerts.alertsUnread > 0) ...[

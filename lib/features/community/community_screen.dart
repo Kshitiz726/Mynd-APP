@@ -1125,10 +1125,17 @@ class _RoomTile extends StatelessWidget {
 
   Future<void> _join(BuildContext context) async {
     Haptics.select();
+    final fr = context.read<FocusRoomProvider>();
+    // Already in this room, just tucked away: bring it back rather than
+    // re-joining, which would reset the session timer.
+    if (fr.activeRoomId == room.id) {
+      fr.restoreRoom();
+      return;
+    }
     try {
       _audio.play(AssetSource('audio/join.wav'));
     } catch (_) {}
-    context.read<FocusRoomProvider>().joinRoom(room.id);
+    fr.joinRoom(room.id);
     // Refresh counts + the global "minds focusing" number after joining.
     try {
       final r = await ApiClient.instance.fetchRooms();

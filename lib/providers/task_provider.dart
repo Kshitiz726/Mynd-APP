@@ -56,21 +56,27 @@ class TaskProvider extends ChangeNotifier {
       a.year == b.year && a.month == b.month && a.day == b.day;
 
   /// Blocks scheduled on [day], in time order.
-  List<Task> scheduleOn(DateTime day) {
+  ///
+  /// [includeDone] keeps finished blocks in the list. The timeline wants them -
+  /// ticking something off should strike it through where it sits, not delete
+  /// your afternoon - and so does any overlap arithmetic, because an hour you
+  /// already spent is still an hour that is taken. "What is next" does not.
+  List<Task> scheduleOn(DateTime day, {bool includeDone = false}) {
     final list = _tasks
         .where((t) =>
             t.scheduled &&
             !t.isMissed &&
             t.startTime != null &&
-            !t.done &&
+            (includeDone || !t.done) &&
             _isSameDay(t.startTime!, day))
         .toList();
     list.sort((a, b) => a.startTime!.compareTo(b.startTime!));
     return list;
   }
 
-  /// What the timeline renders: the selected day, not necessarily today.
-  List<Task> get daySchedule => scheduleOn(_selectedDate);
+  /// What the timeline renders: the selected day, not necessarily today,
+  /// finished blocks included so they can be shown struck through.
+  List<Task> get daySchedule => scheduleOn(_selectedDate, includeDone: true);
 
   /// Today specifically. Packing, conflict checks and "up next" must not follow
   /// the user's browsing around the week.
@@ -517,7 +523,7 @@ class TaskProvider extends ChangeNotifier {
   /// (ignoring [task] itself), or null when the window is free. Used to guard
   /// manual time edits so a block can only land in an actually-empty slot.
   Task? conflictFor(Task task, DateTime start, DateTime end) {
-    for (final t in scheduleOn(start)) {
+    for (final t in scheduleOn(start, includeDone: true)) {
       if (t.id == task.id) continue;
       final ts = t.startTime, te = t.endTime;
       if (ts == null || te == null) continue;
@@ -558,8 +564,9 @@ class TaskProvider extends ChangeNotifier {
   }) {
     if (!end.isAfter(start)) return Duration.zero;
 
-    // Everything else on the day, in the order it currently sits.
-    final others = scheduleOn(start)
+    // Everything else on the day, in the order it currently sits. Finished
+    // blocks included: the time they occupy is still occupied.
+    final others = scheduleOn(start, includeDone: true)
         .where((t) => t.id != task.id && !t.isAnchor)
         .toList();
 

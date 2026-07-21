@@ -9,6 +9,7 @@ import '../../core/services/realtime_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/haptics.dart';
 import '../../core/utils/om_icons.dart';
+import '../../widgets/om_back_button.dart';
 import '../../core/utils/toast.dart';
 import '../../models/focus/body_double.dart';
 import '../../models/focus_mode.dart';
@@ -176,10 +177,9 @@ class _BodyDoublingScreenState extends State<BodyDoublingScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         title: const Text('Focus together'),
-        leading: IconButton(
-          icon: Icon(OmIcons.byName('chevL'), color: c.text),
-          onPressed: () => Navigator.of(context).maybePop(),
-        ),
+        automaticallyImplyLeading: false,
+        leading: const OmBackButton(),
+        leadingWidth: 58,
       ),
       body: SafeArea(
         child: Padding(
