@@ -124,10 +124,15 @@ class OmCard extends StatelessWidget {
         tint: tint,
         padding: padding,
         elevated: true,
-        // A brand-tinted pane wants to be more transparent than neutral
-        // chrome: the tint is doing the work of separating it from the page,
-        // so the frost can stay thin enough to see the gradient move behind it.
-        opacity: tint == null ? null : (dark ? 0.34 : 0.46),
+        blur: 30,
+        // A brand-tinted pane has to stay *thin*.
+        //
+        // This started at 0.46 and read as a solid lilac slab - the tint was
+        // doing all the work and the blur none of it, which is a coloured card
+        // wearing glass as a costume. At this weight the page's gradient is
+        // visibly there underneath, which is the entire difference between
+        // frosted glass and paint.
+        opacity: tint == null ? null : (dark ? 0.20 : 0.24),
         child: child,
       );
       if (onTap == null && onLongPress == null) return pane;

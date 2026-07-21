@@ -137,35 +137,10 @@ class _CaughtUpPainter extends CustomPainter {
       );
     }
 
-    // The sun. Coral into brand purple rather than a flat disc, so it belongs
-    // to the same gradient the top of Home is painted in.
-    canvas.drawCircle(
-      centre,
-      r,
-      Paint()
-        ..shader = LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color.lerp(accent, Colors.white, dark ? 0.12 : 0.30)!,
-            accent,
-            Color.lerp(accent, primary, 0.45)!,
-          ],
-          stops: const [0.0, 0.55, 1.0],
-        ).createShader(Rect.fromCircle(center: centre, radius: r)),
-    );
-    // A lit top-left rim, the same idea as the glass surfaces.
-    canvas.drawArc(
-      Rect.fromCircle(center: centre, radius: r - 1.5),
-      math.pi * 1.05,
-      math.pi * 0.7,
-      false,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2
-        ..strokeCap = StrokeCap.round
-        ..color = Colors.white.withValues(alpha: dark ? 0.35 : 0.55),
-    );
+    // No disc. The rays and the horizon carry it on their own, and the light
+    // reads as coming from just past the edge of the card rather than from an
+    // object sitting in it - which is lighter, and leaves the middle of an
+    // empty state actually empty.
 
     // The horizon: three lines, shortening and fading downwards so the eye
     // reads distance rather than a stack of dashes. The sun sits above them
