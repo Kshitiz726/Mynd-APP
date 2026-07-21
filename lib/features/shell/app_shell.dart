@@ -20,6 +20,7 @@ import '../schedule/schedule_screen.dart';
 import '../../core/routes/app_routes.dart';
 import '../../providers/focus_room_provider.dart';
 import '../home/home_screen.dart';
+import '../../widgets/focus_invite_listener.dart';
 import '../profile/profile_screen.dart';
 import 'widgets/live_focus_pill.dart';
 import 'widgets/om_nav_bar.dart';
@@ -96,7 +97,8 @@ class _AppShellState extends State<AppShell> {
     final hideNav = inFocusRoom || inChat || keyboardUp;
 
     return MemoryAutopilot(
-      child: LowStimFilter(
+      child: FocusInviteListener(
+        child: LowStimFilter(
         child: Scaffold(
           // The nav bar is glass, and glass needs something behind it. Without
           // extendBody the Scaffold reserves a strip of its own background colour
@@ -161,6 +163,7 @@ class _AppShellState extends State<AppShell> {
                   onCreate: () => _showCreateSheet(context),
                   alertsUnread: context.watch<AlertsProvider>().alertsUnread,
                 ),
+          ),
         ),
       ),
     );
