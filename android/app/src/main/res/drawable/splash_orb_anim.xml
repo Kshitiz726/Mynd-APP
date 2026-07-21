@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The vector plus its animator, which is what android:windowSplashScreenAnimatedIcon wants. -->
+<animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/splash_orb">
+    <target
+        android:name="swirl"
+        android:animation="@animator/splash_orb_spin" />
+</animated-vector>

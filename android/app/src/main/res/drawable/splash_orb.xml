@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The orb, as a vector, for the system splash.
+
+     This exists because the window between tapping the icon and Flutter's
+     first frame belongs to Android, not to us: no Dart has run yet, so the
+     shader cannot draw. Leaving the system icon transparent made that window
+     blank cream, which reads as the app having failed to start.
+
+     So this is a hand-drawn stand-in for the shader orb - same brand ramp,
+     same off-centre light - that Android can paint immediately. The two are
+     never on screen at once, so it only has to rhyme with the real one, not
+     match it. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- The body. Lit from the upper left, like the shader. -->
+    <path android:pathData="M12,54 a42,42 0 1,0 84,0 a42,42 0 1,0 -84,0 z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="radial"
+                android:centerX="40"
+                android:centerY="38"
+                android:gradientRadius="64"
+                android:startColor="#B9B4F2"
+                android:centerColor="#6B70C9"
+                android:endColor="#4B4A85" />
+        </aapt:attr>
+    </path>
+
+    <!-- The folds. Rotated by the animator, so the orb turns rather than
+         sitting there being a logo. -->
+    <group
+        android:name="swirl"
+        android:pivotX="54"
+        android:pivotY="54">
+        <path
+            android:pathData="M29,42 a25,14 0 1,0 50,0 a25,14 0 1,0 -50,0 z"
+            android:fillColor="#59F0A479" />
+        <path
+            android:pathData="M33,68 a21,11 0 1,0 42,0 a21,11 0 1,0 -42,0 z"
+            android:fillColor="#4D5C8AD0" />
+    </group>
+
+    <!-- The wet highlight. -->
+    <path
+        android:pathData="M34,34 a9,7 0 1,0 18,0 a9,7 0 1,0 -18,0 z"
+        android:fillColor="#66FFFFFF" />
+</vector>

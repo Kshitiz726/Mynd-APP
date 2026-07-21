@@ -24,22 +24,37 @@ import '../../widgets/fluid_orb.dart';
 /// because a splash that flashes past reads as a stutter rather than an
 /// entrance. And it leaves on a fade, never a cut.
 class SplashScreen extends StatefulWidget {
-  const SplashScreen({super.key, required this.next});
+  const SplashScreen({super.key, required this.next, required this.bootAt});
 
   /// Where we are actually going: the shell if there is a session, the login
   /// screen if there is not. Decided before the app was built; this screen only
   /// covers the gap.
   final String next;
 
+  /// When `main()` began.
+  ///
+  /// The wait is measured from here rather than from this widget being built,
+  /// so a slow start does not *add* to it. Restoring the session, loading coach
+  /// memory and setting up notification channels all happen before runApp, and
+  /// counting from the widget would have stacked the splash on top of that
+  /// instead of overlapping it.
+  final DateTime bootAt;
+
   @override
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
 class _SplashScreenState extends State<SplashScreen> {
+  /// How long the whole entrance lasts, measured from `main()`.
+  ///
   /// Long enough to watch the orb actually move through a shape or two, which
-  /// is the point of it being alive rather than a logo. Anything under about
-  /// three seconds and it reads as a flash on the way past.
-  static const _minShow = Duration(milliseconds: 3500);
+  /// is the point of it being alive rather than a logo.
+  static const _total = Duration(milliseconds: 4000);
+
+  /// Never less than this, however slow the boot was. Without a floor, a start
+  /// that took nearly the whole budget would leave the orb on screen for a few
+  /// frames, which reads as a glitch rather than an entrance.
+  static const _floor = Duration(milliseconds: 1400);
   static const _fadeOut = Duration(milliseconds: 520);
 
   bool _leaving = false;
@@ -57,10 +72,13 @@ class _SplashScreenState extends State<SplashScreen> {
   Future<void> _run() async {
     _moving = !context.read<SettingsProvider>().reduceMotion;
 
-    // A flat wait now. There is nothing to preload: the orb is a shader, so it
-    // is ready on the frame it is first painted, which is the whole reason it
-    // replaced a video that had to be decoded before it could be shown.
-    await Future<void>.delayed(_minShow);
+    // Whatever is left of the budget after boot. There is nothing to preload -
+    // the orb is a shader, ready on the frame it is first painted, which is
+    // the whole reason it replaced a video that had to be decoded first - so
+    // this is purely about how long the entrance should last.
+    final spent = DateTime.now().difference(widget.bootAt);
+    final left = _total - spent;
+    await Future<void>.delayed(left < _floor ? _floor : left);
     if (!mounted) return;
 
     setState(() => _leaving = true);

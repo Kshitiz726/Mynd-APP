@@ -52,6 +52,11 @@ final rootNavigatorKey = GlobalKey<NavigatorState>();
 const kDemoMode = bool.fromEnvironment('OURMYND_DEMO');
 
 void main() async {
+  // Stamped before anything else so the launch screen can measure its own
+  // duration from the true start of the app rather than from the moment it is
+  // built - everything below this line happens while the system splash is
+  // still up, and should be overlapped by the entrance, not added to it.
+  final bootAt = DateTime.now();
   WidgetsFlutterBinding.ensureInitialized();
 
   // Coach memory (parked thoughts + rolling summary) is app-wide; load it once
@@ -74,13 +79,21 @@ void main() async {
 
   runApp(OurMyndApp(
     initialRoute: (hasSession || kDemoMode) ? AppRoutes.shell : AppRoutes.login,
+    bootAt: bootAt,
   ));
 }
 
 class OurMyndApp extends StatelessWidget {
-  const OurMyndApp({super.key, required this.initialRoute});
+  const OurMyndApp({
+    super.key,
+    required this.initialRoute,
+    required this.bootAt,
+  });
 
   final String initialRoute;
+
+  /// When main() began. Handed to the launch screen so it can time itself.
+  final DateTime bootAt;
 
   @override
   Widget build(BuildContext context) {
@@ -176,7 +189,7 @@ class OurMyndApp extends StatelessWidget {
             // [initialRoute] once it has played. `home` rather than
             // `initialRoute` because the splash needs to be told where it is
             // going, and a named initial route has nowhere to carry that.
-            home: SplashScreen(next: initialRoute),
+            home: SplashScreen(next: initialRoute, bootAt: bootAt),
             onGenerateRoute: AppRouter.onGenerateRoute,
             // Keep the Puter.js bridge alive app-wide, off-screen, above routes.
             //
