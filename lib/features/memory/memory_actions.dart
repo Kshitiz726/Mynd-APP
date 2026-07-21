@@ -37,7 +37,21 @@ Future<void> refreshMemory(BuildContext context,
     {bool haptic = true, bool quiet = false}) async {
   if (haptic) Haptics.medium();
   final memory = context.read<MemoryProvider>();
-  final snapshot = buildMemorySnapshot(
+  await memory.refresh(snapshotOf(context));
+  if (!quiet && context.mounted && memory.error != null) {
+    Toast.show(context, memory.error!);
+  }
+}
+
+/// Everything the app can currently see about the user, as prose.
+///
+/// Assembled here rather than in a provider because only the widget tree has
+/// all the other providers to hand. Shared by the memory and by the mood
+/// reading, deliberately: two different claims about the same person should
+/// not be drawn from two different pictures of them.
+String snapshotOf(BuildContext context) {
+  final memory = context.read<MemoryProvider>();
+  return buildMemorySnapshot(
     userName: memory.preferredName?.isNotEmpty == true
         ? memory.preferredName!
         : (ApiConfig.instance.displayName ?? 'friend'),
@@ -50,10 +64,26 @@ Future<void> refreshMemory(BuildContext context,
     // What they have actually been saying to the coach, in their own words.
     recentChat: context.read<CoachProvider>().recentTranscript(),
   );
-  await memory.refresh(snapshot);
-  if (!quiet && context.mounted && memory.error != null) {
-    Toast.show(context, memory.error!);
-  }
+}
+
+/// Ask the model how this person seems to be doing.
+///
+/// Given the same picture as the memory, plus the memory itself and the
+/// thoughts they parked mid-focus - which are the highest-signal thing in the
+/// app, because a thought worth interrupting yourself over is rarely a small
+/// one. Failures are silent: nobody asked for this, and a stale reading beats
+/// an error about a reading.
+Future<void> readMood(BuildContext context) async {
+  final memory = context.read<MemoryProvider>();
+  final mood = context.read<MoodProvider>();
+  final parked = memory.parked.isEmpty
+      ? ''
+      : memory.parked.take(12).map((t) => '- ${t.text}').join('\n');
+  await mood.predict(
+    snapshotOf(context),
+    memory: memory.memory.text,
+    parked: parked,
+  );
 }
 
 /// Hand-edit the memory. The whole point is that the user gets the last word.

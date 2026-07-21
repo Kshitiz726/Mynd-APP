@@ -7,6 +7,7 @@ import '../../../core/utils/haptics.dart';
 import '../../../providers/mood_provider.dart';
 import '../../../widgets/om_glass.dart';
 import '../../../widgets/om_tappable.dart';
+import 'mood_gauge.dart';
 
 /// Today's mood plus the fortnight behind it.
 ///
@@ -48,27 +49,7 @@ class MoodBar extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    MoodOrb(mood: today?.mood, size: 26),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        today == null
-                            ? 'how are you today?'
-                            : 'today feels ${today.mood.label}',
-                        style: Theme.of(context).textTheme.titleSmall,
-                      ),
-                    ),
-                    Text(
-                      today == null ? 'check in' : 'change',
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: c.primary,
-                            fontWeight: FontWeight.w800,
-                          ),
-                    ),
-                  ],
-                ),
+                _Read(mood: mood, today: today),
                 const SizedBox(height: 14),
                 SizedBox(
                   height: 34,
@@ -95,6 +76,80 @@ class MoodBar extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// The dial, and the sentence explaining what it is claiming.
+///
+/// Three states, and the difference between them is who is talking. If they
+/// checked in, the needle is their word and the caption says so. If they have
+/// not, it is the app's guess and the caption is the app's reason, hedged out
+/// loud - being told how you feel by software is only tolerable when the
+/// software shows its working and can be corrected in one tap. With neither,
+/// the dial is empty rather than resting at "okay".
+class _Read extends StatelessWidget {
+  const _Read({required this.mood, required this.today});
+
+  final MoodProvider mood;
+  final MoodEntry? today;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.omColors;
+    final read = mood.reading;
+    final mine = today != null;
+    final shown = today?.mood ?? read?.mood;
+
+    final String headline;
+    final String caption;
+    // The mood word itself lives in the middle of the dial, so nothing here
+    // repeats it. This side is only ever about who said it and why.
+    if (mine) {
+      headline = 'your check-in';
+      caption = 'you logged this today';
+    } else if (read != null) {
+      headline = 'my read on today';
+      caption = read.why.isEmpty ? 'a guess, from what I have seen' : read.why;
+    } else if (mood.predicting) {
+      headline = 'reading your week';
+      caption = 'one moment';
+    } else {
+      headline = 'how are you today?';
+      caption = 'check in, or give me a few days to learn your shape';
+    }
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        MoodGauge(mood: shown, size: 104, pending: mood.predicting),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(headline, style: Theme.of(context).textTheme.titleSmall),
+              const SizedBox(height: 4),
+              Text(
+                caption,
+                style: Theme.of(context)
+                    .textTheme
+                    .labelSmall
+                    ?.copyWith(color: c.text2, height: 1.4),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                mine ? 'change' : 'check in',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: c.primary,
+                      fontWeight: FontWeight.w800,
+                    ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

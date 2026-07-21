@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../features/memory/memory_actions.dart';
 import '../providers/coach_provider.dart';
 import '../providers/memory_provider.dart';
+import '../providers/mood_provider.dart';
 
 /// Keeps "what OurMynd knows about you" current without anybody pressing
 /// anything.
@@ -36,6 +37,7 @@ class _MemoryAutopilotState extends State<MemoryAutopilot> {
   Widget build(BuildContext context) {
     final coach = context.watch<CoachProvider>();
     final memory = context.watch<MemoryProvider>();
+    final mood = context.watch<MoodProvider>();
 
     if (coach.completedTurns != _seenTurns) {
       _seenTurns = coach.completedTurns;
@@ -44,16 +46,24 @@ class _MemoryAutopilotState extends State<MemoryAutopilot> {
 
     // Never mid-reply: the transcript we would snapshot is half-written, and
     // the model call would compete with the one the user is waiting on.
-    if (memory.wantsRefresh && !coach.isStreaming && !_running) {
-      _running = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
-        if (!mounted) {
+    if (!coach.isStreaming && !_running) {
+      // Memory first, and the mood only once it is settled - the reading is
+      // given the profile as input, so doing them the other way round reads
+      // yesterday's picture of the user and then immediately replaces it.
+      final Future<void> Function(BuildContext)? job = memory.wantsRefresh
+          ? (ctx) => refreshMemory(ctx, haptic: false, quiet: true)
+          : (mood.wantsReading ? readMood : null);
+      if (job != null) {
+        _running = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          if (!mounted) {
+            _running = false;
+            return;
+          }
+          await job(context);
           _running = false;
-          return;
-        }
-        await refreshMemory(context, haptic: false, quiet: true);
-        _running = false;
-      });
+        });
+      }
     }
 
     return widget.child;

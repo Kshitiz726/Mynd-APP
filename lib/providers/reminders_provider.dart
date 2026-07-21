@@ -17,9 +17,8 @@ import '../services/notification_service.dart';
 /// could only fire while the app was open and in front of you.
 ///
 /// Every change here ends in [_sync], which hands the whole set to the system
-/// scheduler. That is deliberately blunt: cancelling everything and re-adding
-/// what should exist is cheap, and it cannot drift out of step with what the
-/// screen is showing, which a clever diff eventually would.
+/// scheduler and cancels only what is genuinely no longer wanted. See
+/// [_kScheduled] for why it cannot simply clear the slate first.
 class RemindersProvider extends ChangeNotifier {
   RemindersProvider() {
     _load();
