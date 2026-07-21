@@ -3,8 +3,11 @@ import 'package:provider/provider.dart';
 
 import '../features/memory/memory_actions.dart';
 import '../providers/coach_provider.dart';
+import '../providers/goal_provider.dart';
+import '../providers/habit_provider.dart';
 import '../providers/memory_provider.dart';
 import '../providers/mood_provider.dart';
+import '../providers/task_provider.dart';
 
 /// Keeps "what OurMynd knows about you" current without anybody pressing
 /// anything.
@@ -31,6 +34,7 @@ class MemoryAutopilot extends StatefulWidget {
 
 class _MemoryAutopilotState extends State<MemoryAutopilot> {
   int _seenTurns = 0;
+  String? _seenStamp;
   bool _running = false;
 
   @override
@@ -38,10 +42,35 @@ class _MemoryAutopilotState extends State<MemoryAutopilot> {
     final coach = context.watch<CoachProvider>();
     final memory = context.watch<MemoryProvider>();
     final mood = context.watch<MoodProvider>();
+    final tasks = context.watch<TaskProvider>();
+    final goals = context.watch<GoalProvider>();
+    final habits = context.watch<HabitProvider>();
 
     if (coach.completedTurns != _seenTurns) {
       _seenTurns = coach.completedTurns;
       memory.markDirty();
+    }
+
+    // Anything else the user actually did. Finishing a task, adding a goal,
+    // keeping a habit and logging a mood all change who the profile is about,
+    // and none of them used to count: the memory only listened to the coach,
+    // so a week of real work could go in and the profile would still be
+    // describing the last conversation.
+    //
+    // A stamp of counts rather than deep equality. It is compared on every
+    // build, so it has to be cheap, and it only has to be right about "has
+    // something happened" - the cooldown decides whether that is worth a call,
+    // and getting the answer a few minutes late costs nothing.
+    final stamp = '${tasks.all.length}/${tasks.doneCount}'
+        '·${goals.goals.length}/${goals.activeCount}'
+        '·${habits.boards.length}'
+        '·${mood.entries.length}/${mood.today?.mood.name ?? '-'}';
+    if (_seenStamp != stamp) {
+      final first = _seenStamp == null;
+      _seenStamp = stamp;
+      // The first build is not a change, it is just the app finding out what
+      // is already there.
+      if (!first) memory.markDirty();
     }
 
     // Never mid-reply: the transcript we would snapshot is half-written, and

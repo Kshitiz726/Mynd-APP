@@ -6,7 +6,6 @@ import '../../core/constants/app_spacing.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/om_icons.dart';
 import '../../models/task.dart';
-import '../../providers/energy_provider.dart';
 import '../../providers/goal_provider.dart';
 import '../../providers/mood_provider.dart';
 import '../../providers/settings_provider.dart';
@@ -14,15 +13,12 @@ import '../../providers/task_provider.dart';
 import '../../widgets/om_chip.dart';
 import '../../widgets/om_states.dart';
 import '../../widgets/om_tappable.dart';
-import '../../widgets/vibe_pill.dart';
-import 'widgets/day_timeline.dart';
-import 'widgets/energy_sheet.dart';
+import 'widgets/mynd_hero.dart';
 import 'widgets/home_banners.dart';
 import 'widgets/home_dashboard.dart';
 import 'widgets/mood_bar.dart';
 import 'widgets/progress_bars.dart';
 import 'widgets/task_tile.dart';
-import 'widgets/week_strip.dart';
 
 /// The "Today" dashboard - the app's home base.
 ///
@@ -64,7 +60,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final energy = context.watch<EnergyProvider>().current;
     final c = context.omColors;
     // Watched, so the prompt fires as soon as stored moods have loaded.
     context.watch<MoodProvider>();
@@ -120,23 +115,25 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             const LowStimBanner(),
             const HomeTopBar(),
-            const HomeHero(),
-            const SizedBox(height: AppSpacing.lg),
-            Center(
-              child: VibePill(energy: energy, onTap: () => showEnergyPicker(context)),
-            ),
+            const MyndHero(),
             const SizedBox(height: AppSpacing.xl),
+
+            // What is in your head, first. Everything below this is the app
+            // reporting on you; this is the one thing that only you can put
+            // there, and it is worth nothing if you have to scroll past three
+            // cards to reach it while holding the thought.
+            const BrainDumpCard(),
+
+            const OmSectionHeader('do this now'),
+            const QuickActions(),
+
+            const SizedBox(height: AppSpacing.md),
             const ProgressBars(),
             const MoodBar(),
 
             const OmSectionHeader('your goals'),
             const GoalAchievementCard(),
             const GoalsList(),
-            const BrainDumpCard(),
-
-            const OmSectionHeader('do this now'),
-            const QuickActions(),
-
           ],
         ),
       ],

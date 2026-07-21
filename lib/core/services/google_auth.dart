@@ -11,8 +11,12 @@ import 'package:google_sign_in/google_sign_in.dart';
 class GoogleAuth {
   GoogleAuth._();
 
-  static const _serverClientId =
+  /// Compiled in, so a build made without the --dart-define has an empty one
+  /// and can never obtain an ID token. Public because that is a failure the
+  /// login screen has to be able to name.
+  static const serverClientId =
       String.fromEnvironment('GOOGLE_SERVER_CLIENT_ID');
+  static const _serverClientId = serverClientId;
 
   static final GoogleSignIn instance = (!kIsWeb && _serverClientId.isNotEmpty)
       ? GoogleSignIn(

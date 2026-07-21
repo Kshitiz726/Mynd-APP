@@ -117,12 +117,23 @@ class _LoginScreenState extends State<LoginScreen>
         final auth = await account.authentication;
         final idToken = auth.idToken;
         if (idToken == null) {
+          // Google hands back an ID token only when it knows who is asking.
+          // Nine times out of ten the answer is that this particular build was
+          // compiled without the client id - it is a --dart-define, so a plain
+          // `flutter run` or `flutter build apk` silently produces an app that
+          // can sign in with Google and never get a token. Say which of the two
+          // it is rather than sending them to the Cloud console for a problem
+          // that is in the build command.
           throw kIsWeb
               ? 'No ID token from Google. Check the Web Client ID in web/index.html '
                   'and that your origin is an authorised JavaScript origin.'
-              : 'No ID token from Google. Pass your Web Client ID via '
-                  '--dart-define=GOOGLE_SERVER_CLIENT_ID=… and register an Android '
-                  'OAuth client (package name + SHA-1).';
+              : GoogleAuth.serverClientId.isEmpty
+                  ? 'This build has no Google client id compiled in. Run it with '
+                      '--dart-define=GOOGLE_SERVER_CLIENT_ID=… (see '
+                      'run-android.local.sh) rather than a bare flutter run.'
+                  : 'Google returned no ID token even though a client id is set. '
+                      'Check that an Android OAuth client exists for this package '
+                      'name and signing SHA-1.';
         }
         await ApiClient.instance.authWithGoogleIdToken(idToken);
       } else if (_desktopClientId.isNotEmpty) {
