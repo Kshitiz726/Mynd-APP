@@ -49,7 +49,7 @@ class _SplashScreenState extends State<SplashScreen> {
   ///
   /// Long enough to watch the orb actually move through a shape or two, which
   /// is the point of it being alive rather than a logo.
-  static const _total = Duration(milliseconds: 4000);
+  static const _total = Duration(milliseconds: 5000);
 
   /// Never less than this, however slow the boot was. Without a floor, a start
   /// that took nearly the whole budget would leave the orb on screen for a few
