@@ -8,7 +8,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/community/chat_models.dart';
 import '../models/energy_level.dart';
 import '../models/task.dart';
-import '../services/notification_service.dart';
 import 'alerts_provider.dart';
 
 /// Backlog filter options. `null`-like "all" is represented by [BacklogFilter.all].
@@ -351,8 +350,6 @@ class TaskProvider extends ChangeNotifier {
     final packingToday = _isSameDay(target, now);
     final floor = packingToday ? now : DateTime(target.year, target.month, target.day);
 
-    NotificationService().cancelAll();
-
     // Drop previous anchors, habit blocks and chunks from a prior run on this
     // day so re-running is idempotent (no "(1/2) (1/2)" stacking).
     _tasks.removeWhere((t) =>
@@ -431,7 +428,6 @@ class TaskProvider extends ChangeNotifier {
           // Schedule the task itself in place.
           t.startTime = cursor;
           t.scheduled = true;
-          _scheduleAlarm(t, cursor, ringtone);
           alerts.addLocalReminder(AppNotification(
             id: 'rem-${t.id}', kind: 'reminder', read: false,
             payload: {'title': t.title, 'time': DateFormat.jm().format(cursor)},
@@ -453,7 +449,6 @@ class TaskProvider extends ChangeNotifier {
             ..startTime = cursor
             ..duration = dur;
           chunkBlocks.add(chunk);
-          _scheduleAlarm(chunk, cursor, ringtone);
         }
         cursor = cursor.add(dur);
       }
@@ -479,16 +474,6 @@ class TaskProvider extends ChangeNotifier {
     return pieces;
   }
 
-  void _scheduleAlarm(Task t, DateTime at, String ringtone) {
-    NotificationService().scheduleAlarm(
-      id: t.id.hashCode,
-      title: 'Time for ${t.title}',
-      body: 'Get to it!',
-      scheduledTime: at,
-      ringtone: ringtone == 'Default' ? null : ringtone.toLowerCase(),
-    );
-  }
-
   /// Repack a manually reordered timeline. Available slots stay put - only the
   /// task blocks move - so packing starts at the first block's existing start
   /// (clamped to NOW) and lays the reordered blocks back-to-back from there.
@@ -507,8 +492,6 @@ class TaskProvider extends ChangeNotifier {
   ) {
     if (ordered.isEmpty) return;
 
-    NotificationService().cancelAll();
-
     final now = DateTime.now();
     // Never lay a block in the past on today's timeline.
     DateTime cursor = windowStart.isBefore(now) && _isSameDay(windowStart, now)
@@ -526,7 +509,6 @@ class TaskProvider extends ChangeNotifier {
       t.startTime = cursor;
       t.scheduled = true;
       cursor = cursor.add(dur);
-      _scheduleAlarm(t, t.startTime!, ringtone);
     }
     notifyListeners();
   }
@@ -700,11 +682,9 @@ class TaskProvider extends ChangeNotifier {
       cursor = newStart.add(dur);
     }
 
-    // Alarms are keyed by task id, so re-arm every block we touched.
-    _scheduleAlarm(task, start, ringtone);
-    for (final t in others) {
-      _scheduleAlarm(t, t.startTime!, ringtone);
-    }
+    // The OS schedule is not touched here. RemindersProvider watches the day
+    // and re-arms everything whenever a block moves, so there is one place
+    // that decides what the phone is going to say and when.
 
     notifyListeners();
     return cursor.isAfter(windowEnd) ? cursor.difference(windowEnd) : Duration.zero;
@@ -743,13 +723,6 @@ class TaskProvider extends ChangeNotifier {
     task.duration = end.difference(start);
     task.scheduled = true;
 
-    NotificationService().scheduleAlarm(
-      id: task.id.hashCode,
-      title: 'Time for ${task.title}',
-      body: 'Get to it!',
-      scheduledTime: start,
-      ringtone: ringtone == 'Default' ? null : ringtone.toLowerCase(),
-    );
     notifyListeners();
   }
 
@@ -822,7 +795,6 @@ class TaskProvider extends ChangeNotifier {
     task.scheduled = false;
     task.startTime = null;
     task.done = false;
-    NotificationService().cancelAlarm(task.id.hashCode);
     notifyListeners();
   }
 

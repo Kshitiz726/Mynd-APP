@@ -9,7 +9,6 @@ import '../core/services/groq_service.dart';
 import '../models/energy_level.dart';
 import '../models/goal.dart';
 import '../models/task.dart';
-import '../services/notification_service.dart';
 import 'task_provider.dart';
 
 /// Owns the user's goals and turns each one into a dated, day-by-day plan.
@@ -131,7 +130,6 @@ class GoalProvider extends ChangeNotifier {
         dailyMinutes: dailyMinutes,
       );
       _goals.add(goal);
-      _scheduleDeadlineReminder(goal);
       _injectFor(_day);
       _persist();
       return null;
@@ -162,18 +160,6 @@ class GoalProvider extends ChangeNotifier {
     _injectFor(_day);
     _persist();
     notifyListeners();
-  }
-
-  /// Fire a reminder at the goal's deadline (09:00 on the target day) so the
-  /// user gets nudged when a goal is due. Uses the app's shared reminder service.
-  void _scheduleDeadlineReminder(Goal goal) {
-    final due = DateTime(goal.targetDate.year, goal.targetDate.month, goal.targetDate.day, 9, 0);
-    NotificationService().scheduleAlarm(
-      id: 'goal-due-${goal.id}'.hashCode,
-      title: 'Goal due today: ${goal.title}',
-      body: 'Today is your deadline - finish strong! 💪',
-      scheduledTime: due,
-    );
   }
 
   /// Keep a goal milestone's done state in sync when its timeline task is ticked.

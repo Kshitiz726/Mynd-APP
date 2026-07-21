@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../features/home/widgets/memory_card.dart';
+import '../features/memory/memory_actions.dart';
 import '../providers/coach_provider.dart';
 import '../providers/memory_provider.dart';
 
@@ -51,7 +51,7 @@ class _MemoryAutopilotState extends State<MemoryAutopilot> {
           _running = false;
           return;
         }
-        await MemoryCard.refreshFrom(context, haptic: false, quiet: true);
+        await refreshMemory(context, haptic: false, quiet: true);
         _running = false;
       });
     }

@@ -19,7 +19,6 @@ import 'widgets/day_timeline.dart';
 import 'widgets/energy_sheet.dart';
 import 'widgets/home_banners.dart';
 import 'widgets/home_dashboard.dart';
-import 'widgets/memory_card.dart';
 import 'widgets/mood_bar.dart';
 import 'widgets/progress_bars.dart';
 import 'widgets/task_tile.dart';
@@ -129,7 +128,6 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: AppSpacing.xl),
             const ProgressBars(),
             const MoodBar(),
-            const MemoryCard(),
 
             const OmSectionHeader('your goals'),
             const GoalAchievementCard(),

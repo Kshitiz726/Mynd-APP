@@ -24,9 +24,11 @@ import 'providers/habit_provider.dart';
 import 'providers/memory_provider.dart';
 import 'providers/mood_provider.dart';
 import 'providers/nav_provider.dart';
+import 'providers/reminders_provider.dart';
 import 'providers/notes_provider.dart';
 import 'providers/settings_provider.dart';
 import 'providers/task_provider.dart';
+import 'services/notification_service.dart';
 import 'widgets/puter_host.dart';
 
 /// Root navigator key - lets the app-wide [PuterHost] present Puter's one-time
@@ -64,6 +66,9 @@ void main() async {
   }
 
   AlarmService.instance.init();
+  // Channels and the timezone database, up front. The permission itself is
+  // asked for on the first screen instead, where there is room to say why.
+  await NotificationService.instance.init();
 
   runApp(OurMyndApp(
     initialRoute: (hasSession || kDemoMode) ? AppRoutes.shell : AppRoutes.login,
@@ -100,6 +105,16 @@ class OurMyndApp extends StatelessWidget {
         ChangeNotifierProxyProvider<TaskProvider, GoalProvider>(
           create: (ctx) => GoalProvider(ctx.read<TaskProvider>()),
           update: (_, tasks, previous) => (previous ?? GoalProvider(tasks))..updateTasks(tasks),
+        ),
+        // Reminders hand themselves to the OS scheduler, and follow today's
+        // timed blocks so a block you move takes its nudge with it.
+        ChangeNotifierProxyProvider2<TaskProvider, GoalProvider,
+            RemindersProvider>(
+          create: (_) => RemindersProvider(),
+          update: (_, tasks, goals, previous) => (previous ??
+              RemindersProvider())
+            ..updateTasks(tasks.daySchedule)
+            ..updateGoals(goals.goals),
         ),
         // CoachProvider needs all 5 others - ProxyProvider wires them live.
         ChangeNotifierProxyProvider5<

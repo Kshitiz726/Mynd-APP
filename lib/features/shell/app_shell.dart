@@ -11,6 +11,7 @@ import '../../providers/nav_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../widgets/low_stim_filter.dart';
 import '../../widgets/memory_autopilot.dart';
+import '../../widgets/notification_primer.dart';
 import '../community/community_screen.dart';
 import '../focus/focus_active_screen.dart';
 import '../focus/focus_room_screen.dart';
@@ -54,7 +55,26 @@ class _AppShellState extends State<AppShell> {
       context.read<AlertsProvider>()
         ..init()
         ..load();
+      _askForNotifications();
     });
+  }
+
+  /// The one permission this app actually needs, asked for once, early, and out
+  /// of the way of anything else on screen.
+  ///
+  /// Home may be showing the mood check-in on the same frame, and two sheets
+  /// racing for the bottom of the screen means one of them is dismissed by
+  /// accident. So this waits for the shell to be the top route again before it
+  /// says anything, and gives up quietly if the user is busy.
+  Future<void> _askForNotifications() async {
+    for (var i = 0; i < 12; i++) {
+      await Future<void>.delayed(const Duration(seconds: 1));
+      if (!mounted) return;
+      if (!Navigator.of(context).canPop()) {
+        if (mounted) await maybeAskForNotifications(context);
+        return;
+      }
+    }
   }
 
   @override

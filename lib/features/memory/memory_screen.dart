@@ -9,7 +9,7 @@ import '../../core/utils/om_icons.dart';
 import '../../providers/memory_provider.dart';
 import '../../widgets/om_back_button.dart';
 import '../../widgets/om_tappable.dart';
-import '../home/widgets/memory_card.dart';
+import 'memory_actions.dart';
 
 /// Everything Mynd remembers about you, on its own screen.
 ///
@@ -53,7 +53,7 @@ class MemoryScreen extends StatelessWidget {
                     _Action(
                       icon: 'refresh',
                       tooltip: 'Update from what I have seen',
-                      onTap: () => MemoryCard.refreshFrom(context),
+                      onTap: () => refreshMemory(context),
                     ),
                     const SizedBox(width: 6),
                     _Action(

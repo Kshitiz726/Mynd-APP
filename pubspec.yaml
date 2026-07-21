@@ -28,6 +28,13 @@ dependencies:
 
   # Cross-session memory — stores conversation summary between app launches.
   shared_preferences: ^2.3.2
+
+  # Real OS notifications for reminders and alarms. The old service was an
+  # in-process Timer that played a sound, so nothing fired unless the app was
+  # already open and on screen, which is the one moment you do not need
+  # reminding. timezone is required by the plugin's zonedSchedule.
+  flutter_local_notifications: ^18.0.1
+  timezone: ^0.9.4
   lucide_icons_flutter: ^3.1.14+2
 
   # Realtime backend — Socket.IO client for the Community feed + Focus Rooms
