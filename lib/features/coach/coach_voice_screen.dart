@@ -23,7 +23,8 @@ class CoachVoiceScreen extends StatefulWidget {
   State<CoachVoiceScreen> createState() => _CoachVoiceScreenState();
 }
 
-class _CoachVoiceScreenState extends State<CoachVoiceScreen> with TickerProviderStateMixin {
+class _CoachVoiceScreenState extends State<CoachVoiceScreen>
+    with TickerProviderStateMixin {
   final _puter = PuterService.instance;
   late final AnimationController _breathe;
   late final AnimationController _ripple;
@@ -35,16 +36,18 @@ class _CoachVoiceScreenState extends State<CoachVoiceScreen> with TickerProvider
   String? _status; // transient in-screen message (replaces SnackBar)
   bool _busy = false;
   bool _cancelled = false;
-  
+
   int _highlightIndex = -1;
   Timer? _highlightTimer;
 
   @override
   void initState() {
     super.initState();
-    _breathe = AnimationController(vsync: this, duration: const Duration(milliseconds: 2400))
+    _breathe = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 2400))
       ..repeat(reverse: true);
-    _ripple = AnimationController(vsync: this, duration: const Duration(milliseconds: 1600))
+    _ripple = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 1600))
       ..repeat();
     _sub = _puter.voiceState.listen((s) {
       if (!mounted) return;
@@ -159,7 +162,8 @@ class _CoachVoiceScreenState extends State<CoachVoiceScreen> with TickerProvider
       await _puter.speak(reply);
     } catch (_) {
       _puter.resetVoice();
-      if (mounted) setState(() => _status = 'Something went wrong - tap to retry');
+      if (mounted)
+        setState(() => _status = 'Something went wrong - tap to retry');
     } finally {
       _resetBusy();
     }
@@ -169,7 +173,8 @@ class _CoachVoiceScreenState extends State<CoachVoiceScreen> with TickerProvider
     final words = text.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length;
     _highlightIndex = 0;
     _highlightTimer?.cancel();
-    _highlightTimer = Timer.periodic(const Duration(milliseconds: 300), (timer) {
+    _highlightTimer =
+        Timer.periodic(const Duration(milliseconds: 300), (timer) {
       if (!mounted) {
         timer.cancel();
         return;
@@ -222,7 +227,10 @@ class _CoachVoiceScreenState extends State<CoachVoiceScreen> with TickerProvider
                   ),
                   const Spacer(),
                   Text('Talk with Mynd',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(color: c.text2)),
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleMedium
+                          ?.copyWith(color: c.text2)),
                   const Spacer(),
                   OmAvatar(
                     userId: 'me',
@@ -244,12 +252,17 @@ class _CoachVoiceScreenState extends State<CoachVoiceScreen> with TickerProvider
                     if (_userText.isNotEmpty)
                       Text('“$_userText”',
                           textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: c.text2)),
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodyMedium
+                              ?.copyWith(color: c.text2)),
                     if (_replyText.isNotEmpty) ...[
                       const SizedBox(height: 18),
                       Flexible(
                         child: SingleChildScrollView(
-                          child: _HighlightedText(text: _replyText, highlightIndex: _highlightIndex),
+                          child: _HighlightedText(
+                              text: _replyText,
+                              highlightIndex: _highlightIndex),
                         ),
                       ),
                     ],
@@ -268,7 +281,8 @@ class _CoachVoiceScreenState extends State<CoachVoiceScreen> with TickerProvider
                 builder: (context, _) {
                   final active = _state != PuterVoiceState.idle;
                   final breathe = 0.5 + 0.5 * _breathe.value;
-                  final baseScale = 1.0 + (active ? 0.06 : 0.03) * math.sin(breathe * math.pi);
+                  final baseScale = 1.0 +
+                      (active ? 0.06 : 0.03) * math.sin(breathe * math.pi);
                   return SizedBox(
                     width: 240,
                     height: 240,
@@ -276,7 +290,8 @@ class _CoachVoiceScreenState extends State<CoachVoiceScreen> with TickerProvider
                       alignment: Alignment.center,
                       children: [
                         // Expanding ripples while listening/speaking
-                        if (_state == PuterVoiceState.listening || _state == PuterVoiceState.speaking)
+                        if (_state == PuterVoiceState.listening ||
+                            _state == PuterVoiceState.speaking)
                           ...List.generate(2, (i) {
                             final t = (_ripple.value + i / 2) % 1.0;
                             return Container(
@@ -284,7 +299,9 @@ class _CoachVoiceScreenState extends State<CoachVoiceScreen> with TickerProvider
                               height: 150 + t * 110,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                border: Border.all(color: orbColor.withValues(alpha: (1 - t) * 0.35)),
+                                border: Border.all(
+                                    color: orbColor.withValues(
+                                        alpha: (1 - t) * 0.35)),
                               ),
                             );
                           }),
@@ -299,7 +316,10 @@ class _CoachVoiceScreenState extends State<CoachVoiceScreen> with TickerProvider
                               gradient: LinearGradient(
                                 begin: Alignment.topLeft,
                                 end: Alignment.bottomRight,
-                                colors: [orbColor, Color.lerp(orbColor, c.accent, 0.5)!],
+                                colors: [
+                                  orbColor,
+                                  Color.lerp(orbColor, c.accent, 0.5)!
+                                ],
                               ),
                               boxShadow: [
                                 BoxShadow(
@@ -313,7 +333,8 @@ class _CoachVoiceScreenState extends State<CoachVoiceScreen> with TickerProvider
                               _state == PuterVoiceState.speaking
                                   ? Icons.graphic_eq_rounded
                                   : (_state == PuterVoiceState.thinking ||
-                                          _state == PuterVoiceState.transcribing)
+                                          _state ==
+                                              PuterVoiceState.transcribing)
                                       ? Icons.more_horiz_rounded
                                       : Icons.mic_rounded,
                               color: Colors.white,
@@ -360,7 +381,8 @@ class _HighlightedText extends StatelessWidget {
         TextSpan(
           text: words[i],
           style: TextStyle(
-            color: highlightIndex >= i ? c.text : c.text2.withValues(alpha: 0.4),
+            color:
+                highlightIndex >= i ? c.text : c.text2.withValues(alpha: 0.4),
           ),
         ),
       );
@@ -372,7 +394,10 @@ class _HighlightedText extends StatelessWidget {
     return RichText(
       textAlign: TextAlign.center,
       text: TextSpan(
-        style: Theme.of(context).textTheme.titleMedium?.copyWith(color: c.text, height: 1.4),
+        style: Theme.of(context)
+            .textTheme
+            .titleMedium
+            ?.copyWith(color: c.text, height: 1.4),
         children: spans,
       ),
     );

@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Default Puter chat model. Puter exposes 400+ models; swap freely.
 const String kPuterChatModel = 'gpt-5.4-nano';
@@ -93,7 +94,8 @@ class PuterService {
           var path = req.uri.path;
           if (path == '/' || path.isEmpty) path = '/bridge.html';
           final data = await rootBundle.load('assets/puter$path');
-          final bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+          final bytes =
+              data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
           req.response
             ..statusCode = 200
             ..headers.contentType = _contentTypeFor(path)
@@ -114,8 +116,10 @@ class PuterService {
 
   ContentType _contentTypeFor(String path) {
     if (path.endsWith('.html')) return ContentType.html;
-    if (path.endsWith('.js')) return ContentType('application', 'javascript', charset: 'utf-8');
-    if (path.endsWith('.css')) return ContentType('text', 'css', charset: 'utf-8');
+    if (path.endsWith('.js'))
+      return ContentType('application', 'javascript', charset: 'utf-8');
+    if (path.endsWith('.css'))
+      return ContentType('text', 'css', charset: 'utf-8');
     return ContentType.binary;
   }
 
@@ -132,65 +136,88 @@ class PuterService {
   void attachController(InAppWebViewController controller) {
     _controller = controller;
     controller
-      ..addJavaScriptHandler(handlerName: 'onReady', callback: (args) {
-        if (!_ready.isCompleted) _ready.complete();
-        final d = args.isNotEmpty ? args.first as Map : const {};
-        _setSignedIn(d['signedIn'] == true);
-        debugPrint('[puter] bridge ready (signedIn=$signedIn)');
-      })
-      ..addJavaScriptHandler(handlerName: 'onAuth', callback: (args) {
-        final d = args.first as Map;
-        _setSignedIn(d['signedIn'] == true);
-        debugPrint('[puter] auth → signedIn=$signedIn ${d['error'] ?? ''}');
-      })
-      ..addJavaScriptHandler(handlerName: 'onLog', callback: (args) {
-        debugPrint('[puter:log] ${args.first}');
-      })
-      ..addJavaScriptHandler(handlerName: 'onChunk', callback: (args) {
-        final d = args.first as Map;
-        final id = d['id'] as int;
-        _watchdogs.remove(id)?.cancel(); // first token → no longer "stuck"
-        _chatStreams[id]?.add((d['chunk'] ?? '') as String);
-      })
-      ..addJavaScriptHandler(handlerName: 'onDone', callback: (args) {
-        final d = args.first as Map;
-        final id = d['id'] as int;
-        _watchdogs.remove(id)?.cancel();
-        _completes.remove(id)?.complete((d['full'] ?? '') as String);
-        final s = _chatStreams.remove(id);
-        if (s != null && !s.isClosed) s.close();
-      })
-      ..addJavaScriptHandler(handlerName: 'onError', callback: (args) {
-        final d = args.first as Map;
-        final id = d['id'] as int? ?? -1;
-        _watchdogs.remove(id)?.cancel();
-        final err = PuterException((d['error'] ?? 'puter error') as String);
-        debugPrint('[puter] error: ${err.message}');
-        _completes.remove(id)?.completeError(err);
-        final s = _chatStreams.remove(id);
-        if (s != null && !s.isClosed) {
-          s.addError(err);
-          s.close();
-        }
-      })
-      ..addJavaScriptHandler(handlerName: 'onVoiceState', callback: (args) {
-        final st = ((args.first as Map)['state'] ?? 'idle') as String;
-        _emitState(switch (st) {
-          'listening' => PuterVoiceState.listening,
-          'transcribing' => PuterVoiceState.transcribing,
-          'speaking' => PuterVoiceState.speaking,
-          _ => PuterVoiceState.idle,
-        });
-      })
-      ..addJavaScriptHandler(handlerName: 'onTranscript', callback: (args) {
-        _transcript?.complete(((args.first as Map)['text'] ?? '') as String);
-        _transcript = null;
-      })
-      ..addJavaScriptHandler(handlerName: 'onSpoken', callback: (_) {
-        _emitState(PuterVoiceState.idle);
-        _spoken?.complete();
-        _spoken = null;
-      });
+      ..addJavaScriptHandler(
+          handlerName: 'onReady',
+          callback: (args) {
+            if (!_ready.isCompleted) _ready.complete();
+            final d = args.isNotEmpty ? args.first as Map : const {};
+            _setSignedIn(d['signedIn'] == true);
+            debugPrint('[puter] bridge ready (signedIn=$signedIn)');
+            // A fresh WebView starts signed out even for someone who connected
+            // months ago, so hand it back the token we kept rather than sending
+            // them through a sign-in they have already done.
+            if (!signedIn) unawaited(restoreSavedSession());
+          })
+      ..addJavaScriptHandler(
+          handlerName: 'onAuth',
+          callback: (args) {
+            final d = args.first as Map;
+            _setSignedIn(d['signedIn'] == true);
+            debugPrint('[puter] auth → signedIn=$signedIn ${d['error'] ?? ''}');
+          })
+      ..addJavaScriptHandler(
+          handlerName: 'onLog',
+          callback: (args) {
+            debugPrint('[puter:log] ${args.first}');
+          })
+      ..addJavaScriptHandler(
+          handlerName: 'onChunk',
+          callback: (args) {
+            final d = args.first as Map;
+            final id = d['id'] as int;
+            _watchdogs.remove(id)?.cancel(); // first token → no longer "stuck"
+            _chatStreams[id]?.add((d['chunk'] ?? '') as String);
+          })
+      ..addJavaScriptHandler(
+          handlerName: 'onDone',
+          callback: (args) {
+            final d = args.first as Map;
+            final id = d['id'] as int;
+            _watchdogs.remove(id)?.cancel();
+            _completes.remove(id)?.complete((d['full'] ?? '') as String);
+            final s = _chatStreams.remove(id);
+            if (s != null && !s.isClosed) s.close();
+          })
+      ..addJavaScriptHandler(
+          handlerName: 'onError',
+          callback: (args) {
+            final d = args.first as Map;
+            final id = d['id'] as int? ?? -1;
+            _watchdogs.remove(id)?.cancel();
+            final err = PuterException((d['error'] ?? 'puter error') as String);
+            debugPrint('[puter] error: ${err.message}');
+            _completes.remove(id)?.completeError(err);
+            final s = _chatStreams.remove(id);
+            if (s != null && !s.isClosed) {
+              s.addError(err);
+              s.close();
+            }
+          })
+      ..addJavaScriptHandler(
+          handlerName: 'onVoiceState',
+          callback: (args) {
+            final st = ((args.first as Map)['state'] ?? 'idle') as String;
+            _emitState(switch (st) {
+              'listening' => PuterVoiceState.listening,
+              'transcribing' => PuterVoiceState.transcribing,
+              'speaking' => PuterVoiceState.speaking,
+              _ => PuterVoiceState.idle,
+            });
+          })
+      ..addJavaScriptHandler(
+          handlerName: 'onTranscript',
+          callback: (args) {
+            _transcript
+                ?.complete(((args.first as Map)['text'] ?? '') as String);
+            _transcript = null;
+          })
+      ..addJavaScriptHandler(
+          handlerName: 'onSpoken',
+          callback: (_) {
+            _emitState(PuterVoiceState.idle);
+            _spoken?.complete();
+            _spoken = null;
+          });
   }
 
   void _emitState(PuterVoiceState s) {
@@ -209,12 +236,59 @@ class PuterService {
 
   /// Hand the off-screen bridge the token obtained by the visible Connect screen
   /// (separate webview), so it becomes authenticated without its own popup.
+  ///
+  /// The token is also written to disk. Connecting Puter is a one-time job from
+  /// the user's point of view, and it has to actually be one: the WebView's own
+  /// storage is not a promise, it is a cache the OS is free to clear, and every
+  /// time it did the user was asked to sign in to something they had already
+  /// signed in to. Keeping our own copy makes the promise ours to keep.
   Future<void> applyToken(String token) async {
     if (token.isEmpty) {
       refreshAuth();
       return;
     }
+    await _saveToken(token);
     await _eval("window.omApplyToken('${_encStr(token)}');");
+  }
+
+  static const _kToken = 'om_puter_token';
+
+  Future<void> _saveToken(String token) async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.setString(_kToken, token);
+    } catch (e) {
+      debugPrint('[puter] token save failed: $e');
+    }
+  }
+
+  /// Re-authenticate the bridge from the token we saved last time.
+  ///
+  /// Called when the bridge reports ready and says it is signed out. If we have
+  /// a token, the user has connected before and should not be asked again; if
+  /// the token has been revoked server-side the bridge will simply report
+  /// signed-out once more and the gate appears, which is the correct outcome.
+  Future<bool> restoreSavedSession() async {
+    if (signedIn) return true;
+    try {
+      final p = await SharedPreferences.getInstance();
+      final token = p.getString(_kToken);
+      if (token == null || token.isEmpty) return false;
+      await _eval("window.omApplyToken('${_encStr(token)}');");
+      return true;
+    } catch (e) {
+      debugPrint('[puter] token restore failed: $e');
+      return false;
+    }
+  }
+
+  /// Forget the connection entirely. Only for sign-out.
+  Future<void> clearSavedSession() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.remove(_kToken);
+    } catch (_) {}
+    _setSignedIn(false);
   }
 
   /// Reload the bridge page (re-reads any shared-storage Puter token).
@@ -233,7 +307,8 @@ class PuterService {
   /// Streams the assistant reply token-by-token via `puter.ai.chat(stream:true)`.
   /// A watchdog guarantees the stream errors instead of hanging forever (e.g.
   /// when Puter isn't signed in) so the coach never sticks on "…".
-  Stream<String> streamCompletion(List<Map<String, String>> messages, {String? model}) {
+  Stream<String> streamCompletion(List<Map<String, String>> messages,
+      {String? model}) {
     final id = _seq++;
     final ctrl = StreamController<String>();
     _chatStreams[id] = ctrl;
@@ -241,12 +316,14 @@ class PuterService {
       _watchdogs.remove(id);
       final s = _chatStreams.remove(id);
       if (s != null && !s.isClosed) {
-        s.addError(PuterException(
-            signedIn ? 'Puter timed out - try again' : 'Not connected to Puter - tap "Connect Puter"'));
+        s.addError(PuterException(signedIn
+            ? 'Puter timed out - try again'
+            : 'Not connected to Puter - tap "Connect Puter"'));
         s.close();
       }
     });
-    _eval("window.omChat($id, '${_enc(messages)}', '${model ?? this.model}');").catchError((Object e) {
+    _eval("window.omChat($id, '${_enc(messages)}', '${model ?? this.model}');")
+        .catchError((Object e) {
       _watchdogs.remove(id)?.cancel();
       if (!ctrl.isClosed) {
         ctrl.addError(e);
@@ -262,11 +339,13 @@ class PuterService {
   }
 
   /// Blocking completion - for memory summarisation.
-  Future<String> complete(List<Map<String, String>> messages, {String? model}) async {
+  Future<String> complete(List<Map<String, String>> messages,
+      {String? model}) async {
     final id = _seq++;
     final c = Completer<String>();
     _completes[id] = c;
-    await _eval("window.omComplete($id, '${_enc(messages)}', '${model ?? this.model}');");
+    await _eval(
+        "window.omComplete($id, '${_enc(messages)}', '${model ?? this.model}');");
     return c.future.timeout(const Duration(seconds: 45), onTimeout: () {
       _completes.remove(id);
       throw PuterException('completion timed out');
@@ -281,7 +360,8 @@ class PuterService {
   Future<String> stopAndTranscribe() {
     _transcript = Completer<String>();
     _eval('window.omStopVoice();');
-    return _transcript!.future.timeout(const Duration(seconds: 30), onTimeout: () {
+    return _transcript!.future.timeout(const Duration(seconds: 30),
+        onTimeout: () {
       _transcript = null;
       return '';
     });

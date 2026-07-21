@@ -47,7 +47,8 @@ class _PuterConnectScreenState extends State<PuterConnectScreen> {
     _done = true;
     if (ok && token.isNotEmpty) await PuterService.instance.applyToken(token);
     PuterService.instance.refreshAuth();
-    if (mounted && Navigator.of(context).canPop()) Navigator.of(context).pop(ok);
+    if (mounted && Navigator.of(context).canPop())
+      Navigator.of(context).pop(ok);
   }
 
   @override
@@ -89,7 +90,8 @@ class _PuterConnectScreenState extends State<PuterConnectScreen> {
       key: const ValueKey('puter-connect'),
       webViewEnvironment: PuterService.instance.env,
       initialUrlRequest: URLRequest(
-          url: WebUri('http://localhost:${PuterService.instance.serverPort}/connect.html')),
+          url: WebUri(
+              'http://localhost:${PuterService.instance.serverPort}/connect.html')),
       initialSettings: _settings,
       onWebViewCreated: (controller) {
         controller.addJavaScriptHandler(
@@ -104,9 +106,11 @@ class _PuterConnectScreenState extends State<PuterConnectScreen> {
         resources: request.resources,
         action: PermissionResponseAction.GRANT,
       ),
-      onConsoleMessage: (_, msg) => debugPrint('[puter:connect] ${msg.message}'),
+      onConsoleMessage: (_, msg) =>
+          debugPrint('[puter:connect] ${msg.message}'),
       onCreateWindow: (controller, action) async {
-        debugPrint('[puter] connect onCreateWindow (windowId=${action.windowId})');
+        debugPrint(
+            '[puter] connect onCreateWindow (windowId=${action.windowId})');
         setState(() => _popupWindowId = action.windowId);
         return true;
       },

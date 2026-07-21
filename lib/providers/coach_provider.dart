@@ -97,6 +97,7 @@ class CoachProvider extends ChangeNotifier {
       notifyListeners();
     }
   }
+
   final _contextBuilder = CoachContextBuilder.instance;
   final _promptBuilder = CoachPromptBuilder.instance;
 
@@ -106,7 +107,8 @@ class CoachProvider extends ChangeNotifier {
   bool _isLoading = false;
   String? _errorMessage;
   StreamSubscription<String>? _streamSub;
-  Completer<String>? _turnDone; // completes with the full reply when a turn ends
+  Completer<String>?
+      _turnDone; // completes with the full reply when a turn ends
 
   // ─── Getters ──────────────────────────────────────────────────────────────
 
@@ -122,6 +124,88 @@ class CoachProvider extends ChangeNotifier {
   // ─── Persistence ──────────────────────────────────────────────────────────
 
   static const _kLog = 'om_coach_log';
+
+  /// Past conversations, newest last on disk and newest first in [threads].
+  static const _kThreads = 'om_coach_threads';
+
+  /// How many past conversations we keep. A coach history is a comfort, not an
+  /// archive; past this the older ones have already been folded into the
+  /// rolling memory anyway, so the words are gone but the person is not.
+  static const _threadCap = 40;
+
+  final List<CoachThread> _threads = [];
+
+  /// Past conversations, most recent first.
+  List<CoachThread> get threads => List.unmodifiable(_threads.reversed);
+
+  /// True when the live conversation has nothing in it but the greeting, so
+  /// the screen can lead with the orb rather than one lonely bubble.
+  bool get isFresh =>
+      _messages.where((m) => m.id != 'welcome' && !m.isStreaming).isEmpty;
+
+  /// Put the current conversation away and start an empty one.
+  ///
+  /// Called every time the coach is opened. Landing in the middle of yesterday
+  /// afternoon is disorienting, and scrolling up to find where you left off is
+  /// worse; a new chat with the history one tap below is the honest default.
+  /// An already-empty chat is left alone, so opening the coach twice in a row
+  /// does not stack blank threads in the history.
+  Future<void> startNewChat() async {
+    if (isFresh) return;
+    _archiveCurrent();
+    _messages
+      ..clear()
+      ..add(ChatMessage.welcome(_name));
+    _sinceCondense = 0;
+    notifyListeners();
+    await _persistThreads();
+    await _persistLog();
+  }
+
+  /// Reopen a past conversation. The live one is put away first, so nothing is
+  /// ever lost by navigating.
+  Future<void> openThread(String id) async {
+    final found = _threads.indexWhere((t) => t.id == id);
+    if (found == -1) return;
+    final thread = _threads.removeAt(found);
+    _archiveCurrent();
+    _messages
+      ..clear()
+      ..addAll(thread.messages);
+    _sinceCondense = 0;
+    notifyListeners();
+    await _persistThreads();
+    await _persistLog();
+  }
+
+  Future<void> deleteThread(String id) async {
+    _threads.removeWhere((t) => t.id == id);
+    notifyListeners();
+    await _persistThreads();
+  }
+
+  void _archiveCurrent() {
+    if (isFresh) return;
+    final keep = _messages.where((m) => !m.isStreaming).toList();
+    _threads.add(CoachThread(
+      id: DateTime.now().microsecondsSinceEpoch.toString(),
+      messages: keep,
+      updatedAt: DateTime.now(),
+    ));
+    if (_threads.length > _threadCap) {
+      _threads.removeRange(0, _threads.length - _threadCap);
+    }
+  }
+
+  Future<void> _persistThreads() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.setString(
+          _kThreads, jsonEncode(_threads.map((t) => t.toJson()).toList()));
+    } catch (e) {
+      debugPrint('[coach] thread save failed: $e');
+    }
+  }
 
   /// How much verbatim conversation we keep on disk. Everything older has
   /// already been folded into the rolling summary, so it is not lost, just no
@@ -145,10 +229,15 @@ class CoachProvider extends ChangeNotifier {
   Future<void> _restore() async {
     try {
       final p = await SharedPreferences.getInstance();
+      final rawThreads = p.getString(_kThreads);
+      if (rawThreads != null) {
+        _threads.addAll((jsonDecode(rawThreads) as List).map(
+            (t) => CoachThread.fromJson((t as Map).cast<String, dynamic>())));
+      }
       final raw = p.getString(_kLog);
       if (raw == null) return;
-      _messages.addAll((jsonDecode(raw) as List)
-          .map((m) => ChatMessage.fromJson((m as Map).cast<String, dynamic>())));
+      _messages.addAll((jsonDecode(raw) as List).map(
+          (m) => ChatMessage.fromJson((m as Map).cast<String, dynamic>())));
     } catch (e) {
       debugPrint('[coach] restore failed: $e');
     }
@@ -157,9 +246,11 @@ class CoachProvider extends ChangeNotifier {
   Future<void> _persistLog() async {
     try {
       final keep = _messages.where((m) => !m.isStreaming).toList();
-      final trimmed = keep.length > _logCap ? keep.sublist(keep.length - _logCap) : keep;
+      final trimmed =
+          keep.length > _logCap ? keep.sublist(keep.length - _logCap) : keep;
       final p = await SharedPreferences.getInstance();
-      await p.setString(_kLog, jsonEncode(trimmed.map((m) => m.toJson()).toList()));
+      await p.setString(
+          _kLog, jsonEncode(trimmed.map((m) => m.toJson()).toList()));
     } catch (e) {
       debugPrint('[coach] save failed: $e');
     }
@@ -168,7 +259,8 @@ class CoachProvider extends ChangeNotifier {
   /// The last few exchanges in plain text, for the memory snapshot. This is how
   /// what they actually say to the coach reaches the profile the coach reads.
   String recentTranscript({int turns = 12}) {
-    final real = _messages.where((m) => !m.isStreaming && m.id != 'welcome').toList();
+    final real =
+        _messages.where((m) => !m.isStreaming && m.id != 'welcome').toList();
     if (real.isEmpty) return '';
     final tail = real.length > turns ? real.sublist(real.length - turns) : real;
     return tail
@@ -246,9 +338,7 @@ class CoachProvider extends ChangeNotifier {
 
       // Get the conversation history excluding the placeholder we just added.
       final historyForPrompt = _memory.trimMessages(
-        _messages
-            .where((m) => !m.isStreaming && m.id != 'welcome')
-            .toList(),
+        _messages.where((m) => !m.isStreaming && m.id != 'welcome').toList(),
       );
 
       final messages = _promptBuilder.build(
@@ -368,4 +458,47 @@ class CoachProvider extends ChangeNotifier {
       userName: userName,
     );
   }
+}
+
+/// A conversation you have already had, kept so you can go back to it.
+///
+/// The title is derived rather than stored: it is the first thing the user
+/// actually said, which is a better name for a conversation than anything a
+/// model would invent for it, and it cannot drift out of sync with the content.
+class CoachThread {
+  CoachThread({
+    required this.id,
+    required this.messages,
+    required this.updatedAt,
+  });
+
+  final String id;
+  final List<ChatMessage> messages;
+  final DateTime updatedAt;
+
+  String get title {
+    final first = messages.firstWhere(
+      (m) => m.fromUser && m.text.trim().isNotEmpty,
+      orElse: () => ChatMessage(id: '', text: '', fromUser: true),
+    );
+    final t = first.text.trim().replaceAll('\n', ' ');
+    if (t.isEmpty) return 'a quiet one';
+    return t.length > 44 ? '${t.substring(0, 44)}…' : t;
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'at': updatedAt.toIso8601String(),
+        'msgs': messages.map((m) => m.toJson()).toList(),
+      };
+
+  static CoachThread fromJson(Map<String, dynamic> j) => CoachThread(
+        id: (j['id'] ?? '') as String,
+        updatedAt:
+            DateTime.tryParse((j['at'] ?? '') as String) ?? DateTime.now(),
+        messages: ((j['msgs'] ?? const []) as List)
+            .map(
+                (m) => ChatMessage.fromJson((m as Map).cast<String, dynamic>()))
+            .toList(),
+      );
 }
