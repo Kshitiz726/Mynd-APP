@@ -4,12 +4,20 @@
 // Mynd's face, generated rather than filmed.
 //
 // This replaces a 519 KB video that had to be decoded every frame, and it
-// fixes the loop problem by not having a loop: the motion is driven by four
-// sine fields whose periods share no common multiple you would notice, so it
-// never arrives back where it started and there is no seam to hide.
+// fixes the loop problem by not having a loop: the motion is driven by sine
+// fields whose periods share no common multiple you would notice, so it never
+// arrives back where it started and there is no seam to hide.
 //
 // The colours are uniforms, not pixels, so the orb is brand-coloured by
 // definition - change OmColors and this changes with it, in both themes.
+//
+// Crispness is deliberate and was not free. A first version was all
+// low-frequency warping with a wide edge feather, and it read as an
+// out-of-focus blob: nothing in it was ever in focus because nothing in it had
+// a hard edge. What fixes that is detail at three scales (the third warp
+// octave), thin bright ridges where the field folds, real sphere shading off a
+// reconstructed normal, and an edge that resolves in a few pixels instead of
+// a third of the radius.
 
 precision highp float;
 
@@ -34,45 +42,57 @@ void main() {
     float r = length(uv);
     float t = uTime;
 
-    // Domain warping, twice. Warping the coordinates before sampling is what
-    // turns concentric ripples into something that folds and curls like liquid.
+    // Reconstruct the sphere's surface normal from the disc. Shading against
+    // this rather than against flat uv is what makes the detail sit *on* a
+    // ball instead of being printed across a circle.
+    float z = sqrt(max(0.0, 1.0 - r * r));
+    vec3 n = vec3(uv, z);
+
+    // Domain warping, three octaves. Warping the coordinates before sampling
+    // is what turns concentric ripples into something that folds like liquid;
+    // the third pass is small and fast and is where the fine detail lives.
     vec2 p = uv * 1.55;
     p += 0.42 * vec2(field(p + vec2(0.0, 1.7), t * 0.50),
                      field(p.yx + vec2(3.1, 0.0), t * 0.41));
-    p += 0.26 * vec2(field(p * 1.9 + vec2(1.3, 0.0), t * 0.29),
+    p += 0.24 * vec2(field(p * 1.9 + vec2(1.3, 0.0), t * 0.29),
                      field(p.yx * 1.7 + vec2(0.0, 2.4), t * 0.35));
+    p += 0.09 * vec2(field(p * 4.3 + vec2(2.7, 0.0), t * 0.22),
+                     field(p.yx * 3.9 + vec2(0.0, 5.2), t * 0.18));
 
     float a = field(p, t * 0.23) * 0.44 + 0.5;
     float b = field(p * 0.7 + 2.0, -t * 0.17) * 0.44 + 0.5;
 
-    // A four-stop ramp, dark to light: near-black brand purple, into primary,
-    // into brand blue, with coral on the crests and a pale bloom on the very
-    // brightest.
-    //
-    // Primary and flow sit close together in hue, so ramping only between
-    // those two gave a flat blue ball. The depth has to come from a tone
-    // darker than either of them - the same near-black the painted fallback
-    // orb has always ended on.
+    // A four-stop ramp, dark to light. Primary and flow sit close together in
+    // hue, so the depth has to come from a tone darker than either of them -
+    // the same near-black the painted fallback orb has always ended on.
     vec3 deep = mix(uPrimary, vec3(0.086, 0.047, 0.180), 0.74);
 
-    vec3 col = mix(deep, uPrimary, smoothstep(0.02, 0.52, a));
-    col = mix(col, uFlow, smoothstep(0.38, 0.92, a) * 0.85);
-    col = mix(col, uAccent, smoothstep(0.54, 1.0, b) * 0.72);
-    col = mix(col, vec3(1.0), smoothstep(0.80, 1.0, b) * 0.22);
+    vec3 col = mix(deep, uPrimary, smoothstep(0.06, 0.46, a));
+    col = mix(col, uFlow, smoothstep(0.42, 0.86, a) * 0.90);
+    col = mix(col, uAccent, smoothstep(0.60, 0.98, b) * 0.85);
 
-    // Shading, so it reads as a sphere rather than a flat disc: lit from the
-    // top-left, falling away to the lower right.
-    float lambert = clamp(0.5 - dot(normalize(vec2(0.62, 0.72)), uv) * 0.55, 0.0, 1.0);
-    col *= 0.66 + 0.62 * lambert;
+    // Filaments: thin bright ridges along the folds. Raising a sine to a high
+    // power keeps only the crests, which is a hard line rather than a gradient
+    // - the one thing the blurred version had none of.
+    float ridge = pow(abs(sin(a * 8.0 + b * 3.0)), 8.0);
+    col += mix(uAccent, vec3(1.0), 0.55) * ridge * 0.34;
 
-    // The wet highlight. Small, tight, and offset - it is what makes the
-    // surface look like it has a skin.
-    float spec = smoothstep(0.40, 0.0, length(uv - vec2(-0.36, -0.40)));
-    col += vec3(1.0) * spec * 0.30;
+    // Diffuse, lit from the upper left.
+    vec3 light = normalize(vec3(-0.45, -0.55, 0.70));
+    col *= 0.52 + 0.78 * clamp(dot(light, n), 0.0, 1.0);
 
-    // Feathered, never clipped. A hard circular edge hangs a visible disc on
-    // the page and the blob stops floating.
-    float alpha = smoothstep(1.0, 0.68, r);
+    // The wet highlight, tight enough to read as a surface rather than a glow.
+    float spec = pow(clamp(dot(light, normalize(n + vec3(0.0, 0.0, 0.75))), 0.0, 1.0), 26.0);
+    col += vec3(1.0) * spec * 0.55;
+
+    // Rim light. Defines the silhouette from the inside, so the edge stays
+    // crisp without a drawn outline.
+    col += mix(uFlow, vec3(1.0), 0.45) * pow(1.0 - z, 3.2) * 0.24;
+
+    // A real edge: antialiased over a couple of pixels, not feathered over a
+    // third of the radius.
+    float px = 2.0 / min(uSize.x, uSize.y);
+    float alpha = 1.0 - smoothstep(1.0 - px * 2.0, 1.0, r);
 
     // Flutter composites premultiplied.
     fragColor = vec4(col * alpha, alpha);
