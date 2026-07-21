@@ -782,8 +782,15 @@ class _GoalsEmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.omColors;
+    // Neutral frost, not a brand-tinted pane.
+    //
+    // Brain Dump can carry the purple tint because what sits on it is a white
+    // icon on a solid gradient tile. This card's illustration is drawn in
+    // primary and flow, so tinting the pane the same hue put purple artwork on
+    // a purple slab: the target rings disappeared into it and the body copy
+    // lost most of its contrast. The colour in this card should come from the
+    // drawing and the CTA, not from the surface they sit on.
     return OmCard.glass(
-      tint: c.primary,
       padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 18),
       onTap: () => showAddGoalSheet(context),
       child: Column(
