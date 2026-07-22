@@ -15,9 +15,15 @@ import { authRouter } from './auth.js';
 import { sessionsRouter } from './routes/sessions.js';
 import { roomsRouter } from './routes/rooms.js';
 import { bodyDoublingRouter } from './routes/bodydoubling.js';
+import { billingRouter, billingWebhookHandler } from './routes/billing.js';
 
 const app = express();
 app.use(cors({ origin: config.clientOrigin }));
+
+// Stripe webhook needs the *raw* body to verify the signature, so it must be
+// registered before the JSON body parser swallows the stream.
+app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), billingWebhookHandler);
+
 app.use(express.json({ limit: '256kb' }));
 
 app.get('/health', (_req, res) =>
@@ -33,6 +39,10 @@ app.get('/health', (_req, res) =>
 
 // Dev-only token minting, mounted before the DB guard so it always resolves.
 if (!config.isProd) app.use('/api', devRoutes);
+
+// Billing is mounted before the DB guard: the store has an in-memory fallback,
+// so checkout/status work whether or not a database is attached.
+app.use('/api', billingRouter);
 
 // In dev mode (no DATABASE_URL) the persistence-backed REST routes can't serve
 // real data - return a clear 503 instead of hanging on a dead DB connection.

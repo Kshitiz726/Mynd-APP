@@ -120,13 +120,24 @@ export function attachRealtime(io: Server) {
     });
 
     // ── Session / timer (server is the clock authority) ──
+    // `mode` must be a `focus_mode_kind`; anything else (a task title from an
+    // older/looser client) is coerced to 'custom' so a bad value can never
+    // reach the enum column - and the whole handler is guarded so even an
+    // unexpected DB error only drops this one event instead of crashing the
+    // process for every connected user.
     socket.on('set_session', async ({ roomId, task, mode, durationSecs }: { roomId: string; task: string; mode: string; durationSecs: number }) => {
-      await presence.startSession(roomId, user.id, { task, mode, durationSecs });
-      io.to(`room:${roomId}`).emit('participant_update', {
-        roomId,
-        userId: user.id,
-        patch: { session: { task, mode, secondsRemaining: durationSecs, running: true } },
-      });
+      const VALID_MODES = ['sprint', 'pomodoro', 'deep_work', 'flow', 'custom'];
+      const safeMode = VALID_MODES.includes(mode) ? mode : 'custom';
+      try {
+        await presence.startSession(roomId, user.id, { task, mode: safeMode, durationSecs });
+        io.to(`room:${roomId}`).emit('participant_update', {
+          roomId,
+          userId: user.id,
+          patch: { session: { task, mode: safeMode, secondsRemaining: durationSecs, running: true } },
+        });
+      } catch (e) {
+        console.error('[set_session] failed', { roomId, userId: user.id, mode: safeMode }, e);
+      }
     });
 
     socket.on('timer_control', async ({ roomId, action }: { roomId: string; action: 'pause' | 'resume' | 'end' }) => {

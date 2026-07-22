@@ -9,6 +9,7 @@ const redisUrl = process.env.REDIS_URL ?? '';
 const lkUrl = process.env.LK_URL ?? '';
 const lkKey = process.env.LK_API_KEY ?? '';
 const lkSecret = process.env.LK_API_SECRET ?? '';
+const stripeSecret = process.env.STRIPE_SECRET_KEY ?? '';
 
 export const config = {
   port: Number(process.env.PORT ?? 8080),
@@ -35,11 +36,27 @@ export const config = {
   livekit: { url: lkUrl, apiKey: lkKey, apiSecret: lkSecret },
   fcmServiceAccount: process.env.FCM_SA_JSON ?? '',
 
+  // Stripe billing. The secret key stays server-side (never shipped to the app);
+  // the publishable key is safe to hand the client. Webhook secret is optional -
+  // when unset we reconcile by polling the Checkout Session on return instead.
+  stripe: {
+    secretKey: stripeSecret,
+    publishableKey: process.env.STRIPE_PUBLISHABLE_KEY ?? '',
+    webhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? '',
+    prices: {
+      plusMonthly: process.env.STRIPE_PRICE_PLUS_MONTHLY ?? '',
+      plusYearly: process.env.STRIPE_PRICE_PLUS_YEARLY ?? '',
+      proMonthly: process.env.STRIPE_PRICE_PRO_MONTHLY ?? '',
+      proYearly: process.env.STRIPE_PRICE_PRO_YEARLY ?? '',
+    },
+  },
+
   // Feature flags derived from which creds are present.
   hasDb: !!databaseUrl,
   hasRedis: !!redisUrl,
   hasLivekit: !!(lkUrl && lkKey && lkSecret),
   hasGoogleAuth: !!process.env.GOOGLE_CLIENT_ID,
+  hasStripe: !!stripeSecret,
 };
 
 export function logMode() {
@@ -50,6 +67,7 @@ export function logMode() {
     `[config] db=${config.hasDb ? 'cloud' : 'in-memory(dev)'} ` +
       `redis=${config.hasRedis ? 'cloud' : 'in-memory(dev)'} ` +
       `livekit=${config.hasLivekit ? 'on' : 'off(dev)'} ` +
-      `google-auth=${config.hasGoogleAuth ? 'on' : 'off'}`,
+      `google-auth=${config.hasGoogleAuth ? 'on' : 'off'} ` +
+      `stripe=${config.hasStripe ? 'on' : 'off'}`,
   );
 }
