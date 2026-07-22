@@ -26,8 +26,8 @@ services:
       # ── secrets: set these in the Render dashboard, not in this file ──
       - key: DATABASE_URL          # Supabase Session-pooler URI, NO ?sslmode
         sync: false
-      - key: JWT_SECRET            # Supabase JWT secret, or any long random string
-        sync: false
+      - key: JWT_SECRET            # the server's own token-signing secret
+        generateValue: true        # Render mints a secure random one, never exposed
       - key: GOOGLE_CLIENT_ID      # web OAuth client id (.apps.googleusercontent.com)
         sync: false
       - key: STRIPE_SECRET_KEY
