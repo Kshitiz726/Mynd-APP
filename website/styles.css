@@ -462,6 +462,9 @@ img { max-width: 100%; display: block; }
 
 /* schedule */
 .sch-pills { display: flex; gap: 5px; }
+/* The Auto-Schedule pill must never wrap onto two lines - it is the button the
+   whole screen is about. */
+.sch-pills span { white-space: nowrap; }
 .sch-pills span {
   display: inline-flex; align-items: center; gap: 4px;
   font-size: 8px; padding: 6px 9px; border-radius: var(--r-pill);
@@ -974,3 +977,122 @@ footer { padding: 56px 0 44px; color: var(--text-2); font-size: 14px; }
   .rec i { animation: none; }
   .live .say .w, .live .fr { animation-duration: .01ms; animation-delay: 0ms; }
 }
+
+/* ---- 23. Screens that act ------------------------------------------------ */
+/* Everything here runs off the .live class the players put on a scene, so each
+   screen replays its own behaviour every time the sequence comes round. Two
+   conventions throughout: --i is an element's position within a group, --d an
+   extra delay applied to the group as a whole. */
+
+.live .stg { animation: stgIn .5s var(--ease-spring) both; animation-delay: calc(var(--d, 0s) + var(--i, 0) * 0.3s); }
+@keyframes stgIn { from { opacity: 0; transform: translateY(10px) scale(.97); } to { opacity: 1; transform: none; } }
+
+/* Text arriving at the speed it is typed or spoken. */
+.live .type .w { animation: wordIn .26s ease-out both; animation-delay: calc(var(--d, 0s) + var(--i, 0) * 0.115s); }
+.caret {
+  display: inline-block; width: 1.6px; height: .95em; background: var(--primary);
+  vertical-align: -1px; margin-left: 1px; animation: blink 1.05s steps(1) infinite;
+}
+@keyframes blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
+
+/* A control being pressed by nobody. */
+.live .press { animation: press 1s ease-in-out both; animation-delay: var(--d, 0s); }
+@keyframes press { 0% { transform: none; } 24% { transform: scale(.94); } 48% { transform: scale(1.03); } 100% { transform: none; } }
+.live .glow { animation: glowPulse 1.3s ease-out both; animation-delay: var(--d, 0s); }
+@keyframes glowPulse {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary) 50%, transparent); }
+  100% { box-shadow: 0 0 0 15px transparent; }
+}
+
+/* Toggles that flip themselves on, because the app set them, not you. */
+.toggle.auto { background: color-mix(in srgb, var(--text-2) 30%, transparent); }
+.toggle.auto::after { right: auto; left: 2px; }
+.live .toggle.auto { animation: togBg .35s ease-out both; animation-delay: calc(var(--d, .7s) + var(--i, 0) * .42s); }
+.live .toggle.auto::after { animation: togKnob .35s var(--ease-spring) both; animation-delay: calc(var(--d, .7s) + var(--i, 0) * .42s); }
+@keyframes togBg { to { background: var(--success); } }
+@keyframes togKnob { to { left: 15px; } }
+
+/* A selection moving from one chip to another. */
+.live .sw-off { animation: swOff .45s ease both; animation-delay: var(--d, 1.2s); }
+.live .sw-on  { animation: swOn  .45s ease both; animation-delay: var(--d, 1.2s); }
+@keyframes swOff { to { background: var(--surface); color: var(--text-2); border-color: var(--border); font-weight: 400; } }
+@keyframes swOn  { to { background: var(--primary); color: #fff; border-color: transparent; font-weight: 600; } }
+
+/* Chat that types before it answers. */
+.live .bub { animation: bubIn .42s var(--ease-spring) both; animation-delay: calc(var(--d, 0s) + var(--i, 0) * .95s); }
+@keyframes bubIn { from { opacity: 0; transform: translateY(9px) scale(.96); } to { opacity: 1; transform: none; } }
+.dots { display: inline-flex; gap: 3.5px; align-items: center; padding: 2px 0; }
+.dots i { width: 4px; height: 4px; border-radius: 50%; background: var(--text-2); animation: dot 1.1s ease-in-out infinite; }
+.dots i:nth-child(2) { animation-delay: .16s; }
+.dots i:nth-child(3) { animation-delay: .32s; }
+@keyframes dot { 0%, 100% { opacity: .3; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-2px); } }
+/* The typing bubble hands over to the answer instead of sitting beside it. */
+.bub.ghost { max-height: 34px; overflow: hidden; }
+.live .bub.ghost { animation: ghost 2s ease both; animation-delay: calc(var(--d, 0s) + var(--i, 0) * .95s); }
+@keyframes ghost {
+  0%   { opacity: 0; transform: translateY(9px); }
+  14%  { opacity: 1; transform: none; }
+  86%  { opacity: 1; transform: none; max-height: 34px; }
+  100% { opacity: 0; max-height: 0; padding-top: 0; padding-bottom: 0; margin-bottom: -6px; }
+}
+
+/* A notification, arriving over whatever is on screen. */
+.notif {
+  position: absolute; left: 11px; right: 11px; top: 46px; z-index: 60;
+  display: flex; gap: 9px; align-items: flex-start; padding: 10px 11px; border-radius: 18px;
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+  border: 1px solid var(--border);
+  box-shadow: 0 20px 44px -14px rgba(var(--shadow-rgb), .62);
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+}
+.notif .ic { width: 22px; height: 22px; border-radius: 7px; flex: none; display: grid; place-items: center; background: linear-gradient(135deg, var(--grad-start), var(--grad-end)); color: #fff; }
+.notif .ic svg { width: 12px; height: 12px; }
+.notif .tx { flex: 1; min-width: 0; }
+.notif .tx b { display: block; font-size: 9.5px; font-weight: 600; }
+.notif .tx s { text-decoration: none; display: block; font-size: 8.5px; color: var(--text-2); line-height: 1.4; }
+.notif .ago { font-size: 7.5px; color: var(--text-2); flex: none; }
+.live .notif { animation: notifIn .62s var(--ease-spring) both; animation-delay: var(--d, .9s); }
+@keyframes notifIn { from { opacity: 0; transform: translateY(-30px) scale(.96); } to { opacity: 1; transform: none; } }
+
+/* An editable memory: the field, and someone adding a line to it. */
+.mem-card.editing { border-color: color-mix(in srgb, var(--primary) 45%, transparent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 12%, transparent); }
+.mem-edit-bar {
+  display: flex; align-items: center; gap: 6px; margin-top: 9px;
+  font-size: 8.5px; color: var(--primary); font-weight: 600;
+}
+.mem-edit-bar .sv { margin-left: auto; background: var(--primary); color: #fff; padding: 4px 10px; border-radius: var(--r-pill); font-size: 8px; }
+
+/* The scene strip on a running session, switching under its own steam. */
+.scenebar .sel { position: relative; }
+.live .scenebar .sel-a { animation: selOff .5s ease both; animation-delay: var(--d, 1.6s); }
+.live .scenebar .sel-b { animation: selOn .5s ease both; animation-delay: var(--d, 1.6s); }
+@keyframes selOff { to { opacity: .45; transform: scale(1); } }
+@keyframes selOn  { to { opacity: 1; transform: scale(1.35); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .live .stg, .live .type .w, .live .bub, .live .notif,
+  .live .toggle.auto, .live .toggle.auto::after,
+  .live .sw-off, .live .sw-on, .live .press, .live .glow {
+    animation-duration: .01ms; animation-delay: 0ms;
+  }
+  .dots i, .caret { animation: none; }
+}
+
+/* The context strip above a chat: what Mynd already knows, stated plainly. */
+.ctx { display: flex; gap: 5px; margin-top: 9px; flex-wrap: wrap; }
+.ctx span {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 8px; padding: 5px 8px; border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary) 18%, transparent);
+  color: var(--primary); font-weight: 600;
+}
+.ctx svg { width: 9px; height: 9px; }
+
+/* The scene label crossfades with the scene it names. */
+.hint .sc-a, .hint .sc-b { display: inline-block; }
+.hint .sc-b { display: none; }
+.live .hint .sc-a { animation: labOut .5s ease both; animation-delay: 1.9s; }
+.live .hint .sc-b { display: inline-block; animation: labIn .5s ease both; animation-delay: 1.9s; }
+@keyframes labOut { 0% { opacity: 1; width: auto; } 100% { opacity: 0; font-size: 0; } }
+@keyframes labIn { 0% { opacity: 0; font-size: 0; } 100% { opacity: 1; } }

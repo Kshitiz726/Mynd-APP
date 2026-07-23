@@ -8,10 +8,9 @@
       page (data-wt="...") and the player clones it. So the film can never
       drift out of sync with the site - fix a screen once, it is fixed in both.
 
-   2. The music is a real recording, licensed CC BY 3.0 and trimmed to a clean
-      100-second loop. An earlier version synthesised a pad from oscillators;
-      it was cheaper but it read as a drone, not as music. It only ever starts
-      from a click, which is also what browsers require.
+   2. There is no soundtrack. Two went in - a synthesised pad, then a licensed
+      recording - and both were noise over a page nobody asked to play sound at.
+      The screens carry it on their own.
    ======================================================================== */
 
 (() => {
@@ -22,7 +21,6 @@
   const capBox = document.getElementById('wt-cap');
   const ticks  = document.getElementById('wt-ticks');
   const bPlay  = document.getElementById('wt-play');
-  const bSound = document.getElementById('wt-sound');
   const bClose = document.getElementById('wt-close');
 
   // The script. Durations are reading times, not screen times: a caption you
@@ -31,36 +29,43 @@
     ['home',     'Open it. That is the whole setup.',
                  'No inbox to sort, no project to name, no empty checklist waiting to be filled in. Home is the orb, and the orb is a microphone.', 4600],
     ['speak',    'Say it the way it is in your head',
-                 'Out loud, in one breath, in the wrong order. It transcribes while you talk and does not interrupt you to ask what you meant.', 6600],
+                 'Out loud, in one breath, in the wrong order. It transcribes while you talk and never interrupts to ask what you meant.', 6800],
     ['found',    'That sentence just became three tasks',
-                 'It reads what you said, pulls out the things that are actually work, and tags each one with the energy it will cost. You typed nothing.', 6400],
-    ['sched',    'And they land in real hours',
-                 'The same three tasks, placed between when you wake and when you sleep - the hard ones in your good hours, nothing at 2am.', 5800],
+                 'It reads what you said, pulls out the things that are actually work, and tags each one with the energy it will cost. You typed nothing.', 6600],
+    ['sched',    'One tap, and they land in real hours',
+                 'Auto-Schedule knows when you wake and when you sleep. The hard ones get your good hours, the easy one waits for tomorrow, and nothing lands at 2am.', 7200],
+    ['backlog',  'Whatever has no time yet waits in the backlog',
+                 'Filter it by what you have left in you. A brain-dead evening still has something in it you can actually do, and any gap in the day offers to be filled.', 6600],
     ['dump',     'It works typed, too',
-                 'Same engine, different door. Paste the mess and Brain Dump breaks it apart exactly the way the voice does.', 4800],
+                 'Same engine, different door. Paste the mess, hit Process, and it comes back scheduled exactly the way the voice does.', 7400],
     ['mood',     'It asks how you are, once',
-                 'Drag the dial. A flat day gets a lighter schedule, and it never argues with the answer you gave it.', 4600],
-    ['rem',      'Then it taps you when each one is due',
-                 'Every task that got a time gets a reminder, its own tone and its own switch, and it reaches you with the app closed.', 4600],
+                 'Drag the dial. No wrong answer, and it never argues with the one you gave it.', 4600],
+    ['moodchat', 'And then it plans around that answer',
+                 'Log low and Mynd stops pushing the hard thing. It opens the conversation already knowing your mood, your day and the time, so you never explain yourself twice.', 7200],
     ['setup',    'When it is time, it starts the work for you',
                  'Focus already knows what is up next, because that is the task your sentence turned into. One tap and the session is running.', 4800],
-    ['presets',  'Pick a length and a place',
-                 'Sprint, pomodoro, deep work, flow. Forest, rain, or a room with other people quietly working in it.', 4800],
-    ['together', 'Or sit with someone',
-                 'Body doubling pairs you with another person working right now. Nobody speaks. That is the point.', 4600],
+    ['presets',  'Pick a length, a scene, and whether you want company',
+                 'Sprint, pomodoro, deep work, flow. Turn body doubling on and it starts looking for someone to sit with you.', 6400],
+    ['together', 'Someone quietly on the other end of it',
+                 'You get paired with another person working right now. Nobody speaks. That is the point.', 4600],
     ['live',     'The session holds you',
-                 'A timer, a scene, and nothing else on the screen to fall into.', 4200],
+                 'A timer, one task, and a scene you can change without leaving. Forest to rain, mid-session, no menu.', 5600],
     ['rain',     'A thought arrives. Park it.',
-                 'Two seconds to write it down, then straight back. It joins the pile you can talk through later.', 4800],
-    ['coach',    'Something to talk to',
-                 'Mynd has read your day, your energy and everything you have said to it before you type a word.', 4800],
-    ['memory',   'It remembers so you do not',
-                 'Written back after every session: what you finished, what you parked, what actually mattered.', 4800],
+                 'Two seconds to write it down, then straight back. It joins the pile you can go through later.', 5200],
+    ['memory',   'It remembers, and you can correct it',
+                 'Mynd writes up what it has learned about you after every session. Open it, edit it, and the next plan is built on your version.', 7400],
+    ['rem',      'Then it sets the reminders itself',
+                 'You never switch these on. Scheduling a block is what schedules its reminder, one for each, with its own tone and its own time.', 6400],
+    ['notif',    'And it reaches you with the app closed',
+                 'The reminder arrives knowing what the task is, what it costs you, and why you said it mattered.', 5400],
+    ['coach',    'It has read all of it before you type',
+                 'Every chat, every parked thought, every time you moved something. It tells you the pattern you cannot see and offers to fix your schedule for you.', 7400],
     ['done',     'And the day closes',
                  'Everything ticked, the streak alive, and nothing still circling in your head.', 4600],
     ['paywall',  'Free covers the whole loop',
                  'Talk, schedule, remind, focus, remember. Plus and Pro raise the limits when you want more room to think.', 4600],
   ];
+
 
 
   let built = false;
@@ -183,79 +188,6 @@
     bPlay.querySelector('use').setAttribute('href', '#ic-play');
     bPlay.querySelector('span').textContent = 'Play';
   }
-
-  /* ---- Music ------------------------------------------------------------ */
-  /* A real recording, not a synth: the oscillator pad read as a drone rather
-     than as music. This is a 100s excerpt of "In the Flow" by Softspace
-     (Room With A View, mt012), CC BY 3.0, trimmed and faded at both ends so it
-     loops without a seam. Credited in the footer, as the licence requires. */
-  const LEVEL = 0.34;
-  let wantSound = true;
-
-  const track = new Audio('assets/audio/walkthrough.mp3');
-  track.loop = true;
-  track.preload = 'auto';
-  track.volume = 0;
-
-  let fadeTimer = null;
-  function fade(to, ms) {
-    clearInterval(fadeTimer);
-    const from = track.volume;
-    const t0 = performance.now();
-    fadeTimer = setInterval(() => {
-      const k = Math.min(1, (performance.now() - t0) / ms);
-      track.volume = Math.max(0, Math.min(1, from + (to - from) * k));
-      if (k === 1) clearInterval(fadeTimer);
-    }, 40);
-  }
-
-  bSound.addEventListener('click', () => {
-    wantSound = !wantSound;
-    bSound.setAttribute('aria-pressed', String(wantSound));
-    bSound.classList.toggle('off', !wantSound);
-    bSound.querySelector('use').setAttribute('href', wantSound ? '#ic-vol' : '#ic-mute');
-    bSound.querySelector('span').textContent = wantSound ? 'Sound on' : 'Sound off';
-    fade(wantSound ? LEVEL : 0, 500);
-  });
-
-  /* ---- Open / close ----------------------------------------------------- */
-  // data-walkthrough="" plays the whole film; data-walkthrough="focus" drops
-  // you straight into that chapter, so a section can offer its own clip.
-  function open(key) {
-    if (!built) build();
-    root.hidden = false;
-    void root.offsetWidth;
-    root.classList.add('on');
-    document.documentElement.classList.add('wt-open');
-
-    // Autoplay is allowed here because open() only ever runs from a click.
-    track.play().catch(() => {});
-    if (wantSound) fade(LEVEL, 2200);
-
-    const at = key ? SCENES.findIndex(([k]) => k === key) : 0;
-    go(at < 0 ? 0 : at);
-    refit();
-    play();
-    bClose.focus();
-  }
-
-  function close() {
-    pause();
-    fade(0, 600);
-    root.classList.remove('on');
-    document.documentElement.classList.remove('wt-open');
-    setTimeout(() => { root.hidden = true; track.pause(); track.currentTime = 0; }, 640);
-  }
-
-  document.querySelectorAll('[data-walkthrough]').forEach((el) =>
-    el.addEventListener('click', (e) => { e.preventDefault(); open(el.dataset.walkthrough); })
-  );
-
-  // #walkthrough opens the film straight away, so the link can be shared.
-  if (location.hash.startsWith('#walkthrough')) {
-    addEventListener('load', () => open(location.hash.split('=')[1] || ''));
-  }
-
 
   /* ---- The same film, playing in the hero ------------------------------- */
   /* One timeline, two surfaces: the landing page runs the sequence inline, and
