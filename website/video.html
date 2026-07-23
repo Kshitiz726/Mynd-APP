@@ -45,11 +45,13 @@
     font-size: 96px; line-height: 1.04; letter-spacing: -2.6px;
   }
   #cap .l { display: block; overflow: hidden; }
-  #cap .l span { display: block; color: #F4C9A4; }
+  #cap .l > span { display: block; color: #F4C9A4; }
+  #cap .c { display: inline-block; white-space: pre; }
   /* Typed, not stamped. Each character has its own index and the delay is
      arithmetic from it, which is the same thing the app's own transcript does -
      the film should not claim a smoothness the product does not have. */
   #cap .c { opacity: 0; }
+  #cap .l { white-space: nowrap; }
   #cap.in .l:nth-child(1) .c { animation: charIn .16s ease-out both; animation-delay: calc(var(--i) * .028s); }
   #cap.in .l:nth-child(2) .c { animation: charIn .16s ease-out both; animation-delay: calc(var(--o) * .028s + var(--i) * .028s + .12s); }
   @keyframes charIn { from { opacity: 0; filter: blur(6px); transform: translateY(6px); } to { opacity: 1; filter: none; transform: none; } }
@@ -88,8 +90,8 @@
 
   /* The opening pull-out: starts on the glass, ends on the device. */
   @keyframes macroPull {
-    from { transform: translate3d(-120px, -230px, 460px) rotateX(11deg) rotateY(-52deg) rotateZ(-13deg) scale(1.6); }
-    to   { transform: translate3d(10px, -60px, 40px)     rotateX(5deg)  rotateY(-27deg) rotateZ(-6deg)  scale(1.02); }
+    from { transform: translate3d(-210px, -330px, 900px) rotateX(13deg) rotateY(-58deg) rotateZ(-15deg) scale(1.5); }
+    to   { transform: translate3d(10px, -60px, 30px)      rotateX(5deg)  rotateY(-27deg) rotateZ(-6deg)  scale(1.0); }
   }
   /* Three-quarter, turning slowly away. */
   @keyframes slowTurn {
@@ -108,14 +110,14 @@
   }
   /* A push in, ending closer than it started. */
   @keyframes pushIn {
-    from { transform: translate3d(-60px, -10px, -120px) rotateX(6deg) rotateY(-20deg) rotateZ(-4deg) scale(.94); }
-    to   { transform: translate3d(20px, -110px, 190px)  rotateX(3deg) rotateY(-31deg) rotateZ(-8deg) scale(1.12); }
+    from { transform: translate3d(-90px, 20px, -260px) rotateX(7deg) rotateY(-18deg) rotateZ(-3deg) scale(.92); }
+    to   { transform: translate3d(40px, -150px, 330px)  rotateX(2deg) rotateY(-33deg) rotateZ(-9deg) scale(1.14); }
   }
   /* The insert: too close to read the screen, which is the point - it is a
      texture shot, and the reference uses one to break its own rhythm. */
   @keyframes macroDetail {
-    from { transform: translate3d(-190px, -300px, 520px) rotateX(9deg)  rotateY(-40deg) rotateZ(-10deg) scale(1.5); }
-    to   { transform: translate3d(-90px, -420px, 640px)  rotateX(12deg) rotateY(-46deg) rotateZ(-14deg) scale(1.62); }
+    from { transform: translate3d(-240px, -430px, 880px) rotateX(10deg) rotateY(-42deg) rotateZ(-11deg) scale(1.5); }
+    to   { transform: translate3d(-120px, -540px, 960px) rotateX(13deg) rotateY(-49deg) rotateZ(-15deg) scale(1.6); }
   }
   /* Almost side-on, the frame catching light down its length. */
   @keyframes edgeOn {
