@@ -17,6 +17,7 @@
    ======================================================================== */
 
 import { spawn } from 'node:child_process';
+import { rename, rm } from 'node:fs/promises';
 import { setTimeout as sleep } from 'node:timers/promises';
 
 const arg = (name, fallback) => {
@@ -26,6 +27,11 @@ const arg = (name, fallback) => {
 
 const FPS = Number(arg('fps', 30));
 const OUT = arg('out', 'ourmynd-walkthrough.mp4');
+// ffmpeg writes the moov atom last, so the output path holds an unplayable file
+// for the entire length of the render - twenty-odd minutes of a video that is
+// there but broken. Write beside it and rename at the end instead: the final
+// path either does not exist or is finished.
+const TMP = OUT.replace(/\.mp4$/, '') + '.part.mp4';
 const PORT = Number(arg('port', 4321));
 // A fresh port and profile per run. A previous run that was interrupted can
 // leave Chrome holding the old port, and /json/list then hands back ITS page -
@@ -160,7 +166,7 @@ const ff = spawn('ffmpeg', [
   '-pix_fmt', 'yuv420p', '-profile:v', 'high', '-level', '4.2',
   '-c:a', 'aac', '-b:a', '192k',
   '-shortest', '-movflags', '+faststart',
-  OUT,
+  TMP,
 ], { stdio: ['pipe', 'ignore', 'inherit'] });
 
 const write = (buf) => new Promise((res) => {
@@ -193,6 +199,9 @@ for (let f = 0; f < frames; f++) {
 
 process.stdout.write(`\r  ${frames}/${frames} frames — encoding...            \n`);
 ff.stdin.end();
-await new Promise((res) => ff.on('close', res));
+const code = await new Promise((res) => ff.on('close', res));
 chrome.kill();
+if (code !== 0) { await rm(TMP, { force: true }); throw new Error('ffmpeg exited ' + code); }
+await rm(OUT, { force: true });
+await rename(TMP, OUT);
 console.log('wrote', OUT);
