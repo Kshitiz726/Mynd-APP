@@ -30,6 +30,11 @@ services:
         generateValue: true        # Render mints a secure random one, never exposed
       - key: GOOGLE_CLIENT_ID      # web OAuth client id (.apps.googleusercontent.com)
         sync: false
+      # iOS OAuth client id. Not a secret - it ships inside the IPA's Info.plist -
+      # so it lives here as a plain value rather than a dashboard entry you could
+      # forget to set. Without it every iPhone sign-in fails audience checks.
+      - key: GOOGLE_IOS_CLIENT_ID
+        value: 571086253646-9b5qfcvkffu4efrvrgncfemck9mk5uil.apps.googleusercontent.com
       - key: STRIPE_SECRET_KEY
         sync: false
       - key: STRIPE_PUBLISHABLE_KEY

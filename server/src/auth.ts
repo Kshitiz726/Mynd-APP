@@ -33,9 +33,16 @@ function randomUsername(): string {
   return `${a}${n}${Math.floor(Math.random() * 100)}`;
 }
 
-// Valid token audiences: the Web client id (web/Android) + the Desktop client id.
+// Valid token audiences: the Web client id (web/Android), the Desktop client id,
+// and the iOS client id. iOS needs its own entry because the Google iOS SDK
+// addresses the ID token to the iOS client, not to the serverClientId the app
+// passes - that one only buys a server auth code there.
 function googleAudiences(): string[] {
-  return [config.googleClientId, config.googleDesktopClientId].filter(Boolean) as string[];
+  return [
+    config.googleClientId,
+    config.googleDesktopClientId,
+    config.googleIosClientId,
+  ].filter(Boolean) as string[];
 }
 
 // Verify a Google ID token's signature + audience, return the user's identity

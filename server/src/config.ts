@@ -31,6 +31,12 @@ export const config = {
   googleDesktopClientId: process.env.GOOGLE_DESKTOP_CLIENT_ID ?? '',
   googleDesktopClientSecret: process.env.GOOGLE_DESKTOP_CLIENT_SECRET ?? '',
 
+  // iOS OAuth: the "iOS" client id. Unlike Android - where serverClientId makes
+  // Google mint a token addressed to the WEB client - the iOS SDK always
+  // addresses the ID token to the iOS client itself, so it has to be accepted as
+  // an audience in its own right or every iPhone sign-in fails verification.
+  googleIosClientId: process.env.GOOGLE_IOS_CLIENT_ID ?? '',
+
   databaseUrl,
   redisUrl,
   livekit: { url: lkUrl, apiKey: lkKey, apiSecret: lkSecret },
