@@ -14,17 +14,6 @@
    ======================================================================== */
 
 (() => {
-  const root = document.getElementById('wt');
-  if (!root) return;
-
-  const stage  = document.getElementById('wt-stage');
-  const capBox = document.getElementById('wt-cap');
-  const ticks  = document.getElementById('wt-ticks');
-  const bPlay  = document.getElementById('wt-play');
-  const bClose = document.getElementById('wt-close');
-
-  // The script. Durations are reading times, not screen times: a caption you
-  // finish before the cut feels slow, one you don't finish feels rushed.
   const SCENES = [
     ['home',     'Open it. That is the whole setup.',
                  'No inbox to sort, no project to name, no empty checklist waiting to be filled in. Home is the orb, and the orb is a microphone.', 4600],
@@ -65,6 +54,22 @@
     ['paywall',  'Free covers the whole loop',
                  'Talk, schedule, remind, focus, remember. Plus and Pro raise the limits when you want more room to think.', 4600],
   ];
+  // Published so tools/record.mjs and video.html can drive the same sequence
+  // rather than keeping a copy of it that will drift.
+  window.OM_SCENES = SCENES;
+
+  const root = document.getElementById('wt');
+  if (!root) return;
+
+  const stage  = document.getElementById('wt-stage');
+  const capBox = document.getElementById('wt-cap');
+  const ticks  = document.getElementById('wt-ticks');
+  const bPlay  = document.getElementById('wt-play');
+  const bClose = document.getElementById('wt-close');
+
+  // The script. Durations are reading times, not screen times: a caption you
+  // finish before the cut feels slow, one you don't finish feels rushed.
+
 
 
 

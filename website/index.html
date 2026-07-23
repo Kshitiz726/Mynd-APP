@@ -559,10 +559,13 @@
                   <span class="toggle auto" style="--d:1.8s"></span>
                 </div>
                 <div class="note">we'll pair you with someone in a session - if no one's free yet, we keep matching quietly while your timer runs.</div>
-                <div class="sec-h" style="margin-bottom:5px">ambience</div>
+                <div class="sec-h stg" style="margin-bottom:5px;--d:2.2s">ambience</div>
                 <div class="filters">
-                  <span class="on"><svg class="i" style="font-size:9px"><use href="#ic-coffee"/></svg> café</span>
-                  <span>library</span><span>typing</span>
+                  <!-- The ambience is not just listed, it gets changed: the
+                       selection leaves cafe under a tap on library. -->
+                  <span class="on stg sw-off" style="--i:0;--d:3.4s"><svg class="i" style="font-size:9px"><use href="#ic-coffee"/></svg> café</span>
+                  <span class="stg press sw-on" style="--i:1;--d:3.4s">library<span class="tap"></span></span>
+                  <span class="stg" style="--i:2;--d:2.35s">typing</span>
                 </div>
               </div>
               <div class="btn-orange press" style="border-radius:15px;padding:11px;--d:3.2s">start pomodoro &middot; 25m<span class="tap"></span></div>

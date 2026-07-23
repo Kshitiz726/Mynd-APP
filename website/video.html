@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>OurMynd - film</title>
+<!--
+  The recording stage.
+  ---------------------------------------------------------------------------
+  A 1080x1920 page holding one phone and one caption, built to be filmed rather
+  than browsed. Two rules it lives by:
+
+  1. It owns no content. The phones are cloned out of index.html through a
+     hidden iframe, and the script comes from window.OM_SCENES on that same
+     document, so the film can never say something the site does not.
+  2. Every motion is a CSS animation keyed off .live, exactly as on the site,
+     because tools/record.mjs drives this page through CDP virtual time and
+     virtual time advances animations and timers together.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<style>
+  html, body { margin: 0; width: 1080px; height: 1920px; overflow: hidden; background: #0d0c14; }
+  body { display: grid; grid-template-rows: 132px 1fr auto; }
+
+  .bg { position: fixed; inset: 0; z-index: 0; background:
+        radial-gradient(120% 80% at 50% -10%, #2f2d55, #14131f 58%, #0c0b12); }
+  .bg .b1, .bg .b2 { position: absolute; border-radius: 50%; filter: blur(120px); }
+  .bg .b1 { width: 900px; height: 900px; top: -320px; right: -260px; background: #6B70C9; opacity: .30; }
+  .bg .b2 { width: 800px; height: 800px; bottom: -280px; left: -240px; background: #5C8AD0; opacity: .20; }
+
+  header, main, footer { position: relative; z-index: 2; }
+
+  header { display: flex; align-items: center; justify-content: center; gap: 16px; padding-top: 46px; }
+  header .orb { --orb: 46px; }
+  header b { font-family: "Fredoka", sans-serif; font-size: 38px; font-weight: 600; color: #fff; letter-spacing: -.5px; }
+
+  main { display: grid; place-items: center; position: relative; }
+  /* The phone is 300x625 in the site's own units; twice that is the largest
+     size that still leaves the caption room to breathe. */
+  #stage { position: relative; width: 600px; height: 1250px; }
+  #stage .scene {
+    position: absolute; inset: 0; display: grid; place-items: center;
+    opacity: 0; transform: translateY(26px) scale(.975);
+    transition: opacity .55s ease, transform .55s cubic-bezier(.22,1,.36,1);
+  }
+  #stage .scene.live { opacity: 1; transform: none; }
+  #stage .phone { transform: scale(2); transform-origin: center; }
+  .glow { position: absolute; width: 1000px; height: 1000px; border-radius: 50%;
+          background: radial-gradient(circle, rgba(141,132,230,.34), transparent 62%);
+          filter: blur(40px); pointer-events: none; }
+
+  footer { padding: 0 96px 92px; display: grid; justify-items: center; gap: 40px; }
+  #cap { text-align: center; min-height: 250px; }
+  #cap h2 {
+    font-family: "Fredoka", sans-serif; font-weight: 600; color: #fff;
+    font-size: 62px; line-height: 1.1; letter-spacing: -1.4px; margin: 0 0 22px;
+  }
+  #cap p { margin: 0; font-family: "Lexend", sans-serif; font-size: 31px; line-height: 1.5;
+           color: rgba(255,255,255,.68); }
+  /* The caption lands a beat after the screen it belongs to, like a title card. */
+  #cap.swap h2 { animation: capUp .6s cubic-bezier(.22,1,.36,1) both; }
+  #cap.swap p  { animation: capUp .6s cubic-bezier(.22,1,.36,1) .09s both; }
+  @keyframes capUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: none; } }
+
+  #bar { width: 780px; height: 6px; border-radius: 99px; background: rgba(255,255,255,.16); overflow: hidden; }
+  #bar i { display: block; height: 100%; width: 0; border-radius: 99px;
+           background: linear-gradient(90deg, #8E84E6, #F0A479); }
+
+  #src { position: fixed; width: 1px; height: 1px; opacity: 0; pointer-events: none; border: 0; }
+</style>
+</head>
+<body>
+
+<div class="bg"><div class="b1"></div><div class="b2"></div></div>
+
+<header><span class="orb still"><canvas></canvas></span><b>OurMynd</b></header>
+
+<main><div class="glow"></div><div id="stage"></div></main>
+
+<footer>
+  <div id="cap"><h2></h2><p></p></div>
+  <div id="bar"><i></i></div>
+</footer>
+
+<iframe id="src" src="index.html"></iframe>
+
+<script src="orb.js"></script>
+<script>
+const src = document.getElementById('src');
+const stage = document.getElementById('stage');
+const cap = document.getElementById('cap');
+const bar = document.querySelector('#bar i');
+
+src.addEventListener('load', () => {
+  const w = src.contentWindow, d = src.contentDocument;
+  const SCENES = w.OM_SCENES;
+  const total = SCENES.reduce((a, s) => a + s[3], 0);
+  let elapsed = 0;
+
+  SCENES.forEach(([key]) => {
+    const phone = d.querySelector('.phone[data-wt="' + key + '"]');
+    const sc = document.createElement('div');
+    sc.className = 'scene';
+    if (phone) {
+      const clone = phone.cloneNode(true);
+      sc.appendChild(clone);
+      if (window.OrbInit) clone.querySelectorAll('.orb canvas').forEach(window.OrbInit);
+    }
+    stage.appendChild(sc);
+  });
+
+  // Boot the header orb too - it is markup this page owns, so orb.js ran
+  // before the iframe existed and never saw it.
+  if (window.OrbInit) document.querySelectorAll('header .orb canvas').forEach(window.OrbInit);
+
+  function go(i) {
+    const [, title, body, dur] = SCENES[i];
+    [...stage.children].forEach((s, n) => s.classList.toggle('live', n === i));
+
+    cap.classList.remove('swap');
+    void cap.offsetWidth;
+    cap.querySelector('h2').textContent = title;
+    cap.querySelector('p').textContent = body;
+    cap.classList.add('swap');
+
+    // The bar tracks real elapsed time across the whole film, not the scene,
+    // so it reads as a progress bar rather than a per-slide timer.
+    bar.style.transition = 'none';
+    bar.style.width = (elapsed / total * 100) + '%';
+    void bar.offsetWidth;
+    bar.style.transition = 'width ' + dur + 'ms linear';
+    elapsed += dur;
+    bar.style.width = (elapsed / total * 100) + '%';
+
+    if (i + 1 < SCENES.length) setTimeout(() => go(i + 1), dur);
+    else document.documentElement.dataset.filmDone = '1';
+  }
+
+  // The film does not start itself. The recorder warms the page up in real
+  // time - fonts, the iframe, the WebGL contexts - and only then takes the
+  // clock away and calls this, so frame one really is frame one.
+  window.OM_START = () => setTimeout(() => go(0), 600);
+  document.documentElement.dataset.filmReady = String(total);
+});
+</script>
+</body>
+</html>
