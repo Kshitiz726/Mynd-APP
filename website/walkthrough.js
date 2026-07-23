@@ -238,6 +238,77 @@
     addEventListener('load', () => open(location.hash.split('=')[1] || ''));
   }
 
+
+  /* ---- The same film, playing in the hero ------------------------------- */
+  /* One timeline, two surfaces: the landing page runs the sequence inline, and
+     clicking it lifts the very same thing into the full-screen player at the
+     scene you were on. */
+  const film = document.getElementById('hero-film');
+  if (film) {
+    const cap   = document.getElementById('hero-cap');
+    const hTick = document.getElementById('hero-ticks');
+    let hIdx = 0, hTimer = null, hVisible = true;
+
+    SCENES.forEach(([key], i) => {
+      const src = document.querySelector(`.phone[data-wt="${key}"]`);
+      if (!src) return;
+      const sc = document.createElement('div');
+      sc.className = 'hero-scene';
+      const clone = src.cloneNode(true);
+      sc.appendChild(clone);
+      film.appendChild(sc);
+      if (window.OrbInit) clone.querySelectorAll('.orb canvas').forEach(window.OrbInit);
+
+      const b = document.createElement('button');
+      b.innerHTML = '<i></i>';
+      b.setAttribute('aria-label', `Step ${i + 1}`);
+      b.addEventListener('click', () => hGo(i));
+      hTick.appendChild(b);
+    });
+
+    function hGo(i) {
+      hIdx = (i + SCENES.length) % SCENES.length;
+      const [, title, body, dur] = SCENES[hIdx];
+
+      [...film.children].forEach((sc, n) => sc.classList.toggle('live', n === hIdx));
+
+      cap.classList.remove('swap');
+      void cap.offsetWidth;
+      cap.querySelector('.n').textContent = hIdx + 1;
+      cap.querySelector('.of').textContent = `of ${SCENES.length}`;
+      cap.querySelector('h2').textContent = title;
+      cap.querySelector('p').textContent = body;
+      cap.classList.add('swap');
+
+      [...hTick.children].forEach((b, n) => {
+        b.classList.toggle('done', n < hIdx);
+        b.classList.remove('now');
+        const i2 = b.querySelector('i');
+        i2.style.animationDuration = '';
+        if (n === hIdx) {
+          i2.style.animationDuration = dur + 'ms';
+          void b.offsetWidth;
+          b.classList.add('now');
+        }
+      });
+
+      clearTimeout(hTimer);
+      // Loops, unlike the full-screen film: a hero that stops on a still frame
+      // looks broken to anyone who arrives late.
+      hTimer = setTimeout(() => { if (hVisible) hGo(hIdx + 1); }, dur);
+    }
+
+    // Only runs while it is on screen. Fifteen live orbs scrolling past is a
+    // waste of a laptop battery.
+    new IntersectionObserver(([e]) => {
+      hVisible = e.isIntersecting;
+      if (hVisible) hGo(hIdx); else clearTimeout(hTimer);
+    }, { threshold: 0.15 }).observe(film);
+
+    film.addEventListener('click', () => open(SCENES[hIdx][0]));
+    hGo(0);
+  }
+
   bPlay.addEventListener('click', () => (playing ? pause() : play()));
   bClose.addEventListener('click', close);
 
