@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
-/// The primary bottom-navigation destinations, mirroring the prototype's
-/// `.navbar` buttons: home · schedule · (+) · community · settings.
+/// The primary bottom-navigation destinations: home · schedule · focus · chat.
 ///
-/// Focus and the coach are no longer destinations: they are things you *start*,
-/// so they live behind the centre (+) and open as full-screen routes.
+/// Focus and the coach used to be things you *started* from a centre (+) and
+/// opened as full-screen routes; they are first-class destinations now, and the
+/// (+) is gone with them. Community and settings are parked while we focus on
+/// these four: settings still opens from the profile avatar on Home, and the
+/// community screen is left in the codebase, just off the bar (see the
+/// commented entries below).
 ///
 /// Resting icons come from **Lucide** - the one icon family used everywhere
 /// else in the app. The *selected* tab swaps to a solid glyph: an outline that
@@ -18,8 +21,17 @@ enum AppTab {
       label: 'schedule',
       icon: LucideIcons.calendarDays,
       activeIcon: Icons.calendar_month_rounded),
-  community(label: 'community', icon: LucideIcons.users, activeIcon: Icons.people_rounded),
-  settings(label: 'settings', icon: LucideIcons.settings, activeIcon: Icons.settings_rounded);
+  focus(
+      label: 'focus',
+      icon: LucideIcons.timer,
+      activeIcon: Icons.timer_rounded),
+  coach(
+      label: 'chat',
+      icon: LucideIcons.messageCircle,
+      activeIcon: Icons.chat_bubble_rounded);
+  // Parked for now - keep the code, off the bar:
+  // community(label: 'community', icon: LucideIcons.users, activeIcon: Icons.people_rounded),
+  // settings(label: 'settings', icon: LucideIcons.settings, activeIcon: Icons.settings_rounded);
 
   const AppTab({required this.label, required this.icon, required this.activeIcon});
 

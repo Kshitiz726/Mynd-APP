@@ -10,6 +10,7 @@ import '../../core/utils/haptics.dart';
 import '../../core/utils/om_icons.dart';
 import '../../core/utils/task_icon.dart';
 import '../../core/utils/toast.dart';
+import '../../models/focus_ambience.dart';
 import '../../models/focus_mode.dart';
 import '../../models/saved_focus.dart';
 import '../../models/task.dart';
@@ -38,7 +39,10 @@ class FocusScreen extends StatefulWidget {
 class _FocusScreenState extends State<FocusScreen> {
   /// Minute options the dial snaps through: fine-grained where short sessions
   /// live, coarser once you are past an hour.
-  static const _steps = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 60, 75, 90, 105, 120];
+  static const _steps = [
+    5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, //
+    75, 90, 105, 120, 150, 180, 210, 240, 300, 360,
+  ];
 
   late final PageController _dial = PageController(
     // Pomodoro's 25 minutes is the sane default to open on.
@@ -50,6 +54,10 @@ class _FocusScreenState extends State<FocusScreen> {
   String _label = 'Pomodoro';
   bool _bodyDoubling = false;
   String _ambient = 'Café';
+
+  /// The background scene (looping video) the session runs inside. 'none' keeps
+  /// the plain screen.
+  String _sceneId = 'none';
 
   /// The "now" card counts down between rebuilds, so it needs its own pulse.
   Timer? _clock;
@@ -94,7 +102,8 @@ class _FocusScreenState extends State<FocusScreen> {
       );
       return;
     }
-    context.read<FocusProvider>().start(mode, false, taskTitle: taskTitle, seconds: seconds);
+    context.read<FocusProvider>().start(mode, false,
+        taskTitle: taskTitle, seconds: seconds, ambienceId: _sceneId);
   }
 
   /// "Focus on this task": the timer runs the block's *remaining* time, so a
@@ -159,6 +168,21 @@ class _FocusScreenState extends State<FocusScreen> {
             scrollDirection: Axis.horizontal,
             physics: const BouncingScrollPhysics(),
             children: [
+              // The create tile leads, so it's always one tap away no matter how
+              // many saved focuses pile up to its right.
+              Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: _NewFocusCard(
+                  onTap: () => showNewFocusSheet(
+                    context,
+                    initialMinutes: _minutes,
+                    onStart: (name, minutes) => _startSession(
+                      FocusMode(name: name, minutes: minutes, iconName: 'target', when: 'saved by you'),
+                      taskTitle: name,
+                    ),
+                  ),
+                ),
+              ),
               for (final focus in saved)
                 Padding(
                   padding: const EdgeInsets.only(right: 12),
@@ -180,16 +204,6 @@ class _FocusScreenState extends State<FocusScreen> {
                     },
                   ),
                 ),
-              _NewFocusCard(
-                onTap: () => showNewFocusSheet(
-                  context,
-                  initialMinutes: _minutes,
-                  onStart: (name, minutes) => _startSession(
-                    FocusMode(name: name, minutes: minutes, iconName: 'target', when: 'saved by you'),
-                    taskTitle: name,
-                  ),
-                ),
-              ),
             ],
           ),
         ),
@@ -225,6 +239,9 @@ class _FocusScreenState extends State<FocusScreen> {
             itemBuilder: (context, i) {
               final value = _steps[i];
               final selected = value == _minutes;
+              // A glassy tile: the selected one is a brand-lit slab with a soft
+              // top sheen and glow; the rest are frosted, translucent chips that
+              // pick up the app's surface. Three-digit lengths shrink to fit.
               return Center(
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 240),
@@ -232,27 +249,61 @@ class _FocusScreenState extends State<FocusScreen> {
                   width: selected ? 96 : 66,
                   height: selected ? 96 : 66,
                   decoration: BoxDecoration(
-                    gradient: selected ? c.brandGradient : null,
-                    color: selected ? null : c.surfaceAlt,
-                    borderRadius: BorderRadius.circular(selected ? 28 : 20),
+                    gradient: selected
+                        ? LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              Color.lerp(c.primary, Colors.white, 0.14)!,
+                              c.primary,
+                            ],
+                          )
+                        : LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              c.surface.withValues(alpha: context.isDark ? 0.5 : 0.8),
+                              c.surfaceAlt.withValues(alpha: context.isDark ? 0.35 : 0.6),
+                            ],
+                          ),
+                    borderRadius: BorderRadius.circular(selected ? 30 : 22),
+                    border: Border.all(
+                      color: selected
+                          ? Colors.white.withValues(alpha: 0.35)
+                          : c.border.withValues(alpha: 0.7),
+                      width: selected ? 1.2 : 1,
+                    ),
                     boxShadow: selected
                         ? [
                             BoxShadow(
-                              color: c.primary.withValues(alpha: 0.34),
-                              blurRadius: 22,
-                              offset: const Offset(0, 10),
+                              color: c.primary.withValues(alpha: 0.38),
+                              blurRadius: 26,
+                              offset: const Offset(0, 12),
                             ),
                           ]
-                        : null,
+                        : [
+                            BoxShadow(
+                              color: c.shadow.withValues(alpha: context.isDark ? 0.28 : 0.05),
+                              blurRadius: 12,
+                              offset: const Offset(0, 6),
+                            ),
+                          ],
                   ),
                   alignment: Alignment.center,
-                  child: Text(
-                    '$value',
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          color: selected ? Colors.white : c.text2,
-                          fontSize: selected ? 34 : 22,
-                          fontWeight: FontWeight.w800,
-                        ),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: Text(
+                        '$value',
+                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                              color: selected ? Colors.white : c.text2,
+                              fontSize: selected ? 34 : 22,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.5,
+                            ),
+                      ),
+                    ),
                   ),
                 ),
               );
@@ -283,6 +334,41 @@ class _FocusScreenState extends State<FocusScreen> {
                 ),
               ),
           ],
+        ),
+        const SizedBox(height: AppSpacing.lg),
+
+        // Scene: the looping backdrop the running timer sits inside.
+        Row(
+          children: [
+            Text('scene',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontSize: 16)),
+            const SizedBox(width: 8),
+            Text('sets the mood while you focus',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(color: c.text2)),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        SizedBox(
+          height: 46,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            children: [
+              for (final scene in kFocusAmbiences)
+                Padding(
+                  padding: const EdgeInsets.only(right: AppSpacing.sm),
+                  child: _AmbientChip(
+                    label: scene.label,
+                    icon: scene.icon,
+                    selected: _sceneId == scene.id,
+                    onTap: () {
+                      Haptics.select();
+                      setState(() => _sceneId = scene.id);
+                    },
+                  ),
+                ),
+            ],
+          ),
         ),
         const SizedBox(height: AppSpacing.lg),
 
@@ -348,14 +434,18 @@ class _FocusGreeting extends StatelessWidget {
         ? '${focused.inHours}h ${focused.inMinutes % 60}m focused'
         : '${focused.inMinutes}m focused';
 
+    // A single dark, premium hero: the greeting and a live orb up top, two
+    // connected stat tiles below, all on one brand-lit slab so the top of the
+    // screen reads as one designed object rather than a plain card.
+    final darkInk = Color.lerp(c.primary, Colors.black, 0.62)!;
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(28),
         boxShadow: [
           BoxShadow(
-            color: c.primary.withValues(alpha: context.isDark ? 0.28 : 0.16),
-            blurRadius: 28,
-            offset: const Offset(0, 12),
+            color: c.primary.withValues(alpha: context.isDark ? 0.34 : 0.24),
+            blurRadius: 30,
+            offset: const Offset(0, 14),
           ),
         ],
       ),
@@ -363,68 +453,122 @@ class _FocusGreeting extends StatelessWidget {
         borderRadius: BorderRadius.circular(28),
         child: Stack(
           children: [
-            // A brand glow in the corner, the way the reference lights its card.
             Positioned.fill(
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  gradient: RadialGradient(
-                    center: const Alignment(1.1, -1.0),
-                    radius: 1.4,
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                     colors: [
-                      c.primary.withValues(alpha: context.isDark ? 0.42 : 0.26),
-                      c.primary.withValues(alpha: 0.0),
+                      Color.lerp(darkInk, c.primary, 0.28)!,
+                      darkInk,
                     ],
                   ),
                 ),
               ),
             ),
-            OmGlass(
-              borderRadius: 28,
-              blur: 26,
-              opacity: context.isDark ? 0.34 : 0.62,
-              padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(22, 22, 22, 18),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    _greetingFor(DateTime.now().hour),
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          fontSize: 26,
-                          fontWeight: FontWeight.w500,
-                          color: c.text2,
-                          letterSpacing: -0.4,
-                        ),
-                  ),
-                  Text(
-                    name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          fontSize: 28,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.6,
-                        ),
-                  ),
-                  const SizedBox(height: 16),
                   Row(
                     children: [
-                      Icon(OmIcons.byName('sparkles'), size: 14, color: c.primary),
-                      const SizedBox(width: 6),
                       Expanded(
-                        child: Text(
-                          '${stats.done} done today · $focusedLabel',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                fontWeight: FontWeight.w600,
-                                color: c.text2,
-                              ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _greetingFor(DateTime.now().hour),
+                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.white.withValues(alpha: 0.72),
+                                    letterSpacing: -0.2,
+                                  ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                                    fontSize: 27,
+                                    fontWeight: FontWeight.w800,
+                                    color: Colors.white,
+                                    letterSpacing: -0.6,
+                                  ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              "let's get you locked in.",
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: Colors.white.withValues(alpha: 0.66),
+                                  ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
+                  const SizedBox(height: 18),
+                  // Two connected stat tiles sharing one translucent bar.
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                    ),
+                    child: Row(
+                      children: [
+                        _HeroStat(icon: 'check', value: '${stats.done}', label: 'done today'),
+                        Container(width: 1, height: 34, color: Colors.white.withValues(alpha: 0.14)),
+                        _HeroStat(icon: 'timer', value: focusedLabel.replaceAll(' focused', ''), label: 'focused'),
+                      ],
+                    ),
+                  ),
                 ],
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// One half of the hero's stat bar: an icon, a big number, a quiet label.
+class _HeroStat extends StatelessWidget {
+  const _HeroStat({required this.icon, required this.value, required this.label});
+
+  final String icon;
+  final String value;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+        child: Row(
+          children: [
+            Icon(OmIcons.byName(icon), size: 18, color: Colors.white.withValues(alpha: 0.9)),
+            const SizedBox(width: 10),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(value,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 20,
+                          height: 1,
+                        )),
+                Text(label,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: Colors.white.withValues(alpha: 0.6),
+                        )),
+              ],
             ),
           ],
         ),
@@ -721,7 +865,7 @@ Future<void> showNewFocusSheet(
 }) async {
   // Snapped to 5, so any length is reachable. The old fixed set of ten presets
   // made the machine's convenient numbers the only allowed answers.
-  var minutes = initialMinutes.clamp(5, 180);
+  var minutes = initialMinutes.clamp(5, 360);
   final focus = context.read<FocusProvider>();
 
   await showOmFormPage<void>(
@@ -761,7 +905,7 @@ Future<void> showNewFocusSheet(
                     textCapitalization: TextCapitalization.sentences,
                     style: Theme.of(builderContext).textTheme.titleMedium?.copyWith(fontSize: 17),
                     decoration: InputDecoration(
-                      hintText: 'e.g. read atomic habits',
+                      hintText: 'read atomic habits',
                       filled: true,
                       fillColor: c.surfaceAlt,
                       border: OutlineInputBorder(
@@ -781,6 +925,7 @@ Future<void> showNewFocusSheet(
                           )),
                   OmMinuteDial(
                     value: minutes,
+                    max: 360,
                     onChanged: (m) => setSheetState(() => minutes = m),
                   ),
                   const SizedBox(height: AppSpacing.xl),

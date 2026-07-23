@@ -1,18 +1,25 @@
 import 'package:flutter/material.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
+// Lucide only fed the parked (+) create sheet; nav-tab icons live on AppTab.
+// import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/services/puter_service.dart';
 import '../../providers/alerts_provider.dart';
 import '../../providers/chat_provider.dart';
 import '../../providers/settings_provider.dart';
 import 'widgets/animated_index_stack.dart';
 import '../../providers/focus_provider.dart';
 import '../../providers/nav_provider.dart';
-import '../../core/theme/app_colors.dart';
+// app_colors only served the parked (+) create sheet.
+// import '../../core/theme/app_colors.dart';
 import '../../widgets/low_stim_filter.dart';
 import '../../widgets/memory_autopilot.dart';
 import '../../widgets/notification_primer.dart';
-import '../community/community_screen.dart';
+// Community and Profile are parked as tabs (see _tabs); imports kept commented
+// so the wiring is one line away when they come back.
+// import '../community/community_screen.dart';
+// import '../profile/profile_screen.dart';
+import '../coach/coach_screen.dart';
 import '../focus/focus_active_screen.dart';
 import '../focus/focus_room_screen.dart';
 import '../focus/focus_screen.dart';
@@ -21,7 +28,6 @@ import '../../core/routes/app_routes.dart';
 import '../../providers/focus_room_provider.dart';
 import '../home/home_screen.dart';
 import '../../widgets/focus_invite_listener.dart';
-import '../profile/profile_screen.dart';
 import 'widgets/live_focus_pill.dart';
 import 'widgets/om_nav_bar.dart';
 
@@ -34,12 +40,20 @@ class AppShell extends StatefulWidget {
 }
 
 class _AppShellState extends State<AppShell> {
-  /// Tab order must match [AppTab.values].
+  /// Tab order must match [AppTab.values]: home · schedule · focus · chat.
+  ///
+  /// Focus and the coach are full destinations now, not routes behind a (+).
+  /// [FocusTabShell] swaps between the setup screen and the running timer so the
+  /// tab is always "where focus is" rather than a dead form while a session
+  /// runs. Community and Profile are parked - the screens still exist, they are
+  /// just no longer tabs (Profile opens from the Home avatar).
   static const List<Widget> _tabs = [
     HomeScreen(),
     ScheduleScreen(),
-    CommunityScreen(),
-    ProfileScreen(),
+    FocusTabShell(),
+    CoachScreen(),
+    // CommunityScreen(),
+    // ProfileScreen(),
   ];
 
   @override
@@ -82,8 +96,10 @@ class _AppShellState extends State<AppShell> {
   Widget build(BuildContext context) {
     final nav = context.watch<NavProvider>();
     final focus = context.watch<FocusProvider>();
-    // Focus is a route now, so the live pill is always worth showing in the shell.
-    final showLivePill = focus.isActive;
+    // The live pill is a way *back* to a running session from elsewhere. On the
+    // Focus tab itself the timer is already on screen, so the pill there is just
+    // a second clock floating over the first - show it only off the Focus tab.
+    final showLivePill = focus.isActive && nav.tab != AppTab.focus;
 
     // Immersive surfaces hide the bottom nav so they read full-screen: a live
     // focus room, an open DM / group chat, and the keyboard being up.
@@ -94,7 +110,10 @@ class _AppShellState extends State<AppShell> {
     final inFocusRoom = rooms.roomVisible;
     final inChat = context.watch<ChatProvider>().activeConversationId != null;
     final keyboardUp = MediaQuery.of(context).viewInsets.bottom != 0;
-    final hideNav = inFocusRoom || inChat || keyboardUp;
+    // A running solo session is immersive too: on the Focus tab the timer owns
+    // the screen and the only way out is its own back button (which confirms).
+    final inFocusSession = focus.isActive && nav.tab == AppTab.focus;
+    final hideNav = inFocusRoom || inChat || keyboardUp || inFocusSession;
 
     return MemoryAutopilot(
       child: FocusInviteListener(
@@ -157,12 +176,23 @@ class _AppShellState extends State<AppShell> {
           ),
           bottomNavigationBar: hideNav
               ? null
-              : OmNavBar(
-                  current: nav.tab,
-                  onSelect: nav.select,
-                  onCreate: () => _showCreateSheet(context),
-                  alertsUnread: context.watch<AlertsProvider>().alertsUnread,
-                ),
+              : nav.tab == AppTab.coach
+                  // The coach is full-screen while you are actually chatting:
+                  // the bar steals thumb-room and breaks the flow. But the Puter
+                  // sign-in gate needs a way back out, so the bar stays there.
+                  ? StreamBuilder<bool>(
+                      stream: PuterService.instance.authState,
+                      initialData: PuterService.instance.signedIn,
+                      builder: (context, snap) {
+                        final signedIn = snap.data ?? false;
+                        if (signedIn) return const SizedBox.shrink();
+                        return OmNavBar(current: nav.tab, onSelect: nav.select);
+                      },
+                    )
+                  : OmNavBar(
+                      current: nav.tab,
+                      onSelect: nav.select,
+                    ),
           ),
         ),
       ),
@@ -170,7 +200,10 @@ class _AppShellState extends State<AppShell> {
   }
 }
 
-/// The (+) sheet: the two things you *start* rather than browse to.
+// The (+) create sheet is parked along with the centre button: focus and the
+// coach are their own tabs now, so there is nothing left to "start" from here.
+// Kept (commented) in case the (+) ever comes back.
+/*
 void _showCreateSheet(BuildContext context) {
   showModalBottomSheet<void>(
     context: context,
@@ -227,6 +260,7 @@ void _showCreateSheet(BuildContext context) {
     },
   );
 }
+*/
 
 /// A wrapper for the Focus tab to switch between the setup and active timer.
 class FocusTabShell extends StatelessWidget {

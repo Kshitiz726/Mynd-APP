@@ -12,6 +12,7 @@ import '../../../providers/goal_provider.dart';
 import '../../../widgets/om_button.dart';
 import '../../../widgets/om_form_page.dart';
 import '../../../widgets/om_tappable.dart';
+import '../../../widgets/om_time_picker.dart';
 import '../../../widgets/text_editing_scope.dart';
 
 /// "New goal": capture a title, a target date ("achieve this by") and the slot
@@ -53,7 +54,7 @@ Future<void> showAddGoalSheet(BuildContext context) async {
             }
 
             Future<void> pickSlot() async {
-              final picked = await showTimePicker(
+              final picked = await showOmTimePicker(
                 context: context,
                 initialTime: dailyStart ?? const TimeOfDay(hour: 18, minute: 0),
                 helpText: 'Work on this each day at',
@@ -116,7 +117,7 @@ Future<void> showAddGoalSheet(BuildContext context) async {
                   cursorColor: colors.primary,
                   style: Theme.of(context).textTheme.bodyLarge,
                   decoration: InputDecoration(
-                    hintText: 'e.g. learn to play guitar',
+                    hintText: 'learn to play guitar',
                     hintStyle: Theme.of(context).textTheme.bodyLarge?.copyWith(color: colors.text2),
                     filled: true,
                     fillColor: colors.surfaceAlt,

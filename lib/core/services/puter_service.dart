@@ -128,8 +128,13 @@ class PuterService {
   Stream<PuterVoiceState> get voiceState => _voiceState.stream;
   PuterVoiceState _state = PuterVoiceState.idle;
   PuterVoiceState get state => _state;
-  Completer<String>? _transcript;
   Completer<void>? _spoken;
+
+  // Mic capture: the bridge records audio and hands the base64 clip back here;
+  // Dart transcribes it with Groq Whisper. A live loudness stream drives the orb.
+  Completer<String>? _audioCap;
+  final _levelCtrl = StreamController<double>.broadcast();
+  Stream<double> get voiceLevel => _levelCtrl.stream;
 
   // ───────────────────────── Wiring (called by PuterHost) ─────────────────────
 
@@ -205,11 +210,17 @@ class PuterService {
             });
           })
       ..addJavaScriptHandler(
-          handlerName: 'onTranscript',
+          handlerName: 'onAudio',
           callback: (args) {
-            _transcript
-                ?.complete(((args.first as Map)['text'] ?? '') as String);
-            _transcript = null;
+            final d = args.first as Map;
+            _audioCap?.complete((d['b64'] ?? '') as String);
+            _audioCap = null;
+          })
+      ..addJavaScriptHandler(
+          handlerName: 'onVoiceLevel',
+          callback: (args) {
+            final lvl = ((args.first as Map)['level'] ?? 0) as num;
+            if (!_levelCtrl.isClosed) _levelCtrl.add(lvl.toDouble());
           })
       ..addJavaScriptHandler(
           handlerName: 'onSpoken',
@@ -294,6 +305,28 @@ class PuterService {
   /// Reload the bridge page (re-reads any shared-storage Puter token).
   void reloadBridge() => _controller?.reload();
 
+  /// Reload the bridge and wait until it reports signed in.
+  ///
+  /// Used right after the visible Connect screen finishes Puter's sign-in: the
+  /// bridge shares the connect page's localhost origin, so a reload re-reads the
+  /// session Puter.js just wrote and comes back authenticated. Resolves when the
+  /// bridge confirms it (or after a short timeout, so the caller never hangs).
+  Future<void> reloadBridgeAndAwaitAuth() async {
+    if (signedIn) return;
+    final done = Completer<void>();
+    final sub = authState.listen((v) {
+      if (v && !done.isCompleted) done.complete();
+    });
+    _controller?.reload();
+    try {
+      await done.future.timeout(const Duration(seconds: 6));
+    } catch (_) {
+      // Not signed in after the reload - the gate correctly stays.
+    } finally {
+      await sub.cancel();
+    }
+  }
+
   Future<void> _eval(String js) async {
     await ready;
     await _controller?.evaluateJavascript(source: js);
@@ -354,17 +387,32 @@ class PuterService {
 
   // ───────────────────────────── Voice API ─────────────────────────────────────
 
-  Future<void> startListening() => _eval('window.omStartVoice();');
+  /// Start capturing the mic in the bridge WebView (a secure localhost context
+  /// where getUserMedia works). Loudness arrives on [voiceLevel] meanwhile.
+  Future<void> startCapture() => _eval('window.omRecStart();');
 
-  /// Stops recording and resolves with the transcribed text ('' on failure).
-  Future<String> stopAndTranscribe() {
-    _transcript = Completer<String>();
-    _eval('window.omStopVoice();');
-    return _transcript!.future.timeout(const Duration(seconds: 30),
-        onTimeout: () {
-      _transcript = null;
+  /// Stop capturing and resolve with the recorded audio bytes (empty on
+  /// failure). The caller sends these to Groq Whisper to get text.
+  Future<List<int>> stopCapture() async {
+    _audioCap = Completer<String>();
+    final fut = _audioCap!.future;
+    await _eval('window.omRecStop();');
+    final b64 = await fut.timeout(const Duration(seconds: 20), onTimeout: () {
+      _audioCap = null;
       return '';
     });
+    if (b64.isEmpty) return const [];
+    try {
+      return base64.decode(b64);
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// Abandon the current capture without returning audio.
+  void cancelCapture() {
+    _audioCap = null;
+    _eval('window.omRecCancel();');
   }
 
   /// Speaks [text] aloud; resolves when playback ends.
@@ -379,7 +427,6 @@ class PuterService {
 
   void stopSpeaking() => _eval('window.omStopSpeak();');
 
-  void emitThinking() => _emitState(PuterVoiceState.thinking);
   void resetVoice() => _emitState(PuterVoiceState.idle);
 }
 

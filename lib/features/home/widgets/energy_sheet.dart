@@ -5,7 +5,7 @@ import 'dart:convert';
 
 import '../../../core/constants/app_spacing.dart';
 import '../../../core/services/groq_service.dart';
-import '../../../core/services/puter_service.dart';
+import '../../../core/services/speech_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../core/utils/om_icons.dart';
@@ -224,10 +224,10 @@ Respond ONLY with a valid JSON array of objects. Do not wrap it in markdown. For
               });
             }
 
-            // Voice brain dump: speak it, Puter transcribes, text drops into the
-            // field so the user can review/edit before adding.
+            // Voice brain dump: speak it, Groq Whisper transcribes, text drops
+            // into the field so the user can review/edit before adding.
             Future<void> toggleMic() async {
-              final puter = PuterService.instance;
+              final stt = SpeechService.instance;
               if (recording) {
                 setState(() {
                   recording = false;
@@ -235,7 +235,7 @@ Respond ONLY with a valid JSON array of objects. Do not wrap it in markdown. For
                 });
                 String text = '';
                 try {
-                  text = await puter.stopAndTranscribe();
+                  text = await stt.stopAndTranscribe();
                 } catch (_) {/* keep whatever's typed */}
                 if (text.trim().isNotEmpty) {
                   final existing = controller.text.trim();
@@ -245,16 +245,14 @@ Respond ONLY with a valid JSON array of objects. Do not wrap it in markdown. For
                 Haptics.light();
                 setState(() => transcribing = false);
               } else {
-                if (!puter.signedIn) {
-                  Toast.show(context, 'Connect Puter in Coach to use voice');
-                  return;
-                }
                 Haptics.medium();
                 setState(() => recording = true);
-                try {
-                  await puter.startListening();
-                } catch (_) {
+                final ok = await stt.startRecording();
+                if (!ok) {
                   setState(() => recording = false);
+                  if (context.mounted) {
+                    Toast.show(context, 'Microphone unavailable');
+                  }
                 }
               }
             }

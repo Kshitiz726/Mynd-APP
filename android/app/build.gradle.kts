@@ -23,7 +23,9 @@ android {
         applicationId = "com.example.ourmynd"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        // record (mic capture for voice input) needs API 23+, above Flutter's
+        // default floor, so pin it here rather than let the merge fail.
+        minSdk = maxOf(flutter.minSdkVersion, 23)
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

@@ -1,11 +1,7 @@
 import 'dart:math' as math;
 
-import 'dart:io' show Platform;
-
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:video_player/video_player.dart';
 
 import '../../core/constants/app_spacing.dart';
 import '../../core/theme/app_colors.dart';
@@ -28,103 +24,6 @@ class FocusRoomScreen extends StatefulWidget {
 }
 
 class _FocusRoomScreenState extends State<FocusRoomScreen> {
-  late VideoPlayerController _videoController;
-  String _currentAmbience = '';
-  bool _isVideoInitialized = false;
-
-  @override
-  void initState() {
-    super.initState();
-    // Start with a generic placeholder URL (it will immediately update if Provider has a different value)
-    _initVideo('cafe');
-  }
-
-  bool get _isVideoSupported =>
-      kIsWeb || Platform.isAndroid || Platform.isIOS || Platform.isMacOS;
-
-  void _initVideo(String ambience) {
-    _currentAmbience = ambience;
-
-    if (!_isVideoSupported) {
-      // Safely fallback for Windows/Linux
-      return;
-    }
-
-    final url = _getVideoUrl(ambience);
-
-    _videoController = VideoPlayerController.networkUrl(Uri.parse(url))
-      ..initialize().then((_) {
-        _videoController.setLooping(true);
-        _videoController.setVolume(0.0);
-        _videoController.play();
-        if (mounted) {
-          setState(() {
-            _isVideoInitialized = true;
-          });
-        }
-      });
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final fr = context.watch<FocusRoomProvider>();
-    if (fr.ambience != _currentAmbience) {
-      if (!_isVideoSupported) {
-        _currentAmbience = fr.ambience;
-        return;
-      }
-
-      final oldController = _videoController;
-      final newUrl = _getVideoUrl(fr.ambience);
-
-      final newController = VideoPlayerController.networkUrl(Uri.parse(newUrl));
-      newController.initialize().then((_) {
-        newController.setLooping(true);
-        newController.setVolume(0.0);
-        newController.play();
-
-        if (mounted) {
-          setState(() {
-            _videoController = newController;
-            _currentAmbience = fr.ambience;
-          });
-        }
-
-        // Smooth crossfade, dispose old controller after a delay
-        Future.delayed(const Duration(milliseconds: 1000), () {
-          oldController.dispose();
-        });
-      });
-    }
-  }
-
-  String _getVideoUrl(String ambience) {
-    // Map ambiences to reliable sample video loops to achieve the requested effect.
-    switch (ambience) {
-      case 'rain':
-        return 'https://storage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4';
-      case 'cafe':
-        return 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4';
-      case 'silent':
-        return 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4';
-      case 'library':
-        return 'https://storage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4';
-      case 'typing':
-        return 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4';
-      default:
-        return 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4';
-    }
-  }
-
-  @override
-  void dispose() {
-    if (_isVideoSupported && _isVideoInitialized) {
-      _videoController.dispose();
-    }
-    super.dispose();
-  }
-
   @override
   Widget build(BuildContext context) {
     final fr = context.watch<FocusRoomProvider>();
@@ -174,23 +73,6 @@ class _FocusRoomScreenState extends State<FocusRoomScreen> {
               ),
             ),
           ),
-          // Background Video Ambience
-          if (_isVideoInitialized)
-            AnimatedSwitcher(
-              duration: const Duration(seconds: 1),
-              child: SizedBox.expand(
-                key: ValueKey(_videoController.dataSource),
-                child: FittedBox(
-                  fit: BoxFit.cover,
-                  child: SizedBox(
-                    width: _videoController.value.size.width,
-                    height: _videoController.value.size.height,
-                    child: VideoPlayer(_videoController),
-                  ),
-                ),
-              ),
-            ),
-
           // Glassy Overlay for Readability
           Container(
             color: context.isDark

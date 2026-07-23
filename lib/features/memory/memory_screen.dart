@@ -3,10 +3,13 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/constants/app_spacing.dart';
+import '../../core/routes/app_routes.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/haptics.dart';
 import '../../core/utils/om_icons.dart';
+import '../../core/utils/toast.dart';
 import '../../providers/memory_provider.dart';
+import '../../providers/premium_provider.dart';
 import '../../widgets/om_back_button.dart';
 import '../../widgets/om_tappable.dart';
 import 'memory_actions.dart';
@@ -25,6 +28,9 @@ class MemoryScreen extends StatelessWidget {
     final c = context.omColors;
     final memory = context.watch<MemoryProvider>();
     final m = memory.memory;
+    // Editing your memory by hand is a paid feature. Free users still see and
+    // read everything (and Mynd still refreshes it) - they just can't rewrite it.
+    final canEdit = context.watch<PremiumProvider>().isPremium;
 
     return Scaffold(
       backgroundColor: c.bg,
@@ -58,8 +64,20 @@ class MemoryScreen extends StatelessWidget {
                     const SizedBox(width: 6),
                     _Action(
                       icon: 'edit',
-                      tooltip: 'Edit this yourself',
-                      onTap: () => showMemoryEditor(context),
+                      tooltip: canEdit
+                          ? 'Edit this yourself'
+                          : 'Editing memory is a Plus feature',
+                      locked: !canEdit,
+                      onTap: () {
+                        if (canEdit) {
+                          showMemoryEditor(context);
+                        } else {
+                          Haptics.light();
+                          Toast.show(context,
+                              'Editing your memory is a Plus feature');
+                          Navigator.of(context).pushNamed(AppRoutes.paywall);
+                        }
+                      },
                     ),
                   ],
                 ],
@@ -197,11 +215,15 @@ class MemoryScreen extends StatelessWidget {
 
 class _Action extends StatelessWidget {
   const _Action(
-      {required this.icon, required this.onTap, required this.tooltip});
+      {required this.icon,
+      required this.onTap,
+      required this.tooltip,
+      this.locked = false});
 
   final String icon;
   final VoidCallback onTap;
   final String tooltip;
+  final bool locked;
 
   @override
   Widget build(BuildContext context) {
@@ -217,7 +239,25 @@ class _Action extends StatelessWidget {
           height: 36,
           decoration:
               BoxDecoration(color: c.surfaceAlt, shape: BoxShape.circle),
-          child: Icon(OmIcons.byName(icon), size: 16, color: c.text2),
+          alignment: Alignment.center,
+          child: Stack(
+            clipBehavior: Clip.none,
+            alignment: Alignment.center,
+            children: [
+              Icon(OmIcons.byName(icon), size: 16, color: c.text2),
+              if (locked)
+                Positioned(
+                  right: -5,
+                  bottom: -5,
+                  child: Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration:
+                        BoxDecoration(color: c.surfaceAlt, shape: BoxShape.circle),
+                    child: Icon(Icons.lock_rounded, size: 11, color: c.primary),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );

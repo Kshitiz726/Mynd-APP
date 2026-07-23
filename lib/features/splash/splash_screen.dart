@@ -47,15 +47,16 @@ class SplashScreen extends StatefulWidget {
 class _SplashScreenState extends State<SplashScreen> {
   /// How long the whole entrance lasts, measured from `main()`.
   ///
-  /// Long enough to watch the orb actually move through a shape or two, which
-  /// is the point of it being alive rather than a logo.
-  static const _total = Duration(milliseconds: 5000);
+  /// Kept short: long enough to see the orb settle, not long enough to feel like
+  /// a wait. Most of the boot work overlaps this, so the app is usually ready
+  /// well before it ends.
+  static const _total = Duration(milliseconds: 2000);
 
   /// Never less than this, however slow the boot was. Without a floor, a start
   /// that took nearly the whole budget would leave the orb on screen for a few
   /// frames, which reads as a glitch rather than an entrance.
-  static const _floor = Duration(milliseconds: 1400);
-  static const _fadeOut = Duration(milliseconds: 520);
+  static const _floor = Duration(milliseconds: 900);
+  static const _fadeOut = Duration(milliseconds: 420);
 
   bool _leaving = false;
 

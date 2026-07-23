@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/constants/app_spacing.dart';
@@ -123,7 +124,10 @@ class TaskTile extends StatelessWidget {
                             onPressed: () {
                               Haptics.select();
                               tasks.schedule(task);
-                              Toast.show(context, 'added to your day');
+                              final label = tasks.viewingToday
+                                  ? 'your day'
+                                  : DateFormat.MMMEd().format(tasks.selectedDate);
+                              Toast.show(context, 'added to $label');
                             },
                           ),
                         const SizedBox(width: AppSpacing.md),

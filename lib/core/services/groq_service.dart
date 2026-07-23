@@ -87,6 +87,61 @@ class GroqService {
     }
   }
 
+  // ─── Transcription (Whisper) ──────────────────────────────────────────────
+
+  static const _transcribeEndpoint =
+      'https://api.groq.com/openai/v1/audio/transcriptions';
+
+  /// Fast, cloud speech-to-text. Turbo Whisper is quick and cheap; it works on
+  /// emulators (which have no on-device recogniser) as long as the mic captured
+  /// real audio. Returns the transcript, or '' when nothing intelligible was
+  /// heard.
+  Future<String> transcribe(
+    List<int> bytes, {
+    String filename = 'audio.m4a',
+    String model = 'whisper-large-v3-turbo',
+  }) async {
+    final request = http.MultipartRequest('POST', Uri.parse(_transcribeEndpoint))
+      ..headers['Authorization'] = 'Bearer $_apiKey'
+      ..fields['model'] = model
+      ..fields['response_format'] = 'json'
+      // temperature 0 + a fixed language make Whisper far less likely to invent
+      // filler ("Thank you.", "you") when the audio is quiet.
+      ..fields['temperature'] = '0'
+      ..fields['language'] = 'en'
+      ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: filename));
+
+    final streamed = await _client.send(request);
+    final response = await http.Response.fromStream(streamed);
+
+    if (response.statusCode != 200) {
+      throw GroqException(
+        'Groq transcription returned ${response.statusCode}: ${response.body}',
+        statusCode: response.statusCode,
+      );
+    }
+
+    final json = jsonDecode(response.body) as Map<String, dynamic>;
+    final text = ((json['text'] ?? '') as String).trim();
+    // Whisper fills silence with a handful of stock phrases lifted from its
+    // training on captioned video. Treat those as "heard nothing".
+    if (_isLikelySilence(text)) return '';
+    return text;
+  }
+
+  static final _silenceFillers = <String>{
+    'thank you', 'thank you.', 'thank you very much', 'thank you very much.',
+    'thanks for watching', 'thanks for watching.', 'thanks for watching!',
+    'thank you for watching', 'thank you for watching.', 'please subscribe',
+    'you', 'bye', 'bye.', 'bye bye', '.', '..', '...',
+  };
+
+  static bool _isLikelySilence(String t) {
+    final l = t.toLowerCase().trim();
+    if (l.isEmpty) return true;
+    return _silenceFillers.contains(l);
+  }
+
   // ─── Blocking ─────────────────────────────────────────────────────────────
 
   /// Non-streaming completion - for summarisation and housekeeping tasks.

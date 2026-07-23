@@ -114,6 +114,15 @@ class CoachProvider extends ChangeNotifier {
 
   List<ChatMessage> get messages => List.unmodifiable(_messages);
   bool get isLoading => _isLoading;
+
+  /// How many messages the user has sent in this conversation.
+  int get userTurns => _messages.where((m) => m.fromUser).length;
+
+  /// How many messages the user has sent *today* (device-local date). Drives the
+  /// free tier's daily cap - counted across conversations and persisted, so
+  /// starting a new chat doesn't reset the budget. Rolls over at midnight.
+  int get messagesSentToday => _dailyDate == _todayKey() ? _dailyCount : 0;
+
   String? get errorMessage => _errorMessage;
 
   /// True while the last assistant message is still streaming.
@@ -135,6 +144,34 @@ class CoachProvider extends ChangeNotifier {
 
   /// Past conversations, newest last on disk and newest first in [threads].
   static const _kThreads = 'om_coach_threads';
+
+  /// Daily free-tier message budget: "{date}|{count}". Reset by comparing the
+  /// stored date to today rather than by a timer.
+  static const _kDaily = 'om_coach_daily';
+  String _dailyDate = '';
+  int _dailyCount = 0;
+
+  /// The device-local calendar day as a stable key.
+  static String _todayKey() {
+    final n = DateTime.now();
+    return '${n.year}-${n.month}-${n.day}';
+  }
+
+  Future<void> _bumpDailyCount() async {
+    final today = _todayKey();
+    if (_dailyDate != today) {
+      _dailyDate = today;
+      _dailyCount = 0;
+    }
+    _dailyCount++;
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.setString(_kDaily, '$_dailyDate|$_dailyCount');
+    } catch (e) {
+      debugPrint('[coach] daily count save failed: $e');
+    }
+    notifyListeners();
+  }
 
   /// How many past conversations we keep. A coach history is a comfort, not an
   /// archive; past this the older ones have already been folded into the
@@ -242,6 +279,12 @@ class CoachProvider extends ChangeNotifier {
         _threads.addAll((jsonDecode(rawThreads) as List).map(
             (t) => CoachThread.fromJson((t as Map).cast<String, dynamic>())));
       }
+      final daily = p.getString(_kDaily);
+      if (daily != null && daily.contains('|')) {
+        final parts = daily.split('|');
+        _dailyDate = parts[0];
+        _dailyCount = int.tryParse(parts[1]) ?? 0;
+      }
       final raw = p.getString(_kLog);
       if (raw == null) return;
       _messages.addAll((jsonDecode(raw) as List).map(
@@ -319,6 +362,8 @@ class CoachProvider extends ChangeNotifier {
       fromUser: true,
     );
     _messages.add(userMsg);
+    // Count it against today's free-tier budget (persisted, device-local day).
+    unawaited(_bumpDailyCount());
 
     // Placeholder assistant message (streaming = true).
     final assistantMsg = ChatMessage(

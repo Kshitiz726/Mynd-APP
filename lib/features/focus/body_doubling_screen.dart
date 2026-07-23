@@ -186,23 +186,11 @@ class _BodyDoublingScreenState extends State<BodyDoublingScreen> {
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenH),
           child: Column(
             children: [
-              const SizedBox(height: AppSpacing.sm),
-              _ModeToggle(
-                mode: _mode,
-                onChanged: _phase == _Phase.idle
-                    ? (m) {
-                        setState(() => _mode = m);
-                        if (m == _Mode.invite) _loadFriends();
-                      }
-                    : null,
-              ),
-              const SizedBox(height: AppSpacing.xl),
+              const SizedBox(height: AppSpacing.lg),
+              // "Invite a friend" is parked for now - only stranger auto-match is
+              // offered, so there's no mode toggle.
               Expanded(
-                child: _phase == _Phase.matched
-                    ? _matchedView(c)
-                    : _mode == _Mode.auto
-                        ? _autoView(c)
-                        : _inviteView(c),
+                child: _phase == _Phase.matched ? _matchedView(c) : _autoView(c),
               ),
             ],
           ),

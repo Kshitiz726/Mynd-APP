@@ -67,31 +67,87 @@ window.omComplete = async function(id, b64, model){
   } catch(e){ flh('onError', { id: id, error: String(e && (e.message || e)) }); }
 };
 
-// ── Voice: record → speech2txt ──
+// ── Voice capture: record the mic → hand raw audio to Dart ──
+// Dart transcribes it with Groq Whisper. Puter has no dependable speech2txt and
+// on-device recognisers are absent on emulators, so we capture here (a secure
+// localhost context, mic granted) and let Groq turn the clip into text.
 var __rec = null, __chunks = [], __stream = null;
-window.omStartVoice = async function(){
+var __ac = null, __an = null, __src = null, __lvlTimer = null, __data = null;
+
+function __stopLevels(){
+  try { if (__lvlTimer) clearInterval(__lvlTimer); } catch(e){}
+  __lvlTimer = null;
+  try { if (__src) __src.disconnect(); } catch(e){}
+  try { if (__ac) __ac.close(); } catch(e){}
+  __ac = null; __an = null; __src = null;
+}
+
+window.omRecStart = async function(){
   try {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
       throw new Error('microphone not available in this context');
     }
-    __stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    // autoGainControl boosts a quiet emulator mic; turning off noiseSuppression
+    // stops the browser scrubbing soft speech as if it were background hiss.
+    __stream = await navigator.mediaDevices.getUserMedia({ audio: {
+      autoGainControl: true,
+      noiseSuppression: false,
+      echoCancellation: true
+    } });
     __chunks = [];
+    // Keep the audio track alive for the whole recording: if the OS/WebView
+    // ends it (some emulators drop the mic after a few seconds when the page is
+    // off-screen), we log it rather than silently losing the tail.
+    try {
+      var __trk = __stream.getAudioTracks()[0];
+      if (__trk) __trk.onended = function(){ flh('onLog', 'mic track ended early'); };
+    } catch(e){}
     __rec = new MediaRecorder(__stream);
     __rec.ondataavailable = function(e){ if (e.data && e.data.size) __chunks.push(e.data); };
     __rec.onstop = async function(){
+      __stopLevels();
       try { __stream.getTracks().forEach(function(t){ t.stop(); }); } catch(e){}
-      flh('onVoiceState', { state: 'transcribing' });
       try {
         const blob = new Blob(__chunks, { type: 'audio/webm' });
-        const res = await puter.ai.speech2txt(blob);
-        flh('onTranscript', { text: (res && res.text) || res || '' });
-      } catch(e){ flh('onError', { id: -1, error: 'stt: ' + String(e && (e.message || e)) }); flh('onTranscript', { text: '' }); }
+        const buf = await blob.arrayBuffer();
+        const bytes = new Uint8Array(buf);
+        let bin = '';
+        for (let i = 0; i < bytes.length; i++){ bin += String.fromCharCode(bytes[i]); }
+        flh('onAudio', { b64: btoa(bin) });
+      } catch(e){ flh('onAudio', { b64: '', error: String(e && (e.message || e)) }); }
     };
-    __rec.start();
+    // A timeslice flushes audio into __chunks every second instead of only at
+    // stop(). Long dumps are captured reliably, and if the mic is cut short we
+    // still keep everything spoken up to that point - the recording no longer
+    // "stops capturing after a few seconds".
+    __rec.start(1000);
+    // Live loudness for the orb: RMS of the time-domain signal, ~7fps.
+    try {
+      __ac = new (window.AudioContext || window.webkitAudioContext)();
+      __src = __ac.createMediaStreamSource(__stream);
+      __an = __ac.createAnalyser(); __an.fftSize = 256;
+      __src.connect(__an);
+      __data = new Uint8Array(__an.frequencyBinCount);
+      __lvlTimer = setInterval(function(){
+        // An off-screen page can suspend the audio context; keep resuming it so
+        // metering (and the underlying capture graph) stays awake.
+        if (__ac && __ac.state === 'suspended') { try { __ac.resume(); } catch(e){} }
+        __an.getByteTimeDomainData(__data);
+        var sum = 0;
+        for (var i = 0; i < __data.length; i++){ var v = (__data[i] - 128) / 128; sum += v * v; }
+        flh('onVoiceLevel', { level: Math.min(1, Math.sqrt(sum / __data.length) * 3) });
+      }, 140);
+    } catch(e){}
     flh('onVoiceState', { state: 'listening' });
-  } catch(e){ flh('onError', { id: -1, error: 'mic: ' + String(e && (e.message || e)) }); flh('onTranscript', { text: '' }); }
+  } catch(e){ flh('onAudio', { b64: '', error: 'mic: ' + String(e && (e.message || e)) }); }
 };
-window.omStopVoice = function(){ try { if (__rec && __rec.state !== 'inactive') __rec.stop(); } catch(e){} };
+window.omRecStop = function(){ try { if (__rec && __rec.state !== 'inactive') __rec.stop(); } catch(e){} };
+window.omRecCancel = function(){
+  __chunks = [];
+  __stopLevels();
+  try { if (__rec && __rec.state !== 'inactive') __rec.stop(); } catch(e){}
+  try { if (__stream) __stream.getTracks().forEach(function(t){ t.stop(); }); } catch(e){}
+};
 
 // ── Voice: text → speech ──
 var __audio = null;
@@ -99,7 +155,13 @@ window.omSpeak = async function(b64){
   try {
     const text = b64str(b64);
     flh('onVoiceState', { state: 'speaking' });
-    __audio = await puter.ai.txt2speech(text);
+    // Neural voice sounds like a person; the default engine is the robotic one.
+    // Fall back to the default if this build of Puter rejects the options.
+    try {
+      __audio = await puter.ai.txt2speech(text, { voice: 'Joanna', engine: 'neural', language: 'en-US' });
+    } catch(e){
+      __audio = await puter.ai.txt2speech(text);
+    }
     __audio.onended = function(){ flh('onSpoken', { ok: true }); };
     __audio.onerror = function(){ flh('onSpoken', { ok: false }); };
     __audio.play();

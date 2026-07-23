@@ -8,28 +8,20 @@ import '../../../widgets/om_tappable.dart';
 
 /// The floating bottom navigation bar - a liquid-glass capsule.
 ///
-/// Every destination shows its icon over its label; the selected one is marked
-/// by a translucent "lens" that glides between slots rather than appearing in
-/// place, which is what makes the movement read as liquid. Slots are equal
-/// width, so the lens travel is linear and the longest label ("community")
-/// cannot push its neighbours around.
+/// Four equal-width destinations, the selected one marked by a translucent
+/// "lens" that glides between slots rather than appearing in place, which is
+/// what makes the movement read as liquid. There is no centre (+) any more:
+/// focus and the coach are destinations of their own, so every slot is a plain
+/// tab and the lens travel is a clean linear glide across four.
 class OmNavBar extends StatelessWidget {
   const OmNavBar({
     super.key,
     required this.current,
     required this.onSelect,
-    required this.onCreate,
-    this.alertsUnread = 0,
   });
 
   final AppTab current;
   final ValueChanged<AppTab> onSelect;
-
-  /// Opens the create sheet: start a focus session, or talk to the coach.
-  final VoidCallback onCreate;
-
-  /// Unread follow-requests + comment alerts - drives the red dot on the bell.
-  final int alertsUnread;
 
   @override
   Widget build(BuildContext context) {
@@ -77,18 +69,19 @@ class OmNavBar extends StatelessWidget {
                 ),
               ),
               child: SizedBox(
-                height: 60,
+                // A touch taller now there are four roomy slots and no centre
+                // button crowding the middle - the bar reads as a substantial
+                // pane of glass rather than a thin strip.
+                height: 72,
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 7),
                   child: LayoutBuilder(
                     builder: (context, constraints) {
                       const tabs = AppTab.values;
-                      // Five slots: the four destinations, with (+) sitting in
-                      // the middle where the thumb naturally rests.
-                      final slot = constraints.maxWidth / (tabs.length + 1);
-                      final rawIndex = tabs.indexOf(current);
-                      // Destinations after the centre button shift one slot right.
-                      final index = rawIndex >= 2 ? rawIndex + 1 : rawIndex;
+                      // Four equal slots, one per destination. No (+) reserving
+                      // the middle, so the lens index is just the tab's own.
+                      final slot = constraints.maxWidth / tabs.length;
+                      final index = tabs.indexOf(current);
 
                       return Stack(
                         children: [
@@ -104,9 +97,7 @@ class OmNavBar extends StatelessWidget {
                           ),
                           Row(
                             children: [
-                              for (var i = 0; i < tabs.length; i++) ...[
-                                if (i == 2)
-                                  SizedBox(width: slot, child: _CreateButton(onTap: onCreate)),
+                              for (var i = 0; i < tabs.length; i++)
                                 SizedBox(
                                   width: slot,
                                   child: _NavItem(
@@ -119,7 +110,6 @@ class OmNavBar extends StatelessWidget {
                                     },
                                   ),
                                 ),
-                              ],
                             ],
                           ),
                         ],
@@ -130,45 +120,6 @@ class OmNavBar extends StatelessWidget {
               ),
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-/// The centre (+): starts something rather than navigating somewhere, so it is
-/// a solid, raised affordance instead of another flat destination.
-class _CreateButton extends StatelessWidget {
-  const _CreateButton({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.omColors;
-    return Center(
-      child: OmTappable(
-        onTap: () {
-          Haptics.medium();
-          onTap();
-        },
-        feedback: OmTapFeedback.none,
-        pressedScale: 0.88,
-        child: Container(
-          width: 46,
-          height: 46,
-          decoration: BoxDecoration(
-            gradient: c.brandGradient,
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: c.primary.withValues(alpha: 0.42),
-                blurRadius: 16,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
-          child: const Icon(Icons.add_rounded, color: Colors.white, size: 26),
         ),
       ),
     );
@@ -267,6 +218,19 @@ class _NavIcon extends StatelessWidget {
   final bool active;
   final bool showDot;
 
+  /// One glyph, resting (outline) or selected (filled).
+  ///
+  /// Chat is special-cased: Material has no *circular* filled speech bubble, so
+  /// its resting Lucide circle used to fill into a square `chat_bubble` and the
+  /// shape jumped. Here both states are the same hand-drawn round bubble, so
+  /// selecting it only fills the shape in rather than changing it.
+  Widget _glyph({required bool filled, required Color color, required double size}) {
+    if (tab == AppTab.coach) {
+      return _ChatCircleGlyph(color: color, filled: filled, size: size);
+    }
+    return Icon(filled ? tab.activeIcon : tab.icon, color: color, size: size);
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = context.omColors;
@@ -284,19 +248,22 @@ class _NavIcon extends StatelessWidget {
           builder: (context, t, _) => TweenAnimationBuilder<Color?>(
             duration: const Duration(milliseconds: 240),
             tween: ColorTween(end: color),
-            builder: (context, value, _) => Stack(
+            builder: (context, value, _) {
+            final col = value ?? color;
+            return Stack(
               alignment: Alignment.center,
               children: [
                 Opacity(
                   opacity: (1 - t).clamp(0.0, 1.0),
-                  child: Icon(tab.icon, color: value, size: 25),
+                  child: _glyph(filled: false, color: col, size: 27),
                 ),
                 Opacity(
                   opacity: t.clamp(0.0, 1.0),
-                  child: Icon(tab.activeIcon, color: value, size: 26 + (t * 2)),
+                  child: _glyph(filled: true, color: col, size: 28 + (t * 2)),
                 ),
               ],
-            ),
+            );
+          },
           ),
         ),
         if (showDot)
@@ -316,4 +283,75 @@ class _NavIcon extends StatelessWidget {
       ],
     );
   }
+}
+
+/// A round speech bubble - a circle with a small tail at the lower-left, in the
+/// spirit of Lucide's `messageCircle`. Drawn by hand so the *same* shape can be
+/// an outline (resting) or a solid fill (selected), which the Material icon set
+/// cannot offer for a circular bubble.
+class _ChatCircleGlyph extends StatelessWidget {
+  const _ChatCircleGlyph({
+    required this.color,
+    required this.filled,
+    required this.size,
+  });
+
+  final Color color;
+  final bool filled;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      size: Size.square(size),
+      painter: _ChatCirclePainter(color: color, filled: filled),
+    );
+  }
+}
+
+class _ChatCirclePainter extends CustomPainter {
+  _ChatCirclePainter({required this.color, required this.filled});
+
+  final Color color;
+  final bool filled;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final s = size.shortestSide;
+    final stroke = s * 0.085;
+    // A plump circle sitting up and to the right, with a short stubby tail
+    // dropping to the lower-left, in the spirit of the iMessage bubble.
+    final r = s * 0.38;
+    final centre = Offset(s * 0.53, s * 0.44);
+
+    final bubble = Path()
+      ..addOval(Rect.fromCircle(center: centre, radius: r));
+    final tail = Path()
+      ..moveTo(centre.dx - r * 0.66, centre.dy + r * 0.36)
+      ..lineTo(centre.dx - r * 1.02, centre.dy + r * 1.02)
+      ..lineTo(centre.dx - r * 0.20, centre.dy + r * 0.72)
+      ..close();
+    final glyph = Path.combine(PathOperation.union, bubble, tail);
+
+    final paint = Paint()
+      ..color = color
+      ..isAntiAlias = true
+      ..strokeJoin = StrokeJoin.round
+      ..strokeCap = StrokeCap.round;
+
+    if (filled) {
+      canvas.drawPath(glyph, paint..style = PaintingStyle.fill);
+    } else {
+      canvas.drawPath(
+        glyph,
+        paint
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = stroke,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_ChatCirclePainter old) =>
+      old.color != color || old.filled != filled;
 }

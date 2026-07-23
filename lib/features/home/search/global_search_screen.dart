@@ -134,7 +134,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
         subtitle: cv.isGroup ? 'group chat' : 'direct message',
         icon: cv.isGroup ? 'users' : 'user',
         onTap: () => _go(() {
-          nav.select(AppTab.community);
+          nav.select(AppTab.today /* community parked */);
           chat.openChat(
             id: cv.id,
             title: cv.title,
@@ -150,7 +150,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
         title: g.name,
         subtitle: 'group · ${g.membersLabel}',
         icon: 'users',
-        onTap: () => _go(() => nav.select(AppTab.community)),
+        onTap: () => _go(() => nav.select(AppTab.today /* community parked */)),
       ));
     }
     if (chatHits.isNotEmpty) {
@@ -164,7 +164,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
         title: p.body,
         subtitle: 'post · ${p.authorName}',
         icon: 'message',
-        onTap: () => _go(() => nav.select(AppTab.community)),
+        onTap: () => _go(() => nav.select(AppTab.today /* community parked */)),
       ));
     }
     if (postHits.isNotEmpty) {

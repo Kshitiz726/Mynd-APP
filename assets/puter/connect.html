@@ -22,7 +22,14 @@
 <script>
   function flh(n,d){ try{ window.flutter_inappwebview.callHandler(n,d); }catch(e){} }
   function authed(){ try{ return !!(window.puter && puter.auth && puter.auth.isSignedIn && puter.auth.isSignedIn()); }catch(e){ return false; } }
-  function token(){ try{ return (window.puter && puter.authToken) ? puter.authToken : ''; }catch(e){ return ''; } }
+  function token(){
+    try{
+      if (window.puter && puter.authToken) return puter.authToken;
+      if (window.puter && puter.auth && puter.auth.token) return puter.auth.token;
+      var t = localStorage.getItem('puter.auth.token');
+      return t || '';
+    }catch(e){ return ''; }
+  }
   window.addEventListener('load', function(){
     try{ puter.quiet = true; }catch(e){}
     flh('onReady', {});

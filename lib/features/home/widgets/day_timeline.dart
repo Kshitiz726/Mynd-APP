@@ -14,6 +14,7 @@ import '../../../providers/settings_provider.dart';
 import '../../../providers/task_provider.dart';
 import '../../../widgets/om_states.dart';
 import '../../../widgets/om_tappable.dart';
+import '../../../widgets/om_time_picker.dart';
 import '../../../models/energy_level.dart';
 import '../../../models/task.dart';
 import 'edit_task_sheet.dart';
@@ -708,7 +709,7 @@ void _reportOverrun(BuildContext context, Duration overrun) {
 /// of the way instead. See [TaskProvider.rippleTaskTime].
 Future<void> _editBlockTime(BuildContext context, Task task) async {
   final base = task.startTime ?? DateTime.now();
-  final start = await showTimePicker(
+  final start = await showOmTimePicker(
     context: context,
     initialTime: TimeOfDay.fromDateTime(base),
     helpText: 'Start time',
@@ -716,7 +717,7 @@ Future<void> _editBlockTime(BuildContext context, Task task) async {
   if (start == null || !context.mounted) return;
 
   final endBase = task.endTime ?? base.add(const Duration(hours: 1));
-  final end = await showTimePicker(
+  final end = await showOmTimePicker(
     context: context,
     initialTime: TimeOfDay.fromDateTime(endBase),
     helpText: 'End time',
@@ -854,9 +855,13 @@ class _TimeSheet extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.lg),
             OmTappable(
+              // Run the picker while this sheet is still mounted, then close it.
+              // Popping first tore down this context, so the `context.mounted`
+              // guard inside _editBlockTime failed and the chosen time was never
+              // applied - which is why picking an exact time did nothing.
               onTap: () async {
-                Navigator.of(context).pop();
                 await _editBlockTime(context, task);
+                if (context.mounted) Navigator.of(context).pop();
               },
               pressedScale: 0.98,
               child: Container(

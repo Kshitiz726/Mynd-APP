@@ -73,5 +73,12 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
+        <!-- Android 11+ package visibility: without this, url_launcher can't see
+             a browser and launchUrl silently returns false. Needed to open the
+             Stripe Checkout page (https) in the system browser. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
+        </intent>
     </queries>
 </manifest>

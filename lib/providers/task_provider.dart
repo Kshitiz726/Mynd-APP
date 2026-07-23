@@ -111,8 +111,14 @@ class TaskProvider extends ChangeNotifier {
   int get doneCount => _tasks.where((t) => !t.isChunk && !t.isAnchor && t.done).length;
   int get goalsOnTheGo => 0;
 
-  /// The day the timeline is showing. Defaults to today; the week strip moves it.
-  DateTime _selectedDate = DateTime.now();
+  static DateTime _todayDate() {
+    final n = DateTime.now();
+    return DateTime(n.year, n.month, n.day);
+  }
+
+  /// The day the timeline is showing. Defaults to today (date-only, so it lines
+  /// up exactly with the device's calendar day); the week strip moves it.
+  DateTime _selectedDate = _todayDate();
   DateTime get selectedDate => _selectedDate;
   bool get viewingToday => _isSameDay(_selectedDate, DateTime.now());
 
@@ -279,54 +285,51 @@ class TaskProvider extends ChangeNotifier {
     }
   }
 
+  /// "Add to my day": drop [task] onto the day the user is currently looking at,
+  /// not always today. Standing on the 23rd and adding a task schedules it on
+  /// the 23rd. A past day can't be planned, so it falls back to today.
   void schedule(Task task) {
+    final day = canPlan(_selectedDate) ? _selectedDate : DateTime.now();
+    _placeOn(task, day);
+    notifyListeners();
+  }
+
+  /// Finds the next free slot on [day] (08:00-21:00) and pins [task] there. On
+  /// today it starts from NOW; on a future day it starts from 08:00.
+  void _placeOn(Task task, DateTime day) {
     final now = DateTime.now();
     task.duration ??= const Duration(hours: 1);
-    
-    final text = task.title.toLowerCase();
-    final preferEvening = text.contains('call') || text.contains('family');
-    
-    DateTime searchStart = now;
-    if (preferEvening && now.hour < 17) {
-      searchStart = DateTime(now.year, now.month, now.day, 17, 0);
-    }
-    
-    // Constraints: 08:00 to 21:00
     const startHour = 8;
     const endHour = 21;
-    
+    final packingToday = _isSameDay(day, now);
+
+    final text = task.title.toLowerCase();
+    final preferEvening = text.contains('call') || text.contains('family');
+
+    DateTime searchStart =
+        packingToday ? now : DateTime(day.year, day.month, day.day, startHour, 0);
+    if (preferEvening && searchStart.hour < 17) {
+      searchStart = DateTime(day.year, day.month, day.day, 17, 0);
+    }
     if (searchStart.hour >= endHour) {
       searchStart = DateTime(searchStart.year, searchStart.month, searchStart.day + 1, startHour, 0);
     } else if (searchStart.hour < startHour) {
       searchStart = DateTime(searchStart.year, searchStart.month, searchStart.day, startHour, 0);
     }
-    
-    final schedule = todaySchedule;
+
+    final occupied = scheduleOn(searchStart, includeDone: true);
     DateTime proposedStart = searchStart;
-    
-    for (final t in schedule) {
-      if (proposedStart.add(task.duration!).isBefore(t.startTime!) || 
-          proposedStart.add(task.duration!).isAtSameMomentAs(t.startTime!)) {
-        break;
-      }
-      
-      if (t.endTime!.isAfter(proposedStart)) {
-        proposedStart = t.endTime!;
-      }
-      
+    for (final t in occupied) {
+      if (!proposedStart.add(task.duration!).isAfter(t.startTime!)) break;
+      if (t.endTime!.isAfter(proposedStart)) proposedStart = t.endTime!;
       if (proposedStart.hour >= endHour) {
         proposedStart = DateTime(proposedStart.year, proposedStart.month, proposedStart.day + 1, startHour, 0);
       }
     }
-    
+
     task.startTime = proposedStart;
     task.scheduled = true;
-    notifyListeners();
   }
-
-  /// Heavy tasks longer than this get split into focus chunks by Auto-Schedule.
-  static const _chunkThreshold = Duration(minutes: 90);
-  static const _chunkLength = Duration(minutes: 50);
 
   /// Round [t] up to the next 5-minute mark so auto-placed blocks land on clean
   /// times rather than e.g. 2:43 PM.
@@ -348,39 +351,35 @@ class TaskProvider extends ChangeNotifier {
     DateTime? day,
   }) {
     final now = DateTime.now();
-    // Which day we are packing. Scheduling a future day must not be limited by
-    // the current clock, so "is it too late for this block" is measured against
-    // the start of that day instead of NOW.
     final target = day ?? now;
-    // The past is a record. Re-planning it would rewrite history and fire alarms
-    // for times that have already gone.
+    // The past is a record - you can't plan a day that's already gone.
     if (!canPlan(target)) return;
     final packingToday = _isSameDay(target, now);
     final floor = packingToday ? now : DateTime(target.year, target.month, target.day);
 
-    // Drop previous anchors, habit blocks and chunks from a prior run on this
-    // day so re-running is idempotent (no "(1/2) (1/2)" stacking).
+    // Dead simple: lay the wake-up and sleep bookends on the day, then drop
+    // everything in the backlog between them as blocks - one block per task,
+    // back to back, in order. No splitting a task into chunks, no clever
+    // packing. Exactly "put my backlog on this day, with my wake/sleep times".
+
+    // Clear this day's own blocks first so re-running just re-lays them (and
+    // sweep any leftover chunks a previous version left on this day).
     _tasks.removeWhere((t) =>
         (t.id == 'wake_anchor' || t.id == 'sleep_anchor' || t.id.startsWith('habit-') || t.isChunk) &&
         (t.startTime == null || _isSameDay(t.startTime!, target)));
-
-    // Unschedule this day's non-done tasks so we can repack them.
     for (final t in _tasks) {
-      if (!t.done && (t.startTime == null || _isSameDay(t.startTime!, target))) {
+      if (!t.done && !t.isAnchor && !t.isChunk && t.startTime != null && _isSameDay(t.startTime!, target)) {
         t.scheduled = false;
         t.startTime = null;
       }
     }
 
-    DateTime wakeTime = DateTime(target.year, target.month, target.day, wakeUp.hour, wakeUp.minute);
-    DateTime sleepTimeFull = DateTime(target.year, target.month, target.day, sleep.hour, sleep.minute);
-    if (!sleepTimeFull.isAfter(wakeTime)) {
-      sleepTimeFull = sleepTimeFull.add(const Duration(days: 1));
-    }
+    final wakeTime = DateTime(target.year, target.month, target.day, wakeUp.hour, wakeUp.minute);
+    var sleepTimeFull = DateTime(target.year, target.month, target.day, sleep.hour, sleep.minute);
+    if (!sleepTimeFull.isAfter(wakeTime)) sleepTimeFull = sleepTimeFull.add(const Duration(days: 1));
     final windDown = sleepTimeFull.subtract(const Duration(minutes: 30));
 
-    // Wake routine only matters if the day hasn't started yet; otherwise it's in
-    // the past and would clutter a NOW-anchored timeline.
+    // Wake-up bookend, unless that time has already passed today.
     if (wakeTime.isAfter(floor)) {
       _tasks.add(Task(id: 'wake_anchor', title: 'Wake Up Routine', time: 'Morning', energy: EnergyLevel.high, isAnchor: true)
         ..scheduled = true
@@ -392,6 +391,34 @@ class TaskProvider extends ChangeNotifier {
       ));
     }
 
+    // Everything in the backlog now (unscheduled or missed, not done).
+    final items = _tasks
+        .where((t) => !t.isAnchor && !t.isChunk && !t.done && (!t.scheduled || t.isMissed))
+        .toList();
+    // A gentle order: high-energy first, brain-dead last. Nothing more.
+    items.sort((a, b) => a.energy.index.compareTo(b.energy.index));
+
+    // Work begins after the wake routine when we placed one (its 30-minute
+    // block is known, so derive the start directly rather than looking the
+    // anchor up by id - several days can share the 'wake_anchor' id, and the
+    // lookup returned the wrong day's block, letting the first task overlap
+    // the wake routine). Otherwise (today, already past wake) start from now.
+    DateTime cursor = wakeTime.isAfter(floor)
+        ? wakeTime.add(const Duration(minutes: 30))
+        : _roundUpToFive(floor);
+
+    for (final t in items) {
+      final dur = t.duration ??= const Duration(hours: 1);
+      t.startTime = cursor;
+      t.scheduled = true;
+      alerts.addLocalReminder(AppNotification(
+        id: 'rem-${t.id}', kind: 'reminder', read: false,
+        payload: {'title': t.title, 'time': DateFormat.jm().format(cursor)},
+      ));
+      cursor = cursor.add(dur);
+    }
+
+    // Sleep / wind-down bookend.
     if (windDown.isAfter(floor)) {
       _tasks.add(Task(id: 'sleep_anchor', title: 'Wind Down / Sleep', time: 'Night', energy: EnergyLevel.dead, isAnchor: true)
         ..scheduled = true
@@ -403,83 +430,7 @@ class TaskProvider extends ChangeNotifier {
       ));
     }
 
-    final toSchedule = _tasks
-        .where((t) => !t.scheduled && !t.done && !t.isAnchor && !t.isChunk)
-        .toList();
-    // High energy first (morning), then low (afternoon), then brain-dead (evening).
-    toSchedule.sort((a, b) => a.energy.index.compareTo(b.energy.index));
-
-    // Begin packing from NOW (rounded), or wake time if we're still pre-wake.
-    DateTime cursor = floor.isBefore(wakeTime) ? wakeTime : _roundUpToFive(floor);
-    // The wake block owns the first half hour, so work starts after it rather
-    // than on top of it.
-    final wakeBlock = _firstById('wake_anchor');
-    if (wakeBlock?.endTime != null && wakeBlock!.endTime!.isAfter(cursor)) {
-      cursor = wakeBlock.endTime!;
-    }
-
-    final chunkBlocks = <Task>[];
-
-    for (final t in toSchedule) {
-      t.duration ??= const Duration(hours: 1);
-
-      // Split a heavy task into focus chunks; a normal task is a single chunk.
-      final pieces = _chunksFor(t);
-      for (var i = 0; i < pieces.length; i++) {
-        final dur = pieces[i];
-        if (cursor.add(dur).isAfter(windDown)) {
-          // Out of room - leave the rest in the backlog.
-          break;
-        }
-
-        if (pieces.length == 1) {
-          // Schedule the task itself in place.
-          t.startTime = cursor;
-          t.scheduled = true;
-          alerts.addLocalReminder(AppNotification(
-            id: 'rem-${t.id}', kind: 'reminder', read: false,
-            payload: {'title': t.title, 'time': DateFormat.jm().format(cursor)},
-          ));
-        } else {
-          // Materialise a chunk block; the parent task stays out of the backlog.
-          final chunk = Task(
-            id: '${t.id}#${i + 1}',
-            title: t.title,
-            time: 'today',
-            energy: t.energy,
-            goalId: t.goalId,
-            goalTitle: t.goalTitle,
-            chunkOf: t.id,
-            chunkIndex: i + 1,
-            chunkCount: pieces.length,
-          )
-            ..scheduled = true
-            ..startTime = cursor
-            ..duration = dur;
-          chunkBlocks.add(chunk);
-        }
-        cursor = cursor.add(dur);
-      }
-    }
-
-    _tasks.addAll(chunkBlocks);
     notifyListeners();
-  }
-
-  /// Returns the per-block durations a task should occupy. A task at or under
-  /// [_chunkThreshold] is one block; a longer one is split into [_chunkLength]
-  /// pieces (the last one carrying the remainder).
-  List<Duration> _chunksFor(Task t) {
-    final total = t.duration ?? const Duration(hours: 1);
-    if (total <= _chunkThreshold) return [total];
-    final pieces = <Duration>[];
-    var left = total;
-    while (left > Duration.zero) {
-      final take = left < _chunkLength ? left : _chunkLength;
-      pieces.add(take);
-      left -= take;
-    }
-    return pieces;
   }
 
   /// Repack a manually reordered timeline. Available slots stay put - only the
@@ -764,32 +715,16 @@ class TaskProvider extends ChangeNotifier {
     return null;
   }
 
-  /// Finds the next free slot (08:00-21:00) for [task] and pins it - the core of
-  /// [schedule] without the extra notify, for batch use.
-  void _place(Task task) {
-    final now = DateTime.now();
-    task.duration ??= const Duration(hours: 1);
-    const startHour = 8;
-    const endHour = 21;
+  /// Finds the next free slot (08:00-21:00) on today for [task] and pins it - the
+  /// core of [schedule] without the extra notify, for batch use (goal tasks).
+  void _place(Task task) => _placeOn(task, DateTime.now());
 
-    DateTime searchStart = now;
-    if (searchStart.hour >= endHour) {
-      searchStart = DateTime(searchStart.year, searchStart.month, searchStart.day + 1, startHour, 0);
-    } else if (searchStart.hour < startHour) {
-      searchStart = DateTime(searchStart.year, searchStart.month, searchStart.day, startHour, 0);
-    }
-
-    final occupied = todaySchedule;
-    DateTime proposedStart = searchStart;
-    for (final t in occupied) {
-      if (!proposedStart.add(task.duration!).isAfter(t.startTime!)) break;
-      if (t.endTime!.isAfter(proposedStart)) proposedStart = t.endTime!;
-      if (proposedStart.hour >= endHour) {
-        proposedStart = DateTime(proposedStart.year, proposedStart.month, proposedStart.day + 1, startHour, 0);
-      }
-    }
-    task.startTime = proposedStart;
-    task.scheduled = true;
+  /// Permanently remove [task] - the honest "I'm never doing this" that the
+  /// backlog needs alongside "not today". Also clears any chunk blocks it spun
+  /// off, so deleting a heavy task doesn't leave orphan pieces on the timeline.
+  void deleteTask(String id) {
+    _tasks.removeWhere((t) => t.id == id || t.chunkOf == id);
+    notifyListeners();
   }
 
   /// "Not today." Pulls [task] off the timeline and drops it back in the

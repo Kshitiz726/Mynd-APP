@@ -111,11 +111,17 @@ class _DayPill extends StatelessWidget {
               ),
               const SizedBox(height: 2),
               Text(
-                DateFormat.E().format(day),
+                // Today is named outright so there's never any doubt which day
+                // the device is actually on.
+                isToday ? 'today' : DateFormat.E().format(day).toLowerCase(),
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: selected ? Colors.white70 : c.text2,
+                      color: selected
+                          ? Colors.white
+                          : isToday
+                              ? c.primary
+                              : c.text2,
                       fontSize: 10.5,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: isToday ? FontWeight.w800 : FontWeight.w600,
                     ),
               ),
               const SizedBox(height: 3),

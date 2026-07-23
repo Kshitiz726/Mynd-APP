@@ -11,14 +11,15 @@ import '../../core/services/realtime_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/haptics.dart';
 
+import '../../core/utils/toast.dart';
 import '../../providers/nav_provider.dart';
+import '../../providers/premium_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../widgets/om_avatar.dart';
 import '../../widgets/om_switch.dart';
 import '../../widgets/om_tappable.dart';
 import '../memory/memory_screen.dart';
 import 'about_screen.dart';
-import 'activity_history_screen.dart';
 
 /// Settings.
 ///
@@ -32,9 +33,9 @@ import 'activity_history_screen.dart';
 ///
 /// What stayed had to earn it. The sensory toggles are not decoration in an
 /// ADHD app, they are the accessibility layer, so low-stim, dark mode,
-/// hyperlegible type, haptics and reduced motion all remain. Memory and
-/// activity history are here because this screen is their only entrance;
-/// deleting the row would delete the feature. Notes went the other way: it was
+/// hyperlegible type, haptics and reduced motion all remain. Memory is here
+/// because this screen is its only entrance; deleting the row would delete the
+/// feature. Notes went the other way: it was
 /// a second, worse place to write things down next to the coach and the
 /// backlog, so it is gone rather than kept out of politeness.
 class ProfileScreen extends StatelessWidget {
@@ -79,6 +80,7 @@ class ProfileScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<SettingsProvider>();
+    final premium = context.watch<PremiumProvider>().isPremium;
     final c = context.omColors;
     final name = ApiConfig.instance.displayName ?? 'your account';
     final handle = ApiConfig.instance.handle;
@@ -144,6 +146,10 @@ class ProfileScreen extends StatelessWidget {
                             .bodySmall
                             ?.copyWith(color: c.text2)),
                   ],
+                  if (premium) ...[
+                    const SizedBox(height: 8),
+                    _MemberTag(tier: context.watch<PremiumProvider>().tier),
+                  ],
                 ],
               ),
             ),
@@ -151,8 +157,10 @@ class ProfileScreen extends StatelessWidget {
 
             // ── The plan ──
             _PlanCard(
-                onTap: () =>
-                    Navigator.of(context).pushNamed(AppRoutes.paywall)),
+              premium: premium,
+              tier: context.watch<PremiumProvider>().tier,
+              onTap: () => Navigator.of(context).pushNamed(AppRoutes.paywall),
+            ),
             const SizedBox(height: AppSpacing.xl),
 
             const _GroupLabel('Account'),
@@ -174,14 +182,6 @@ class ProfileScreen extends StatelessWidget {
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute<void>(builder: (_) => const MemoryScreen()),
                 ),
-              ),
-              _Row(
-                icon: Icons.history_rounded,
-                label: 'Activity history',
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                      builder: (_) => const ActivityHistoryScreen()),
-                ),
                 last: true,
               ),
             ]),
@@ -196,11 +196,20 @@ class ProfileScreen extends StatelessWidget {
                 value: settings.lowStim,
                 onChanged: (_) => settings.toggleLowStim(),
               ),
+              // Dark mode is a Premium perk. Free users see it locked: the
+              // switch never moves, and tapping the row explains why and opens
+              // the paywall. Premium users get the real toggle.
               _ToggleRow(
                 icon: Icons.dark_mode_outlined,
                 label: 'Dark mode',
-                value: settings.darkMode,
-                onChanged: (_) => settings.toggleDarkMode(),
+                value: premium && settings.darkMode,
+                locked: !premium,
+                onChanged: premium ? (_) => settings.toggleDarkMode() : null,
+                onLockedTap: () {
+                  Haptics.light();
+                  Toast.show(context, 'Dark mode is a Premium feature');
+                  Navigator.of(context).pushNamed(AppRoutes.paywall);
+                },
               ),
               _ToggleRow(
                 icon: Icons.text_fields_rounded,
@@ -276,21 +285,91 @@ class _CircleButton extends StatelessWidget {
   }
 }
 
-/// The gradient plan banner from the reference.
-class _PlanCard extends StatelessWidget {
-  const _PlanCard({required this.onTap});
+/// The plan banner. Colourful in every state, and it tells the truth about
+/// which plan you are on: a warm invitation gradient when you are free, the
+/// tier's own gradient (teal for Plus, violet-gold for Pro) once you subscribe.
+/// A small gradient pill under the user's name once they subscribe - the
+/// "member" badge. Colours match the tier's own gradient on the paywall.
+class _MemberTag extends StatelessWidget {
+  const _MemberTag({required this.tier});
 
-  final VoidCallback onTap;
-
-  /// Nobody has paid yet, because there is nothing to pay with yet. Until
-  /// billing exists this is false, and the card tells the truth: you are on the
-  /// free plan. Calling everyone Premium while charging nobody trains people to
-  /// ignore the one label that will eventually mean something.
-  static const bool _isPremium = false;
+  final String tier; // plus | pro
 
   @override
   Widget build(BuildContext context) {
-    final c = context.omColors;
+    final isPro = tier == 'pro';
+    final colors = isPro
+        ? const [Color(0xFF6D3BF0), Color(0xFFF0B24A)]
+        : const [Color(0xFF1FA2A6), Color(0xFF3E7BF0)];
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(colors: colors),
+        borderRadius: BorderRadius.circular(999),
+        boxShadow: [
+          BoxShadow(
+            color: colors.first.withValues(alpha: 0.35),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.workspace_premium_rounded,
+              color: Colors.white, size: 14),
+          const SizedBox(width: 5),
+          Text(
+            isPro ? 'PRO MEMBER' : 'PLUS MEMBER',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PlanCard extends StatelessWidget {
+  const _PlanCard({
+    required this.premium,
+    required this.tier,
+    required this.onTap,
+  });
+
+  final bool premium;
+  final String tier; // free | plus | pro
+  final VoidCallback onTap;
+
+  /// The gradient for the current state. Free is intentionally not grey - a flat
+  /// white card here read as "off"; the point is to look like something worth
+  /// tapping.
+  List<Color> _gradient() {
+    if (!premium) return const [Color(0xFF7C6FF0), Color(0xFFF0A479)];
+    if (tier == 'pro') return const [Color(0xFF6D3BF0), Color(0xFFF0B24A)];
+    return const [Color(0xFF1FA2A6), Color(0xFF3E7BF0)]; // plus
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = _gradient();
+    final title = !premium
+        ? 'Free plan'
+        : tier == 'pro'
+            ? 'OurMynd Pro'
+            : 'OurMynd Plus';
+    final subtitle = !premium
+        ? 'See what Premium adds'
+        : 'Enjoy your premium features';
+    final icon = !premium
+        ? Icons.auto_awesome_outlined
+        : Icons.workspace_premium_rounded;
+
     return OmTappable(
       onTap: () {
         Haptics.medium();
@@ -301,19 +380,19 @@ class _PlanCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
         decoration: BoxDecoration(
-          gradient: _isPremium ? c.brandGradient : null,
-          color: _isPremium ? null : c.surface,
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: colors,
+          ),
           borderRadius: BorderRadius.circular(18),
-          border: _isPremium ? null : Border.all(color: c.border),
-          boxShadow: _isPremium
-              ? [
-                  BoxShadow(
-                    color: c.primary.withValues(alpha: 0.34),
-                    blurRadius: 20,
-                    offset: const Offset(0, 8),
-                  ),
-                ]
-              : null,
+          boxShadow: [
+            BoxShadow(
+              color: colors.first.withValues(alpha: 0.34),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            ),
+          ],
         ),
         child: Row(
           children: [
@@ -322,18 +401,10 @@ class _PlanCard extends StatelessWidget {
               height: 40,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: _isPremium
-                    ? Colors.white.withValues(alpha: 0.22)
-                    : c.primaryTint,
+                color: Colors.white.withValues(alpha: 0.22),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(
-                _isPremium
-                    ? Icons.workspace_premium_rounded
-                    : Icons.auto_awesome_outlined,
-                color: _isPremium ? Colors.white : c.primary,
-                size: 21,
-              ),
+              child: Icon(icon, color: Colors.white, size: 21),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -341,29 +412,25 @@ class _PlanCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    _isPremium ? 'Premium Account' : 'Free plan',
-                    style: TextStyle(
-                        color: _isPremium ? Colors.white : c.text,
+                    title,
+                    style: const TextStyle(
+                        color: Colors.white,
                         fontWeight: FontWeight.w800,
                         fontSize: 15.5),
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    _isPremium
-                        ? 'Enjoy your premium features'
-                        : 'See what Premium adds',
+                    subtitle,
                     style: TextStyle(
-                      color: _isPremium
-                          ? Colors.white.withValues(alpha: 0.82)
-                          : c.text2,
+                      color: Colors.white.withValues(alpha: 0.9),
                       fontSize: 12.5,
                     ),
                   ),
                 ],
               ),
             ),
-            if (!_isPremium)
-              Icon(Icons.chevron_right_rounded, color: c.text2, size: 20),
+            Icon(Icons.chevron_right_rounded,
+                color: Colors.white.withValues(alpha: 0.9), size: 20),
           ],
         ),
       ),
@@ -469,20 +536,27 @@ class _ToggleRow extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.value,
-    required this.onChanged,
+    this.onChanged,
     this.last = false,
+    this.locked = false,
+    this.onLockedTap,
   });
 
   final IconData icon;
   final String label;
   final bool value;
-  final ValueChanged<bool> onChanged;
+  final ValueChanged<bool>? onChanged;
   final bool last;
+
+  /// A premium-gated row: the switch is replaced by a "Premium" pill and the
+  /// whole row taps through to [onLockedTap] instead of toggling.
+  final bool locked;
+  final VoidCallback? onLockedTap;
 
   @override
   Widget build(BuildContext context) {
     final c = context.omColors;
-    return Container(
+    final row = Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
       decoration: BoxDecoration(
         border: last
@@ -492,12 +566,62 @@ class _ToggleRow extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(icon, size: 20, color: c.text),
+          Icon(icon, size: 20, color: locked ? c.text2 : c.text),
           const SizedBox(width: 14),
           Expanded(
-            child: Text(label, style: Theme.of(context).textTheme.bodyLarge),
+            child: Text(
+              label,
+              style: Theme.of(context)
+                  .textTheme
+                  .bodyLarge
+                  ?.copyWith(color: locked ? c.text2 : null),
+            ),
           ),
-          OmSwitch(value: value, onChanged: onChanged),
+          if (locked)
+            const _PremiumPill()
+          else
+            OmSwitch(value: value, onChanged: onChanged ?? (_) {}),
+        ],
+      ),
+    );
+
+    if (!locked) return row;
+    return OmTappable(
+      onTap: onLockedTap ?? () {},
+      feedback: OmTapFeedback.none,
+      pressedScale: 0.99,
+      child: row,
+    );
+  }
+}
+
+/// The small violet "Premium" chip shown where a locked feature's control would
+/// be. A lock glyph plus the word, so the gate reads at a glance.
+class _PremiumPill extends StatelessWidget {
+  const _PremiumPill();
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.omColors;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: c.primaryTint,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.lock_rounded, size: 12, color: c.primary),
+          const SizedBox(width: 4),
+          Text(
+            'Premium',
+            style: TextStyle(
+              color: c.primary,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
         ],
       ),
     );

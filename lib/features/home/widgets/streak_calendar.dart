@@ -227,8 +227,8 @@ class _MonthGrid extends StatelessWidget {
                 child: Center(
                   child: Text(l,
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: c.text2,
-                            fontWeight: FontWeight.w700,
+                            color: Color.lerp(c.text2, c.text, 0.4),
+                            fontWeight: FontWeight.w800,
                           )),
                 ),
               ),
@@ -286,12 +286,21 @@ class _DayCell extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: done ? c.accent.withValues(alpha: 0.16) : Colors.transparent,
+        // A completed day carries a warm coral wash strong enough to read as
+        // filled on the translucent sheet, not a faint tint that disappears
+        // into the glass.
+        color: done
+            ? c.accent.withValues(alpha: context.isDark ? 0.30 : 0.22)
+            // Today, before it is earned, gets a soft brand wash so "where I
+            // am" is legible even on the days the outline alone washed out.
+            : isToday
+                ? c.primary.withValues(alpha: context.isDark ? 0.20 : 0.10)
+                : Colors.transparent,
         borderRadius: BorderRadius.circular(12),
         // Today is outlined rather than filled, so "where I am" and "what I
         // did" never compete for the same visual language.
         border: isToday
-            ? Border.all(color: c.primary.withValues(alpha: 0.9), width: 1.6)
+            ? Border.all(color: c.primary, width: 1.8)
             : null,
       ),
       child: Center(
@@ -300,11 +309,13 @@ class _DayCell extends StatelessWidget {
             : Text(
                 '$day',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      // A day still to come is not a day you missed.
+                      // Past and present days sit at full text colour so the
+                      // grid is actually readable; a day still to come is dimmed
+                      // rather than absent, because it is not a day you missed.
                       color: future
-                          ? c.text2.withValues(alpha: 0.35)
-                          : c.text2,
-                      fontWeight: isToday ? FontWeight.w800 : FontWeight.w500,
+                          ? c.text2.withValues(alpha: 0.45)
+                          : (isToday ? c.primary : c.text),
+                      fontWeight: isToday ? FontWeight.w800 : FontWeight.w600,
                     ),
               ),
       ),

@@ -15,6 +15,7 @@ import '../../services/notification_service.dart';
 import '../../widgets/om_screen_header.dart';
 import '../../widgets/om_switch.dart';
 import '../../widgets/om_tappable.dart';
+import '../../widgets/om_time_picker.dart';
 
 /// "reminders" - the things you asked to be told about, and the promise that
 /// you will actually be told.
@@ -493,7 +494,7 @@ class _ReminderSheetState extends State<_ReminderSheet> {
                   Expanded(
                     child: OmTappable(
                       onTap: () async {
-                        final picked = await showTimePicker(
+                        final picked = await showOmTimePicker(
                             context: context, initialTime: _time);
                         if (picked != null) setState(() => _time = picked);
                       },

@@ -76,12 +76,21 @@ class CoachContextBuilder {
   }
 
   List<TaskSummary> _buildTaskSummaries(TaskProvider tasks) {
-    return tasks.all.take(8).map((t) {
+    // The coach only ever knows about *today*. Tasks the user has parked on a
+    // future day (e.g. tapping "24 July" and auto-scheduling there) must not
+    // leak into the conversation - talking to Mynd on the 22nd should surface
+    // the 22nd's plan and mood, nothing that lives days ahead. Because these
+    // are read live from the provider against DateTime.now(), the picture also
+    // "cleans" itself every midnight for free: yesterday's blocks simply stop
+    // matching today, and only the rolling summary carries context forward.
+    final today = tasks.todaySchedule.where((t) => !t.isAnchor);
+    final backlog = tasks.backlog; // undated, "keeps not happening" - fair game
+    return [...today, ...backlog].take(8).map((t) {
       return TaskSummary(
         title: t.title,
         energyLevel: t.energy.label,
         isDone: t.done,
-        dueAt: null, // wire to due date when model supports it
+        dueAt: t.startTime, // today's blocks carry their time; backlog is null
       );
     }).toList();
   }
@@ -139,8 +148,11 @@ class CoachContextBuilder {
   }) {
     final patterns = <String>[];
 
-    // Overwhelm: many undone tasks + low energy
-    final undone = tasks.all.where((t) => !t.done).length;
+    // Overwhelm: many undone tasks + low energy. Scoped to today's plan plus the
+    // undated backlog - the load the user is actually carrying *now*, not blocks
+    // they deliberately pushed to a later day.
+    final undone = tasks.todaySchedule.where((t) => !t.isAnchor && !t.done).length +
+        tasks.backlog.length;
     if (undone >= 5 && energy != EnergyLevel.high) {
       patterns.add(
         'The user has $undone unfinished tasks and is not at high energy - '

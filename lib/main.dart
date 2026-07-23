@@ -25,6 +25,7 @@ import 'providers/habit_provider.dart';
 import 'providers/memory_provider.dart';
 import 'providers/mood_provider.dart';
 import 'providers/nav_provider.dart';
+import 'providers/premium_provider.dart';
 import 'providers/reminders_provider.dart';
 import 'providers/notes_provider.dart';
 import 'providers/settings_provider.dart';
@@ -100,6 +101,9 @@ class OurMyndApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => SettingsProvider()),
+        // Subscription entitlement (Stripe). Gates premium-only features and
+        // drives the paywall checkout. Refreshed after sign-in / on the paywall.
+        ChangeNotifierProvider(create: (_) => PremiumProvider()..refresh()),
         ChangeNotifierProvider(create: (_) => NavProvider()),
         ChangeNotifierProvider(create: (_) => EnergyProvider()),
         ChangeNotifierProvider(create: (_) => TaskProvider()),

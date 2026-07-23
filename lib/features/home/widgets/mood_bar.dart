@@ -7,6 +7,7 @@ import '../../../core/utils/haptics.dart';
 import '../../../providers/mood_provider.dart';
 import '../../../widgets/om_glass.dart';
 import '../../../widgets/om_tappable.dart';
+import '../../memory/memory_actions.dart';
 import 'mood_gauge.dart';
 
 /// Today's mood plus the fortnight behind it.
@@ -280,59 +281,14 @@ Future<void> showMoodCheckIn(BuildContext context, {Mood? replacing}) {
                 Text('how are you today?',
                     style: Theme.of(ctx).textTheme.titleLarge),
                 const SizedBox(height: 4),
-                Text('one tap. no wrong answer, and you can change it later.',
+                Text('drag the dial. no wrong answer, and you can change it later.',
                     style: Theme.of(ctx).textTheme.bodySmall),
-                const SizedBox(height: AppSpacing.xl),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    for (final m in Mood.values)
-                      OmTappable(
-                        onTap: () {
-                          Haptics.select();
-                          setState(() => selected = m);
-                        },
-                        feedback: OmTapFeedback.none,
-                        pressedScale: 0.88,
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 220),
-                          curve: Curves.easeOutCubic,
-                          width: 58,
-                          height: 72,
-                          decoration: BoxDecoration(
-                            color: selected == m ? c.primaryTint : c.surfaceAlt,
-                            borderRadius: BorderRadius.circular(18),
-                            border: Border.all(
-                              color: selected == m ? c.primary : Colors.transparent,
-                              width: 2,
-                            ),
-                          ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              // The orb grows a little when picked, so the
-                              // choice registers physically before the border
-                              // and label catch up.
-                              AnimatedScale(
-                                duration: const Duration(milliseconds: 220),
-                                curve: Curves.easeOutBack,
-                                scale: selected == m ? 1.12 : 1.0,
-                                child: MoodOrb(mood: m, size: 28),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                m.label,
-                                style: Theme.of(ctx).textTheme.labelSmall?.copyWith(
-                                      color: selected == m ? c.primary : c.text2,
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 10,
-                                    ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                  ],
+                const SizedBox(height: AppSpacing.lg),
+                Center(
+                  child: MoodDialPicker(
+                    initial: selected,
+                    onChanged: (m) => setState(() => selected = m),
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.xl),
                 SizedBox(
@@ -344,6 +300,13 @@ Future<void> showMoodCheckIn(BuildContext context, {Mood? replacing}) {
                             Haptics.success();
                             provider.checkIn(selected!);
                             Navigator.of(ctx).pop();
+                            // Fold the just-logged mood into the memory now
+                            // rather than waiting on the autopilot's 8-minute
+                            // cooldown: a check-in is the user stating outright
+                            // how they are, and the coach should carry it into
+                            // the very next message. Uses the outer context,
+                            // which outlives the sheet.
+                            refreshMemory(context, haptic: false, quiet: true);
                           },
                     style: FilledButton.styleFrom(
                       backgroundColor: c.primary,

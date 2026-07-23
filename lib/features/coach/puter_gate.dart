@@ -73,8 +73,15 @@ class _PuterGateState extends State<PuterGate> {
     if (_done) return;
     _done = true;
     _closePopup();
+    // Save the token for cold-start restore.
     if (ok && token.isNotEmpty) await PuterService.instance.applyToken(token);
-    PuterService.instance.refreshAuth();
+    // The bridge WebView loaded before this sign-in, so its in-memory Puter
+    // object still thinks it is signed out; just re-checking it (refreshAuth)
+    // reports the stale state and the gate never lets go. The connect page and
+    // the bridge share one localhost origin, so the session Puter.js just wrote
+    // is already in shared storage: reload the bridge and it re-initialises
+    // signed in, which is what flips CoachScreen from the gate to the chat.
+    await PuterService.instance.reloadBridgeAndAwaitAuth();
     if (mounted) setState(() => _opening = false);
   }
 
@@ -144,16 +151,6 @@ class _PuterGateState extends State<PuterGate> {
             children: [
               const FluidOrb(size: 132),
               const SizedBox(height: AppSpacing.xl),
-              Text(
-                'MYND',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontSize: 28,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 8,
-                      color: c.primary,
-                    ),
-              ),
-              const SizedBox(height: 14),
               Text(
                 'Your coach runs on Puter, so it needs a Puter account before '
                 'it can talk to you.',

@@ -133,7 +133,7 @@ Future<void> showMemoryEditor(BuildContext context) async {
                     minLines: 5,
                     decoration: const InputDecoration(
                       border: InputBorder.none,
-                      hintText: 'e.g. You focus best late at night, and you are '
+                      hintText: 'You focus best late at night, and you are '
                           'working towards IELTS band 7.',
                     ),
                   ),

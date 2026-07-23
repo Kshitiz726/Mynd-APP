@@ -20,6 +20,51 @@ void showBrainDumpSheet(BuildContext context) {
   );
 }
 
+/// Sends a brain dump to Groq, parses the task titles it returns, and adds them
+/// to the backlog. Returns how many tasks were added; throws on failure.
+///
+/// Shared by the typed [BrainDumpSheet] and the voice capture flow so speaking
+/// a dump and typing one break down into the exact same scheduled tasks.
+Future<int> processBrainDumpText(String text, TaskProvider tp) async {
+  final response = await GroqService.instance.complete([
+    {
+      'role': 'system',
+      'content':
+          'You are a task extraction assistant. The user will provide a messy brain dump. '
+              'Extract every distinct actionable task from the text - do not cap or drop any. '
+              'Only merge two items when they are literally the same action stated twice; '
+              'otherwise keep them separate so nothing the user said is lost. '
+              'Respond ONLY with a valid JSON array of strings, '
+              'where each string is a concise task title. Do not include any other formatting, explanations, or markdown blocks.'
+    },
+    {'role': 'user', 'content': text},
+  ]);
+
+  // Clean markdown wrappers if any.
+  String cleaned = response.trim();
+  if (cleaned.startsWith('```json')) cleaned = cleaned.substring(7);
+  if (cleaned.startsWith('```')) cleaned = cleaned.substring(3);
+  if (cleaned.endsWith('```')) cleaned = cleaned.substring(0, cleaned.length - 3);
+  cleaned = cleaned.trim();
+
+  final List<dynamic> parsed = jsonDecode(cleaned);
+  // No cap: every task the user spoke or typed should land. We only drop blanks.
+  final titles =
+      parsed.cast<String>().where((t) => t.trim().isNotEmpty).toList();
+
+  final newTasks = titles
+      .map((title) => Task(
+            id: 'bd_${DateTime.now().microsecondsSinceEpoch}_${title.hashCode}',
+            title: title,
+            time: 'today',
+            energy: EnergyLevel.low,
+          ))
+      .toList();
+
+  tp.addTasks(newTasks);
+  return newTasks.length;
+}
+
 class BrainDumpSheet extends StatefulWidget {
   const BrainDumpSheet({super.key});
 
@@ -36,44 +81,14 @@ class _BrainDumpSheetState extends State<BrainDumpSheet> {
     if (text.isEmpty) return;
 
     setState(() => _processing = true);
+    final tp = context.read<TaskProvider>();
 
     try {
-      final response = await GroqService.instance.complete([
-        {
-          'role': 'system',
-          'content': 'You are a task extraction assistant. The user will provide a messy brain dump. '
-                     'Extract actionable tasks from the text. Respond ONLY with a valid JSON array of strings, '
-                     'where each string is a concise task title. Do not include any other formatting, explanations, or markdown blocks.'
-        },
-        {'role': 'user', 'content': text},
-      ]);
-
-      // Clean markdown wrappers if any
-      String cleaned = response.trim();
-      if (cleaned.startsWith('```json')) cleaned = cleaned.substring(7);
-      if (cleaned.startsWith('```')) cleaned = cleaned.substring(3);
-      if (cleaned.endsWith('```')) cleaned = cleaned.substring(0, cleaned.length - 3);
-      cleaned = cleaned.trim();
-
-      final List<dynamic> parsed = jsonDecode(cleaned);
-      final tasks = parsed.cast<String>();
-
+      final count = await processBrainDumpText(text, tp);
       if (!mounted) return;
-
-      final tp = context.read<TaskProvider>();
-      final newTasks = tasks.map((title) => Task(
-        id: 'bd_${DateTime.now().microsecondsSinceEpoch}_${title.hashCode}',
-        title: title,
-        time: 'today',
-        energy: EnergyLevel.low,
-      )).toList();
-      
-      tp.addTasks(newTasks);
-
       Navigator.of(context).pop();
-      
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Added ${tasks.length} tasks to your backlog!')),
+        SnackBar(content: Text('Added $count tasks to your backlog!')),
       );
     } catch (e) {
       if (!mounted) return;
@@ -113,7 +128,7 @@ class _BrainDumpSheetState extends State<BrainDumpSheet> {
               autofocus: true,
               style: Theme.of(context).textTheme.bodyLarge,
               decoration: InputDecoration(
-                hintText: 'e.g., I need to buy milk, text mom, and finish the report by tomorrow...',
+                hintText: 'I need to buy milk, text mom, and finish the report by tomorrow...',
                 hintStyle: TextStyle(color: c.text2.withValues(alpha: 0.5)),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: c.border)),
                 enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: c.border)),

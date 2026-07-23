@@ -1531,7 +1531,7 @@ class _CreateRoomSheetState extends State<_CreateRoomSheet> {
                 decoration: const InputDecoration(
                   border: InputBorder.none,
                   counterText: '',
-                  hintText: 'Room name, e.g. Late Night Grind',
+                  hintText: 'Room name, like Late Night Grind',
                 ),
               ),
             ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/constants/app_spacing.dart';
+import '../../core/routes/app_routes.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/services/puter_service.dart';
 import '../../core/utils/haptics.dart';
@@ -9,12 +10,13 @@ import '../../core/utils/om_icons.dart';
 import '../../models/chat_message.dart';
 import '../../providers/coach_provider.dart';
 import '../../providers/memory_provider.dart';
+import '../../providers/nav_provider.dart';
+import '../../providers/premium_provider.dart';
 import '../../widgets/fluid_orb.dart';
 import '../../widgets/om_back_button.dart';
 import '../../widgets/om_glass.dart';
 import '../../widgets/om_tappable.dart';
 import 'coach_history_screen.dart';
-import 'coach_voice_screen.dart';
 import 'puter_gate.dart';
 
 /// "coach" - Mynd, the pocket coach. A calm chat with one-tap prompts for the
@@ -28,6 +30,9 @@ class CoachScreen extends StatefulWidget {
   @override
   State<CoachScreen> createState() => _CoachScreenState();
 }
+
+/// Free users get this many coach messages per day before the paywall.
+const int kFreeCoachMessageLimit = 5;
 
 class _CoachScreenState extends State<CoachScreen> {
   static const _prompts = [
@@ -60,12 +65,6 @@ class _CoachScreenState extends State<CoachScreen> {
     _controller.clear();
     context.read<CoachProvider>().send(text);
     _scrollToEnd();
-  }
-
-  void _openVoice() {
-    Haptics.medium();
-    Navigator.of(context)
-        .push(MaterialPageRoute(builder: (_) => const CoachVoiceScreen()));
   }
 
   void _scrollToEnd() {
@@ -113,8 +112,13 @@ class _CoachScreenState extends State<CoachScreen> {
 
   Widget _buildChat(BuildContext context, OmColors c) {
     final memory = context.watch<MemoryProvider>();
+    final isPremium = context.watch<PremiumProvider>().isPremium;
     return Consumer<CoachProvider>(
       builder: (context, coach, _) {
+        // Free tier: after the daily message budget the composer locks behind
+        // the paywall. Premium unlocks it entirely.
+        final locked =
+            !isPremium && coach.messagesSentToday >= kFreeCoachMessageLimit;
         // Auto-scroll whenever a new token arrives.
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (coach.isStreaming) _scrollToEnd();
@@ -129,7 +133,17 @@ class _CoachScreenState extends State<CoachScreen> {
                   8, AppSpacing.screenTop, AppSpacing.screenH, 8),
               child: Row(
                 children: [
-                  OmBackButton(onTap: () => Navigator.of(context).maybePop()),
+                  // The chat hides the bottom bar, so it always carries its own
+                  // way out. If it was pushed (from history or a deep link) the
+                  // arrow pops that route; on the tab there is nothing to pop, so
+                  // it returns to whichever tab you came from instead.
+                  OmBackButton(onTap: () {
+                    if (Navigator.of(context).canPop()) {
+                      Navigator.of(context).maybePop();
+                    } else {
+                      context.read<NavProvider>().back();
+                    }
+                  }),
                   const SizedBox(width: 4),
                   Stack(
                     children: [
@@ -270,28 +284,30 @@ class _CoachScreenState extends State<CoachScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Only show quick prompts if the user hasn't sent a message yet
-                    // (messages.length <= 1 means only the welcome message is there).
-                    if (coach.messages.length <= 1) ...[
-                      SizedBox(
-                        height: 42,
-                        child: ListView.separated(
-                          scrollDirection: Axis.horizontal,
-                          itemCount: _prompts.length,
-                          separatorBuilder: (_, __) => const SizedBox(width: 8),
-                          itemBuilder: (context, i) => _PromptChip(
-                            label: _prompts[i],
-                            urgent: i == 0,
-                            onTap: () => _send(_prompts[i]),
+                    if (locked)
+                      const _LimitReachedCard()
+                    else ...[
+                      // Only show quick prompts if the user hasn't sent a message
+                      // yet (messages.length <= 1 = only the welcome message).
+                      if (coach.messages.length <= 1) ...[
+                        SizedBox(
+                          height: 42,
+                          child: ListView.separated(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: _prompts.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(width: 8),
+                            itemBuilder: (context, i) => _PromptChip(
+                              label: _prompts[i],
+                              urgent: i == 0,
+                              onTap: () => _send(_prompts[i]),
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 10),
+                        const SizedBox(height: 10),
+                      ],
+                      _CoachInput(controller: _controller, onSend: _send),
                     ],
-                    _CoachInput(
-                        controller: _controller,
-                        onSend: _send,
-                        onVoice: _openVoice),
                   ],
                 ),
               ),
@@ -790,13 +806,75 @@ class _PromptChip extends StatelessWidget {
   }
 }
 
+/// Shown in place of the composer once a free user hits the message cap.
+class _LimitReachedCard extends StatelessWidget {
+  const _LimitReachedCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.omColors;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: c.primaryTint,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: c.primary.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.lock_rounded, size: 18, color: c.primary),
+              const SizedBox(width: 8),
+              Text('Message limit reached',
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleSmall
+                      ?.copyWith(fontWeight: FontWeight.w800)),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Free plan includes $kFreeCoachMessageLimit messages a day. Upgrade to Plus to keep talking to Mynd without limits.',
+            style:
+                Theme.of(context).textTheme.bodySmall?.copyWith(color: c.text2, height: 1.4),
+          ),
+          const SizedBox(height: 14),
+          OmTappable(
+            onTap: () {
+              Haptics.medium();
+              Navigator.of(context).pushNamed(AppRoutes.paywall);
+            },
+            feedback: OmTapFeedback.none,
+            pressedScale: 0.97,
+            child: Container(
+              width: double.infinity,
+              height: 48,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                gradient: c.brandGradient,
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+              ),
+              child: const Text('Upgrade to Premium',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 15)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _CoachInput extends StatelessWidget {
-  const _CoachInput(
-      {required this.controller, required this.onSend, required this.onVoice});
+  const _CoachInput({required this.controller, required this.onSend});
 
   final TextEditingController controller;
   final ValueChanged<String> onSend;
-  final VoidCallback onVoice;
 
   @override
   Widget build(BuildContext context) {
@@ -842,17 +920,6 @@ class _CoachInput extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 6),
-            // Hands-free voice mode (Puter speech↔text + TTS).
-            OmTappable(
-              onTap: onVoice,
-              feedback: OmTapFeedback.none,
-              pressedScale: 0.88,
-              child: SizedBox(
-                width: 40,
-                height: 42,
-                child: Icon(OmIcons.byName('mic'), color: c.text2, size: 19),
-              ),
-            ),
             // The send key from the reference: a soft brand-tinted square with an
             // arrow, not a hard coral disc. It belongs to the same family as the
             // orb above it, which is the point.

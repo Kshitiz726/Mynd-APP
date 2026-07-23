@@ -60,10 +60,15 @@ class _PuterHostState extends State<PuterHost> {
 
   @override
   Widget build(BuildContext context) {
-    // Off-screen 1×1 - present but never seen or touchable.
+    // A 1×1 in the very top-left corner - present but effectively invisible
+    // (the bridge page is an empty, transparent document). It is kept ON-screen
+    // rather than pushed off at negative coordinates on purpose: Android
+    // suspends the mic capture of a WebView it considers off-screen, which was
+    // cutting voice recordings off after a few seconds. A composited 1px surface
+    // keeps getUserMedia/MediaRecorder running for the whole dump.
     return Positioned(
-      left: -2,
-      top: -2,
+      left: 0,
+      top: 0,
       width: 1,
       height: 1,
       child: IgnorePointer(

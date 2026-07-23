@@ -51,6 +51,11 @@ class _EditTaskSheetState extends State<EditTaskSheet> {
     Navigator.of(context).pop();
   }
 
+  void _delete() {
+    context.read<TaskProvider>().deleteTask(widget.task.id);
+    Navigator.of(context).pop();
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = context.omColors;
@@ -110,6 +115,26 @@ class _EditTaskSheetState extends State<EditTaskSheet> {
                 ),
                 alignment: Alignment.center,
                 child: const Text('Save Changes', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16)),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            // "I'm never doing this": remove the task outright, distinct from
+            // scheduling or ticking it off.
+            OmTappable(
+              onTap: _delete,
+              feedback: OmTapFeedback.light,
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                alignment: Alignment.center,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.delete_outline_rounded, size: 18, color: c.error),
+                    const SizedBox(width: 6),
+                    Text('Delete task',
+                        style: TextStyle(color: c.error, fontWeight: FontWeight.w700, fontSize: 15)),
+                  ],
+                ),
               ),
             ),
           ],

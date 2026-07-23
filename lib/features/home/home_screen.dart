@@ -12,6 +12,7 @@ import '../../providers/settings_provider.dart';
 import '../../providers/task_provider.dart';
 import '../../widgets/om_chip.dart';
 import '../../widgets/om_states.dart';
+import '../../widgets/om_time_picker.dart';
 import '../../widgets/om_tappable.dart';
 import 'widgets/mynd_hero.dart';
 import 'widgets/home_banners.dart';
@@ -231,7 +232,7 @@ class SleepScheduleBarX extends StatelessWidget {
   const SleepScheduleBarX();
 
   Future<void> _pickTime(BuildContext context, TimeOfDay current, ValueChanged<TimeOfDay> onChanged) async {
-    final t = await showTimePicker(context: context, initialTime: current);
+    final t = await showOmTimePicker(context: context, initialTime: current);
     if (t != null) onChanged(t);
   }
 

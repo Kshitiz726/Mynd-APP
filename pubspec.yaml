@@ -23,8 +23,9 @@ dependencies:
   http: ^1.2.2
 
   # Embedded WebView (Android/iOS/macOS/Windows) — hosts Puter.js so the coach's
-  # AI chat + voice (speech↔text, TTS) run inside the native app via a JS bridge.
+  # AI chat + text-to-speech run inside the native app via a JS bridge.
   flutter_inappwebview: ^6.1.5
+
 
   # Cross-session memory — stores conversation summary between app launches.
   shared_preferences: ^2.3.2

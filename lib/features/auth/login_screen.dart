@@ -15,7 +15,7 @@ import '../../core/services/desktop_google_auth_stub.dart'
 import '../../core/services/realtime_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/haptics.dart';
-import '../../widgets/om_mascot.dart';
+import '../../widgets/fluid_orb.dart';
 import '../../widgets/om_tappable.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -213,25 +213,11 @@ class _LoginScreenState extends State<LoginScreen>
                   child: FadeTransition(
                     opacity: CurvedAnimation(
                         parent: _intro, curve: const Interval(0.0, 0.35)),
-                    child: const OmMascot(size: 96),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                // MYND wordmark based on brand color
-                FadeTransition(
-                  opacity: CurvedAnimation(
-                      parent: _intro, curve: const Interval(0.2, 0.7)),
-                  child: ShaderMask(
-                    shaderCallback: (r) => c.brandGradient.createShader(r),
-                    child: Text(
-                      'MYND',
-                      style: t.headlineLarge?.copyWith(
-                        fontSize: 44,
-                        fontWeight: FontWeight.w900,
-                        color: Colors.white,
-                        letterSpacing: 6,
-                      ),
-                    ),
+                    // The same living orb the splash, home and coach use, so the
+                    // first face you meet is the one you keep. Gently alive here
+                    // rather than held still - this is a welcome, not a resting
+                    // home screen.
+                    child: const FluidOrb(size: 132),
                   ),
                 ),
               ],

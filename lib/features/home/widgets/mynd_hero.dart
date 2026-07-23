@@ -14,6 +14,7 @@ import '../../../widgets/fluid_orb.dart';
 import '../../../widgets/om_glass.dart';
 import '../../../widgets/om_tappable.dart';
 import '../../memory/memory_actions.dart';
+import 'voice_dump_sheet.dart';
 
 /// The top of Home: Mynd itself, the day's count, and a way to make it think
 /// again.
@@ -85,10 +86,14 @@ class _MyndHeroState extends State<MyndHero> with TickerProviderStateMixin {
     }
   }
 
-  void _poke() {
+  /// Tapping the orb is the fastest way to offload a head full of stuff: it
+  /// opens the voice dump, you talk, and Groq breaks it into today's tasks, the
+  /// same as typing into Brain Dump but hands-free.
+  void _voiceDump() {
     if (_busy) return;
-    Haptics.light();
+    Haptics.medium();
     _pulse.forward(from: 0);
+    showVoiceDumpSheet(context);
   }
 
   @override
@@ -110,7 +115,7 @@ class _MyndHeroState extends State<MyndHero> with TickerProviderStateMixin {
         SizedBox(
           height: 176,
           child: OmTappable(
-            onTap: _poke,
+            onTap: _voiceDump,
             feedback: OmTapFeedback.none,
             pressedScale: 0.97,
             child: Stack(
