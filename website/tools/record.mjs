@@ -27,7 +27,11 @@ const arg = (name, fallback) => {
 const FPS = Number(arg('fps', 30));
 const OUT = arg('out', 'ourmynd-walkthrough.mp4');
 const PORT = Number(arg('port', 4321));
-const DEBUG_PORT = Number(arg('debug-port', 9333));
+// A fresh port and profile per run. A previous run that was interrupted can
+// leave Chrome holding the old port, and /json/list then hands back ITS page -
+// which has already played the film through, so every captured frame is the
+// end card. Silent, deterministic, and completely wrong.
+const DEBUG_PORT = Number(arg('debug-port', 9400 + Math.floor(Math.random() * 400)));
 const WIDTH = 1080;
 const HEIGHT = 1920;
 
@@ -95,7 +99,7 @@ const chrome = spawn(CHROME, [
   '--force-device-scale-factor=1',
   `--window-size=${WIDTH},${HEIGHT}`,
   `--remote-debugging-port=${DEBUG_PORT}`,
-  '--user-data-dir=' + (process.env.TEMP || '/tmp') + '/om-record-profile',
+  `--user-data-dir=${process.env.TEMP || '/tmp'}/om-record-${DEBUG_PORT}`,
   url,
 ], { stdio: 'ignore' });
 
@@ -109,6 +113,9 @@ for (let i = 0; i < 60 && !target; i++) {
   } catch { /* not up yet */ }
 }
 if (!target) { chrome.kill(); throw new Error('chrome never opened the page'); }
+
+process.on('exit', () => { try { chrome.kill(); } catch {} });
+process.on('SIGINT', () => { try { chrome.kill(); } catch {} process.exit(1); });
 
 const cdp = await connect(target.webSocketDebuggerUrl);
 await cdp.send('Page.enable');

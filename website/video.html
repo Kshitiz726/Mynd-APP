@@ -122,6 +122,40 @@
   #outro.on .cta  { animation: upIn .7s cubic-bezier(.16,1,.3,1) .58s both; }
   @keyframes upIn { from { opacity: 0; transform: translateY(34px); } to { opacity: 1; transform: none; } }
 
+  /* ---- Promo timing ------------------------------------------------------ */
+  /* Every screen's behaviour has to complete inside one 3120ms shot. These
+     override the delays the site set for a slower film; the animations
+     themselves are untouched. */
+  #stage .say .w        { animation-delay: calc(var(--i) * .070s) !important; }
+  #stage .type .w       { animation-delay: calc(var(--d, 0s) + var(--i, 0) * .062s) !important; }
+  #stage .found .fr     { --d: 1.35s; }
+  #stage .sheet .pill-btn.press { --d: 1.0s; }
+  #stage .blk.stg, #stage .addrow.stg { animation-delay: calc(.55s + var(--i, 0) * .17s) !important; }
+  #stage .bl-item.stg   { animation-delay: calc(1.0s + var(--i, 0) * .16s) !important; }
+  #stage .filters .sw-off, #stage .filters .sw-on { --d: .85s; }
+  #stage .scenes .sw-off, #stage .scenes .sw-on   { --d: .7s; }
+  #stage .toggle.auto   { animation-delay: calc(.5s + var(--i, 0) * .26s) !important; }
+  #stage .toggle.auto::after { animation-delay: calc(.5s + var(--i, 0) * .26s) !important; }
+  #stage .bdouble .toggle.auto, #stage .bdouble .toggle.auto::after { animation-delay: 1.0s !important; }
+  #stage .bdouble .sec-h.stg, #stage .bdouble .filters .stg { animation-delay: calc(1.35s + var(--i, 0) * .12s) !important; }
+  #stage .bdouble .filters .sw-off, #stage .bdouble .filters .sw-on { --d: 1.9s; }
+  #stage .btn-orange.press { --d: 2.2s; }
+  #stage .mins.wheel .row  { --d: 1.5s; }
+  #stage .lbl-swap .before, #stage .lbl-swap .after { --d: 1.5s; }
+  #stage .presets .pick-off, #stage .presets .pick-on { --d: 1.5s; }
+  #stage .fcard.new.press  { --d: .45s; }
+  #stage .fcard.saved.stg  { animation-delay: 1.0s !important; }
+  #stage .swapper .before, #stage .swapper .after { --d: 1.9s; }
+  #stage .bub           { animation-delay: calc(var(--d, 0s) + var(--i, 0) * .42s) !important; }
+  #stage .bub.ghost     { animation-duration: 1.15s !important; }
+  #stage .moodchat-late, #stage [data-wt="moodchat"] .bub:not(.ghost) { --d: 1.35s; }
+  #stage [data-wt="coach"] .bub:not(.ghost) { --d: 1.5s; }
+  #stage .mem-card .type .w { animation-delay: calc(var(--i, 0) * .055s) !important; }
+  #stage .mem-edit-bar .sv  { --d: 2.0s; }
+  #stage .notif         { --d: .5s; }
+  #stage .scenebar .sel-a, #stage .scenebar .sel-b { --d: 1.4s; }
+  #stage .parked.stg    { animation-delay: calc(.3s + var(--i, 0) * .18s) !important; }
+
   #src { position: fixed; width: 1px; height: 1px; opacity: 0; pointer-events: none; border: 0; }
 </style>
 </head>
@@ -217,7 +251,12 @@ src.addEventListener('load', () => {
     }
 
     const [, a, b] = SHOTS[i];
-    [...stage.children].forEach((s, n) => s.classList.toggle('on', n === i));
+    // .live is what the screens' own animations hang off - the site's players
+    // set it too. Without it every phone in the film would be a still.
+    [...stage.children].forEach((s, n) => {
+      s.classList.toggle('on', n === i);
+      s.classList.toggle('live', n === i);
+    });
 
     // Retrigger the caption by reflowing between cuts, then schedule its exit.
     cap.classList.remove('in', 'out');
