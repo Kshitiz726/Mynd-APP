@@ -1096,3 +1096,92 @@ footer { padding: 56px 0 44px; color: var(--text-2); font-size: 14px; }
 .live .hint .sc-b { display: inline-block; animation: labIn .5s ease both; animation-delay: 1.9s; }
 @keyframes labOut { 0% { opacity: 1; width: auto; } 100% { opacity: 0; font-size: 0; } }
 @keyframes labIn { 0% { opacity: 0; font-size: 0; } 100% { opacity: 1; } }
+
+/* ---- 24. Taps you can see ------------------------------------------------ */
+/* Nothing on these screens moves by itself in the real app - a finger moves it.
+   A ring under the control at the moment it reacts is the cheapest way to say
+   so without drawing a cartoon hand over the interface. */
+.press { position: relative; }
+.press .tap {
+  position: absolute; left: 50%; top: 50%; width: 26px; height: 26px; margin: -13px 0 0 -13px;
+  border-radius: 50%; pointer-events: none; opacity: 0;
+  border: 2px solid color-mix(in srgb, var(--primary) 70%, transparent);
+  background: color-mix(in srgb, var(--primary) 22%, transparent);
+}
+.press .tap.tl { left: 26%; }
+.live .press .tap { animation: tapRing .75s ease-out both; animation-delay: var(--d, 0s); }
+@keyframes tapRing {
+  0%   { opacity: 0; transform: scale(.35); }
+  25%  { opacity: 1; transform: scale(.8); }
+  100% { opacity: 0; transform: scale(2.6); }
+}
+
+/* ---- 25. Looking for a partner ------------------------------------------- */
+/* The search is the feature. It has to look like it is actually reaching for
+   somebody, and then actually find them. */
+.search-ring { position: relative; display: grid; place-items: center; width: 96px; height: 96px; margin: 0 auto; }
+.search-ring .r {
+  position: absolute; inset: 0; border-radius: 50%;
+  border: 1.5px solid color-mix(in srgb, var(--primary) 55%, transparent);
+  opacity: 0;
+}
+.live .search-ring .r { animation: sonar 2.2s ease-out infinite; animation-delay: calc(var(--i) * .73s); }
+@keyframes sonar { 0% { opacity: .85; transform: scale(.35); } 100% { opacity: 0; transform: scale(1); } }
+.search-ring .core {
+  width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center;
+  background: linear-gradient(135deg, var(--grad-start), var(--grad-end)); color: #fff; z-index: 2;
+}
+.search-ring .core svg { width: 18px; height: 18px; }
+
+/* The searching copy hands over to the match, in place. */
+.swapper { position: relative; display: grid; }
+.swapper > * { grid-area: 1 / 1; }
+.live .swapper .before { animation: swapOut .45s ease both; animation-delay: var(--d, 3.4s); }
+.live .swapper .after  { animation: swapIn .45s var(--ease-spring) both; animation-delay: var(--d, 3.4s); }
+.swapper .after { opacity: 0; }
+@keyframes swapOut { to { opacity: 0; transform: translateY(-7px); } }
+@keyframes swapIn  { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+.matched { display: grid; justify-items: center; gap: 6px; }
+.matched .who { display: flex; align-items: center; gap: 7px; }
+.matched .who .av2 {
+  width: 24px; height: 24px; border-radius: 50%;
+  background: linear-gradient(140deg, var(--accent), var(--primary));
+}
+.matched b { font-family: "Fredoka", sans-serif; font-size: 13px; }
+.matched .go2 {
+  margin-top: 4px; padding: 8px 18px; border-radius: var(--r-pill); font-size: 10px; font-weight: 600;
+  background: linear-gradient(135deg, var(--grad-start), var(--grad-end)); color: #fff;
+}
+
+/* ---- 26. Pickers that get picked ----------------------------------------- */
+/* The minutes wheel really rolls, and the preset under it follows. */
+/* Two rows stacked in a window: the old numbers roll up and out, the new ones
+   roll up and in, which is what the wheel in the app does under a finger. */
+.mins.wheel { position: relative; overflow: hidden; display: block; height: 52px; }
+.mins.wheel .row {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+}
+.mins.wheel .row.after { opacity: 0; }
+.live .mins.wheel .row.before { animation: rollOut .55s var(--ease-spring) both; animation-delay: var(--d, 1.5s); }
+.live .mins.wheel .row.after  { animation: rollIn  .55s var(--ease-spring) both; animation-delay: var(--d, 1.5s); }
+@keyframes rollOut { to { opacity: 0; transform: translateY(-46px); } }
+@keyframes rollIn  { from { opacity: 0; transform: translateY(46px); } to { opacity: 1; transform: none; } }
+.live .pick-off { animation: pickOff .45s ease both; animation-delay: var(--d, 1.5s); }
+.live .pick-on  { animation: pickOn  .45s ease both; animation-delay: var(--d, 1.5s); }
+@keyframes pickOff { to { background: var(--surface); color: var(--text-2); border-color: var(--border); } }
+@keyframes pickOn  { to { background: color-mix(in srgb, var(--primary) 15%, transparent); color: var(--primary); border-color: color-mix(in srgb, var(--primary) 40%, transparent); } }
+/* Labels that must change when the choice does. */
+.lbl-swap { position: relative; display: inline-grid; }
+.lbl-swap > * { grid-area: 1 / 1; }
+.lbl-swap .after { opacity: 0; }
+.live .lbl-swap .before { animation: swapOut .4s ease both; animation-delay: var(--d, 1.6s); }
+.live .lbl-swap .after  { animation: swapIn .4s ease both; animation-delay: var(--d, 1.6s); }
+
+@media (prefers-reduced-motion: reduce) {
+  .live .press .tap, .live .search-ring .r, .live .swapper .before, .live .swapper .after,
+  .live .mins.wheel .row, .live .pick-off, .live .pick-on, .live .lbl-swap .before, .live .lbl-swap .after {
+    animation-duration: .01ms; animation-delay: 0ms; animation-iteration-count: 1;
+  }
+}

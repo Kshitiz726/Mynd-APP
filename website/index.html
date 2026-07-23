@@ -503,19 +503,24 @@
                 <div class="sec-h2">your focuses</div><div class="pc-s">hold to remove</div>
               </div>
               <div class="focus-cards">
-                <div class="fcard new"><span class="p">+</span><b>new focus</b><s>name it, keep it</s></div>
-                <div class="fcard saved">
-                  <span class="m"><b>15</b><s>min</s><svg class="i arrow" style="font-size:11px"><use href="#ic-up"/></svg></span>
-                  <s style="display:flex;gap:4px;align-items:center"><svg class="i" style="font-size:9px"><use href="#ic-note"/></svg> I wanna work</s>
+                <div class="fcard new press" style="--d:.6s"><span class="p">+</span><b>new focus</b><s>name it, keep it</s><span class="tap"></span></div>
+                <!-- Named and kept, right after the card above is tapped. -->
+                <div class="fcard saved stg" style="--i:0;--d:1.5s">
+                  <span class="m"><b>45</b><s>min</s><svg class="i arrow" style="font-size:11px"><use href="#ic-up"/></svg></span>
+                  <s style="display:flex;gap:4px;align-items:center"><svg class="i" style="font-size:9px"><use href="#ic-note"/></svg> C coursework</s>
                 </div>
               </div>
               <div class="pc-s" style="text-align:center">focus time in mins</div>
-              <div class="mins"><span>20</span><span class="on">25</span><span>30</span></div>
-              <div class="pc-s" style="text-align:center;color:var(--primary);font-weight:600">pomodoro</div>
+              <!-- The wheel actually turns: 25 rolls off, 45 rolls up. -->
+              <div class="mins wheel" style="--d:2.6s">
+                <div class="row before"><span>20</span><span class="on">25</span><span>30</span></div>
+                <div class="row after"><span>40</span><span class="on">45</span><span>50</span></div>
+              </div>
+              <div class="pc-s lbl-swap" style="text-align:center;color:var(--primary);font-weight:600;--d:2.6s"><span class="before">pomodoro</span><span class="after">deep work</span></div>
               <div class="presets">
                 <div><svg class="i"><use href="#ic-zap"/></svg><b>15</b><s>sprint</s></div>
-                <div class="on"><svg class="i"><use href="#ic-timer"/></svg><b>25</b><s>pomodoro</s></div>
-                <div><svg class="i"><use href="#ic-brain"/></svg><b>45</b><s>deep work</s></div>
+                <div class="on pick-off" style="--d:2.6s"><svg class="i"><use href="#ic-timer"/></svg><b>25</b><s>pomodoro</s></div>
+                <div class="press pick-on" style="--d:2.6s"><svg class="i"><use href="#ic-brain"/></svg><b>45</b><s>deep work</s><span class="tap"></span></div>
                 <div><svg class="i"><use href="#ic-waves"/></svg><b>90</b><s>flow</s></div>
               </div>
             </div>
@@ -533,7 +538,7 @@
             <div class="status"><span>3:03</span><span class="sig"><i></i><i></i><i></i><span class="bat"></span></span></div>
             <div class="screen-body">
               <div class="pc-s" style="text-align:center">focus time in mins</div>
-              <div class="mins"><span>20</span><span class="on">25</span><span>30</span></div>
+              <div class="mins"><span class="mn">20</span><span class="on mn">25</span><span class="mn">30</span></div>
               <div class="pc-s" style="text-align:center;color:var(--primary);font-weight:600">pomodoro</div>
               <div class="presets">
                 <div><svg class="i"><use href="#ic-zap"/></svg><b>15</b><s>sprint</s></div>
@@ -560,7 +565,7 @@
                   <span>library</span><span>typing</span>
                 </div>
               </div>
-              <div class="btn-orange" style="border-radius:15px;padding:11px">start pomodoro · 25m</div>
+              <div class="btn-orange press" style="border-radius:15px;padding:11px;--d:3.2s">start pomodoro &middot; 25m<span class="tap"></span></div>
               <div style="text-align:center;font-size:9px;color:var(--primary);font-weight:600">Need help? Talk to Mynd</div>
             </div>
             <div class="tabbar">
@@ -580,9 +585,23 @@
               <div class="sec-h2">Focus together</div>
             </div>
             <div class="together">
-              <span class="pulse"><svg class="i"><use href="#ic-users"/></svg></span>
-              <b>Looking for a focus partner…</b>
-              <s>You'll be paired the moment someone else is ready.</s>
+              <!-- Three rings going out on a stagger: the app is reaching, and
+                   you can see it reaching. -->
+              <div class="search-ring">
+                <span class="r" style="--i:0"></span><span class="r" style="--i:1"></span><span class="r" style="--i:2"></span>
+                <span class="core"><svg class="i"><use href="#ic-users"/></svg></span>
+              </div>
+              <div class="swapper" style="--d:3.4s;margin-top:14px">
+                <div class="before">
+                  <b>Looking for a focus partner&hellip;</b>
+                  <s>You'll be paired the moment someone else is ready.</s>
+                </div>
+                <div class="after matched">
+                  <div class="who"><span class="av2"></span><b>QuietOtter42</b></div>
+                  <s>working on something of their own, for the next 45 minutes.</s>
+                  <div class="go2">start together &middot; 45m</div>
+                </div>
+              </div>
               <div class="cancel">Cancel</div>
             </div>
           </div>
