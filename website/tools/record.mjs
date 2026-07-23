@@ -116,16 +116,20 @@ await cdp.send('Emulation.setDeviceMetricsOverride', {
   width: WIDTH, height: HEIGHT, deviceScaleFactor: 1, mobile: false,
 });
 
-// Let it settle in real time: fonts, the iframe, and the WebGL contexts all
-// need to exist before the clock is taken away from them.
-console.log('warming up...');
-await sleep(6000);
-
 const read = async (expr) =>
   (await cdp.send('Runtime.evaluate', { expression: expr, returnByValue: true })).result.value;
 
-const totalMs = Number(await read('document.documentElement.dataset.filmReady || 0'));
+// Settle in real time: fonts, the iframe and the WebGL contexts all have to
+// exist before the clock is taken away from them. Poll rather than guess a
+// sleep - a cold profile takes noticeably longer than a warm one.
+console.log('warming up...');
+let totalMs = 0;
+for (let i = 0; i < 60 && !totalMs; i++) {
+  await sleep(500);
+  totalMs = Number(await read('document.documentElement.dataset.filmReady || 0'));
+}
 if (!totalMs) { chrome.kill(); throw new Error('video.html never reported a duration'); }
+await sleep(2500);   // a beat more for fonts to paint at their final metrics
 
 const frameMs = 1000 / FPS;
 // 600ms of lead-in before the first cut, plus a beat to rest on the last card.
@@ -136,11 +140,19 @@ const cap = Number(arg('max-frames', 0));
 if (cap) frames = Math.min(frames, cap);
 console.log(`film is ${(totalMs / 1000).toFixed(1)}s -> ${frames} frames at ${FPS}fps`);
 
+// Frames in on stdin, the soundtrack in as a second input, one mp4 out. The
+// music is cut to the film's own length and its bar length is what the shot
+// length was derived from, so no offset is needed here - both start at zero.
+const AUDIO = arg('audio', 'assets/audio/film.m4a');
 const ff = spawn('ffmpeg', [
   '-y',
   '-f', 'image2pipe', '-framerate', String(FPS), '-i', '-',
+  '-i', AUDIO,
+  '-map', '0:v:0', '-map', '1:a:0',
   '-c:v', 'libx264', '-preset', 'slow', '-crf', '19',
-  '-pix_fmt', 'yuv420p', '-movflags', '+faststart',
+  '-pix_fmt', 'yuv420p', '-profile:v', 'high', '-level', '4.2',
+  '-c:a', 'aac', '-b:a', '192k',
+  '-shortest', '-movflags', '+faststart',
   OUT,
 ], { stdio: ['pipe', 'ignore', 'inherit'] });
 

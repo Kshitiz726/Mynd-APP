@@ -4,144 +4,234 @@
 <meta charset="utf-8">
 <title>OurMynd - film</title>
 <!--
-  The recording stage.
+  The film stage.
   ---------------------------------------------------------------------------
-  A 1080x1920 page holding one phone and one caption, built to be filmed rather
-  than browsed. Two rules it lives by:
+  1080x1920, built to be recorded rather than browsed, in the shape of a store
+  promo: one big claim in the top third, one phone tilted in perspective below
+  it, a hard cut every few seconds, and a logo card at the end.
 
-  1. It owns no content. The phones are cloned out of index.html through a
-     hidden iframe, and the script comes from window.OM_SCENES on that same
-     document, so the film can never say something the site does not.
-  2. Every motion is a CSS animation keyed off .live, exactly as on the site,
-     because tools/record.mjs drives this page through CDP virtual time and
-     virtual time advances animations and timers together.
+  It owns no screens. Every phone is cloned out of index.html through a hidden
+  iframe and the running order comes from window.OM_SCENES on that document, so
+  the film can never show something the product does not.
+
+  The captions ARE written here, and deliberately: the site explains, a promo
+  asserts. Two short lines a shot, no more.
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Lexend:wght@300;400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 <style>
-  html, body { margin: 0; width: 1080px; height: 1920px; overflow: hidden; background: #0d0c14; }
-  body { display: grid; grid-template-rows: 132px 1fr auto; }
+  /* Copied from index.html's head: the sprite icons are sized by this rule, and
+     without it every glyph renders at the SVG default of 300x150. */
+  .i { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .i.fill { fill: currentColor; stroke: none; }
 
-  .bg { position: fixed; inset: 0; z-index: 0; background:
-        radial-gradient(120% 80% at 50% -10%, #2f2d55, #14131f 58%, #0c0b12); }
-  .bg .b1, .bg .b2 { position: absolute; border-radius: 50%; filter: blur(120px); }
-  .bg .b1 { width: 900px; height: 900px; top: -320px; right: -260px; background: #6B70C9; opacity: .30; }
-  .bg .b2 { width: 800px; height: 800px; bottom: -280px; left: -240px; background: #5C8AD0; opacity: .20; }
+  html, body { margin: 0; width: 1080px; height: 1920px; overflow: hidden; background: #08070d; }
 
-  header, main, footer { position: relative; z-index: 2; }
+  /* Deep, near-black, with the brand sitting just underneath it. */
+  .bg { position: fixed; inset: 0; z-index: 0; background: #08070d; }
+  .bg i { position: absolute; border-radius: 50%; filter: blur(150px); display: block; }
+  .bg .a { width: 1100px; height: 1100px; top: -420px; left: -260px; background: #6B70C9; opacity: .30; }
+  .bg .b { width: 900px;  height: 900px;  bottom: -300px; right: -260px; background: #F0A479; opacity: .13; }
+  .bg .c { width: 700px;  height: 700px;  top: 40%; right: -240px; background: #5C8AD0; opacity: .16; }
+  .vig { position: fixed; inset: 0; z-index: 1; pointer-events: none;
+         background: radial-gradient(120% 70% at 50% 42%, transparent 40%, rgba(0,0,0,.72)); }
 
-  header { display: flex; align-items: center; justify-content: center; gap: 16px; padding-top: 46px; }
-  header .orb { --orb: 46px; }
-  header b { font-family: "Fredoka", sans-serif; font-size: 38px; font-weight: 600; color: #fff; letter-spacing: -.5px; }
-
-  main { display: grid; place-items: center; position: relative; }
-  /* The phone is 300x625 in the site's own units; twice that is the largest
-     size that still leaves the caption room to breathe. */
-  #stage { position: relative; width: 600px; height: 1250px; }
-  #stage .scene {
-    position: absolute; inset: 0; display: grid; place-items: center;
-    opacity: 0; transform: translateY(26px) scale(.975);
-    transition: opacity .55s ease, transform .55s cubic-bezier(.22,1,.36,1);
+  /* ---- Caption ----------------------------------------------------------- */
+  #cap {
+    position: fixed; z-index: 5; left: 96px; right: 96px; top: 150px;
+    font-family: "Fredoka", sans-serif; font-weight: 700;
+    font-size: 96px; line-height: 1.04; letter-spacing: -2.6px;
   }
-  #stage .scene.live { opacity: 1; transform: none; }
-  #stage .phone { transform: scale(2); transform-origin: center; }
-  .glow { position: absolute; width: 1000px; height: 1000px; border-radius: 50%;
-          background: radial-gradient(circle, rgba(141,132,230,.34), transparent 62%);
-          filter: blur(40px); pointer-events: none; }
+  #cap .l { display: block; overflow: hidden; }
+  #cap .l span { display: block; color: #F4C9A4; }
+  /* In on the cut, out just before the next one, so no line ever sits still
+     long enough to feel like a slide. Driven by two classes rather than by a
+     calc() on the animation delay: a two-animation shorthand sharing transform
+     and opacity is exactly the kind of thing that silently resolves to the
+     from-frame and never moves. */
+  #cap.in .l:nth-child(1) span { animation: lineIn .62s cubic-bezier(.16,1,.3,1) both; }
+  #cap.in .l:nth-child(2) span { animation: lineIn .62s cubic-bezier(.16,1,.3,1) .09s both; }
+  #cap.out .l:nth-child(1) span { animation: lineOut .34s ease-in forwards; }
+  #cap.out .l:nth-child(2) span { animation: lineOut .34s ease-in .04s forwards; }
+  @keyframes lineIn  { from { transform: translateY(110%) rotate(3deg); opacity: 0; } to { transform: none; opacity: 1; } }
+  @keyframes lineOut { to { transform: translateY(-60%); opacity: 0; } }
 
-  footer { padding: 0 96px 92px; display: grid; justify-items: center; gap: 40px; }
-  #cap { text-align: center; min-height: 250px; }
-  #cap h2 {
-    font-family: "Fredoka", sans-serif; font-weight: 600; color: #fff;
-    font-size: 62px; line-height: 1.1; letter-spacing: -1.4px; margin: 0 0 22px;
+  /* ---- Phone ------------------------------------------------------------- */
+  #stage { position: fixed; inset: 0; z-index: 3; perspective: 1700px; perspective-origin: 50% 40%; }
+  .shot { position: absolute; inset: 0; opacity: 0; }
+  .shot.on { opacity: 1; }
+  .rig {
+    position: absolute; left: 50%; top: 620px; width: 600px; height: 1250px;
+    margin-left: -300px; transform-style: preserve-3d;
   }
-  #cap p { margin: 0; font-family: "Lexend", sans-serif; font-size: 31px; line-height: 1.5;
-           color: rgba(255,255,255,.68); }
-  /* The caption lands a beat after the screen it belongs to, like a title card. */
-  #cap.swap h2 { animation: capUp .6s cubic-bezier(.22,1,.36,1) both; }
-  #cap.swap p  { animation: capUp .6s cubic-bezier(.22,1,.36,1) .09s both; }
-  @keyframes capUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: none; } }
+  .rig .phone { transform: scale(2); transform-origin: top center; }
+  /* Three moves, cycled, so no two neighbouring shots drift the same way. */
+  .shot.on .rig { animation: var(--move) var(--dur) linear both; }
+  @keyframes moveA {
+    from { transform: translate3d(90px, 120px, -260px) rotateX(9deg) rotateY(-26deg) rotateZ(-9deg); }
+    to   { transform: translate3d(20px, -40px, 0)      rotateX(4deg) rotateY(-13deg) rotateZ(-4deg); }
+  }
+  @keyframes moveB {
+    from { transform: translate3d(-120px, 60px, -200px) rotateX(6deg) rotateY(22deg) rotateZ(7deg); }
+    to   { transform: translate3d(-30px, -70px, 40px)   rotateX(2deg) rotateY(9deg)  rotateZ(2deg); }
+  }
+  @keyframes moveC {
+    from { transform: translate3d(0, 220px, -320px) rotateX(14deg) rotateY(-6deg) rotateZ(2deg); }
+    to   { transform: translate3d(0, -30px, 60px)   rotateX(3deg)  rotateY(-2deg) rotateZ(-1deg); }
+  }
+  /* A soft floor-light under the device so it is lit, not pasted on. */
+  .rig::after {
+    content: ""; position: absolute; left: 50%; top: 42%; width: 1200px; height: 1200px;
+    margin-left: -600px; border-radius: 50%; transform: translateZ(-300px);
+    background: radial-gradient(circle, rgba(141,132,230,.30), transparent 60%);
+    filter: blur(50px);
+  }
 
-  #bar { width: 780px; height: 6px; border-radius: 99px; background: rgba(255,255,255,.16); overflow: hidden; }
-  #bar i { display: block; height: 100%; width: 0; border-radius: 99px;
-           background: linear-gradient(90deg, #8E84E6, #F0A479); }
+  /* ---- Outro ------------------------------------------------------------- */
+  #outro {
+    position: fixed; inset: 0; z-index: 8; display: grid; place-content: center;
+    justify-items: center; gap: 44px; background: #08070d; opacity: 0;
+  }
+  #outro.on { opacity: 1; }
+  /* The mark turns while the shader inside it keeps flowing - a rotating
+     object, not a spinning picture. */
+  .mark { width: 300px; height: 300px; position: relative; }
+  #outro.on .mark { animation: markIn 1.1s cubic-bezier(.16,1,.3,1) both; }
+  #outro.on .mark .orb { animation: spin 14s linear infinite; }
+  @keyframes markIn { from { opacity: 0; transform: scale(.72) rotate(-24deg); } to { opacity: 1; transform: none; } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .mark .orb { --orb: 300px; box-shadow: 0 40px 120px -30px rgba(107,112,201,.9); }
+  .mark .halo {
+    position: absolute; inset: -70px; border-radius: 50%; pointer-events: none;
+    background: radial-gradient(circle, rgba(141,132,230,.34), transparent 62%); filter: blur(24px);
+  }
+  #outro .word {
+    font-family: "Fredoka", sans-serif; font-weight: 600; font-size: 96px; color: #fff; letter-spacing: -2px;
+  }
+  #outro .sub { font-family: "Lexend", sans-serif; font-size: 34px; color: rgba(255,255,255,.62); margin-top: -22px; }
+  #outro .cta {
+    margin-top: 18px; font-family: "Fredoka", sans-serif; font-weight: 600; font-size: 44px; color: #fff;
+    padding: 30px 68px; border-radius: 999px;
+    background: linear-gradient(135deg, #8E84E6, #6469C6);
+    box-shadow: 0 30px 70px -20px rgba(107,112,201,.85);
+  }
+  #outro.on .word { animation: upIn .7s cubic-bezier(.16,1,.3,1) .30s both; }
+  #outro.on .sub  { animation: upIn .7s cubic-bezier(.16,1,.3,1) .40s both; }
+  #outro.on .cta  { animation: upIn .7s cubic-bezier(.16,1,.3,1) .58s both; }
+  @keyframes upIn { from { opacity: 0; transform: translateY(34px); } to { opacity: 1; transform: none; } }
 
   #src { position: fixed; width: 1px; height: 1px; opacity: 0; pointer-events: none; border: 0; }
 </style>
 </head>
 <body>
 
-<div class="bg"><div class="b1"></div><div class="b2"></div></div>
+<div class="bg"><i class="a"></i><i class="b"></i><i class="c"></i></div>
+<div class="vig"></div>
 
-<header><span class="orb still"><canvas></canvas></span><b>OurMynd</b></header>
+<div id="stage"></div>
+<div id="cap"><span class="l"><span></span></span><span class="l"><span></span></span></div>
 
-<main><div class="glow"></div><div id="stage"></div></main>
-
-<footer>
-  <div id="cap"><h2></h2><p></p></div>
-  <div id="bar"><i></i></div>
-</footer>
+<div id="outro">
+  <div class="mark"><span class="halo"></span><span class="orb"><canvas></canvas></span></div>
+  <div class="word">OurMynd</div>
+  <div class="sub">your head is loud. your day doesn't have to be.</div>
+  <div class="cta">Get early access</div>
+</div>
 
 <iframe id="src" src="index.html"></iframe>
 
 <script src="orb.js"></script>
 <script>
+/* The cut list. Each entry is a screen key from index.html plus the two lines
+   that go over it. Kept to two short lines because a promo asserts; the site is
+   where the explaining happens. */
+const SHOTS = [
+  ['home',     'Your head is loud.', "Your day isn't."],
+  ['speak',    'Open it.',           'Just talk.'],
+  ['found',    'One sentence.',      'Three real tasks.'],
+  ['sched',    'Your day,',          'already scheduled.'],
+  ['backlog',  'Nothing you said',   'gets lost.'],
+  ['dump',     'Type the mess.',     'Same result.'],
+  ['mood',     'How are you,',       'actually?'],
+  ['moodchat', 'It plans around',    'your answer.'],
+  ['setup',    'Focus knows',        "what's next."],
+  ['presets',  'Your length.',       'Your scene.'],
+  ['together', 'Work beside',        'someone.'],
+  ['live',     'One task.',          'Nothing else.'],
+  ['rain',     'A thought?',         'Park it.'],
+  ['memory',   'It remembers.',      'You can edit it.'],
+  ['rem',      'Reminders set',      'themselves.'],
+  ['notif',    'It taps you',        'right on time.'],
+  ['coach',    "It's read",          'all of it.'],
+];
+
+// One bar of the soundtrack. tools/record.mjs measured the track at 153.8bpm,
+// which reads as 76.9 half-time, so a bar is 3120ms and every cut lands on the
+// downbeat rather than near it.
+const SHOT_MS = 3120;
+const OUTRO_MS = 5200;
+const MOVES = ['moveA', 'moveB', 'moveC'];
+
 const src = document.getElementById('src');
 const stage = document.getElementById('stage');
 const cap = document.getElementById('cap');
-const bar = document.querySelector('#bar i');
+const outro = document.getElementById('outro');
+const lines = cap.querySelectorAll('.l span');
 
 src.addEventListener('load', () => {
-  const w = src.contentWindow, d = src.contentDocument;
-  const SCENES = w.OM_SCENES;
-  const total = SCENES.reduce((a, s) => a + s[3], 0);
-  let elapsed = 0;
+  const d = src.contentDocument;
 
-  SCENES.forEach(([key]) => {
+  SHOTS.forEach(([key], i) => {
     const phone = d.querySelector('.phone[data-wt="' + key + '"]');
-    const sc = document.createElement('div');
-    sc.className = 'scene';
+    const shot = document.createElement('div');
+    shot.className = 'shot';
+    const rig = document.createElement('div');
+    rig.className = 'rig';
+    rig.style.setProperty('--move', MOVES[i % MOVES.length]);
     if (phone) {
       const clone = phone.cloneNode(true);
-      sc.appendChild(clone);
+      rig.appendChild(clone);
       if (window.OrbInit) clone.querySelectorAll('.orb canvas').forEach(window.OrbInit);
     }
-    stage.appendChild(sc);
+    shot.appendChild(rig);
+    stage.appendChild(shot);
   });
 
-  // Boot the header orb too - it is markup this page owns, so orb.js ran
-  // before the iframe existed and never saw it.
-  if (window.OrbInit) document.querySelectorAll('header .orb canvas').forEach(window.OrbInit);
+  const sprite = d.querySelector('svg[aria-hidden="true"]');
+  if (sprite) document.body.insertBefore(sprite.cloneNode(true), document.body.firstChild);
+
+  if (window.OrbInit) outro.querySelectorAll('.orb canvas').forEach(window.OrbInit);
+
+  const total = SHOTS.length * SHOT_MS + OUTRO_MS;
 
   function go(i) {
-    const [, title, body, dur] = SCENES[i];
-    [...stage.children].forEach((s, n) => s.classList.toggle('live', n === i));
+    if (i >= SHOTS.length) {
+      [...stage.children].forEach((s) => s.classList.remove('on'));
+      cap.classList.remove('in', 'out');
+      cap.style.display = 'none';
+      outro.classList.add('on');
+      setTimeout(() => { document.documentElement.dataset.filmDone = '1'; }, OUTRO_MS);
+      return;
+    }
 
-    cap.classList.remove('swap');
+    const [, a, b] = SHOTS[i];
+    [...stage.children].forEach((s, n) => s.classList.toggle('on', n === i));
+
+    // Retrigger the caption by reflowing between cuts, then schedule its exit.
+    cap.classList.remove('in', 'out');
     void cap.offsetWidth;
-    cap.querySelector('h2').textContent = title;
-    cap.querySelector('p').textContent = body;
-    cap.classList.add('swap');
+    lines[0].textContent = a;
+    lines[1].textContent = b;
+    cap.classList.add('in');
+    setTimeout(() => cap.classList.add('out'), SHOT_MS - 340);
 
-    // The bar tracks real elapsed time across the whole film, not the scene,
-    // so it reads as a progress bar rather than a per-slide timer.
-    bar.style.transition = 'none';
-    bar.style.width = (elapsed / total * 100) + '%';
-    void bar.offsetWidth;
-    bar.style.transition = 'width ' + dur + 'ms linear';
-    elapsed += dur;
-    bar.style.width = (elapsed / total * 100) + '%';
-
-    if (i + 1 < SCENES.length) setTimeout(() => go(i + 1), dur);
-    else document.documentElement.dataset.filmDone = '1';
+    setTimeout(() => go(i + 1), SHOT_MS);
   }
 
-  // The film does not start itself. The recorder warms the page up in real
-  // time - fonts, the iframe, the WebGL contexts - and only then takes the
-  // clock away and calls this, so frame one really is frame one.
-  window.OM_START = () => setTimeout(() => go(0), 600);
+  document.documentElement.style.setProperty('--dur', SHOT_MS + 'ms');
+  window.OM_START = () => setTimeout(() => go(0), 500);
   document.documentElement.dataset.filmReady = String(total);
 });
 </script>

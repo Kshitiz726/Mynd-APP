@@ -1,0 +1,18 @@
+film.m4a
+--------
+A 59-second excerpt of "Uncanny Valley" by L.Bridge, from the release
+[FNet051] An Abstract Tomorrow.
+
+  Source:  https://archive.org/details/FNet051
+  Licence: Creative Commons Attribution 3.0 (CC BY 3.0)
+           https://creativecommons.org/licenses/by/3.0/
+
+Modified: cut from 45.290s on a measured downbeat, faded in over 0.8s and out
+over the last 3.5s, loudness-normalised to -16 LUFS, encoded as 192k AAC.
+
+The film's shot length (3120ms) is one bar of this track at its measured
+153.8bpm, so every cut lands on a downbeat. Change the track and the shot
+length has to be re-derived, or the edit stops sitting on the music.
+
+CC BY requires the author be credited wherever the video is published. Keep the
+credit in the video description.

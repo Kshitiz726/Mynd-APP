@@ -461,13 +461,14 @@ img { max-width: 100%; display: block; }
 .gauge .knob { position: absolute; right: 10px; top: 46px; width: 13px; height: 13px; border-radius: 50%; background: var(--primary); z-index: 3; box-shadow: 0 2px 6px rgba(var(--shadow-rgb),.4); }
 
 /* schedule */
-.sch-pills { display: flex; gap: 5px; }
-/* The Auto-Schedule pill must never wrap onto two lines - it is the button the
-   whole screen is about. */
-.sch-pills span { white-space: nowrap; }
+/* Three pills have to fit 245px of screen. They were 283px wide with nowrap on,
+   so Auto-Schedule - the button the whole screen is about - ran off the right
+   edge. Tighter type and padding brings the row to ~224px with room to spare,
+   and nothing wraps. */
+.sch-pills { display: flex; gap: 4px; }
 .sch-pills span {
-  display: inline-flex; align-items: center; gap: 4px;
-  font-size: 8px; padding: 6px 9px; border-radius: var(--r-pill);
+  display: inline-flex; align-items: center; gap: 3px; white-space: nowrap;
+  font-size: 7.5px; padding: 6px 8px; border-radius: var(--r-pill);
   background: var(--surface); border: 1px solid var(--border); color: var(--text-2);
 }
 .sch-pills span.hot { background: linear-gradient(135deg, var(--grad-start), var(--grad-end)); color: #fff; border-color: transparent; font-weight: 700; }
