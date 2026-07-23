@@ -82,17 +82,34 @@
   /* The phones are a fixed 300px wide and each one is a different height, so on
      a short window the tallest would run over the captions. Scale the stage
      down to whatever actually fits, per scene. */
+  const bar  = root.querySelector('.wt-bar');
+  const foot = root.querySelector('.wt-foot');
+
   function fit() {
-    const phone = stage.querySelector('.wt-scene.live .phone') || stage.querySelector('.phone');
-    if (!phone) return;
-    const box = stage.getBoundingClientRect();
-    const h = phone.offsetHeight;
-    const w = phone.offsetWidth;
-    if (!h || !w) return;
-    const s = Math.min(1, (box.height - 28) / h, (box.width - 40) / w);
-    stage.style.setProperty('--wt-scale', Math.max(0.45, s).toFixed(3));
+    const avail = innerHeight - bar.offsetHeight - foot.offsetHeight - 36;
+    const wide  = innerWidth - 56;
+    // Every phone gets its own factor. They are different heights, so a single
+    // shared one would clip the tall screens or shrink the short ones for no
+    // reason - and an off-screen phone that overflows still drags the stage's
+    // centring into a start-aligned fallback, which is what cut the frame off.
+    stage.querySelectorAll('.wt-scene .phone').forEach((phone) => {
+      const h = phone.offsetHeight, w = phone.offsetWidth;
+      if (!h || !w) return;
+      const s = Math.max(0.4, Math.min(1, avail / h, wide / w));
+      phone.style.transform = `scale(${s.toFixed(4)})`;
+      // A transform does not change the layout box, so an unscaled 625px phone
+      // still counted as overflowing a shorter stage - and an overflowing item
+      // makes the browser abandon centring for start alignment, which pushed
+      // the frame down until its bottom was clipped. Negative margins shrink
+      // the box to what the scale actually paints, symmetrically, so it
+      // centres on what you can see.
+      phone.style.margin = `${(-h * (1 - s)) / 2}px ${(-w * (1 - s)) / 2}px`;
+    });
   }
-  addEventListener('resize', fit);
+  // Twice: once now, once after the browser has laid the new caption out.
+  const refit = () => { fit(); requestAnimationFrame(fit); };
+  addEventListener('resize', refit);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(refit);
 
   function go(i) {
     idx = (i + SCENES.length) % SCENES.length;
@@ -119,7 +136,7 @@
     });
 
     remaining = dur;
-    fit();
+    refit();
   }
 
   function schedule(ms) {
@@ -199,7 +216,7 @@
 
     const at = key ? SCENES.findIndex(([k]) => k === key) : 0;
     go(at < 0 ? 0 : at);
-    fit();
+    refit();
     play();
     bClose.focus();
   }
@@ -215,6 +232,11 @@
   document.querySelectorAll('[data-walkthrough]').forEach((el) =>
     el.addEventListener('click', (e) => { e.preventDefault(); open(el.dataset.walkthrough); })
   );
+
+  // #walkthrough opens the film straight away, so the link can be shared.
+  if (location.hash.startsWith('#walkthrough')) {
+    addEventListener('load', () => open(location.hash.split('=')[1] || ''));
+  }
 
   bPlay.addEventListener('click', () => (playing ? pause() : play()));
   bClose.addEventListener('click', close);
