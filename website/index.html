@@ -230,6 +230,95 @@
             </div>
           </div>
         </div>
+        <!-- ===== SPEAK: the transcript arriving as you talk ===== -->
+        <div class="phone" data-wt="speak">
+          <div class="island"></div>
+          <div class="phone-screen screen-home">
+            <div class="status"><span>3:03</span><span class="sig"><i></i><i></i><i></i><span class="bat"></span></span></div>
+            <div class="screen-body" style="opacity:.28">
+              <div class="p-top"><span class="av"><i></i></span><span class="search"><svg class="i"><use href="#ic-search"/></svg> Search OurMynd</span></div>
+              <div class="p-hero"><span class="orb" style="--orb:80px"><canvas></canvas></span></div>
+            </div>
+            <div class="sheet" style="padding-bottom:22px">
+              <div class="grab"></div>
+              <div style="display:grid;place-items:center;padding:4px 0 0">
+                <span class="orb" style="--orb:74px"><canvas></canvas></span>
+              </div>
+              <div style="text-align:center;margin-top:10px">
+                <div class="rec"><i></i> listening</div>
+              </div>
+              <!-- Each word carries its own index, and the delay is computed
+                   from it, so the line arrives at the speed of speech. -->
+              <div class="say">
+                <span class="w" style="--i:0">okay</span>
+                <span class="w" style="--i:1">so</span>
+                <span class="w" style="--i:2">I</span>
+                <span class="w" style="--i:3">still</span>
+                <span class="w" style="--i:4">need</span>
+                <span class="w" style="--i:5">to</span>
+                <span class="w" style="--i:6">install</span>
+                <span class="w" style="--i:7">the</span>
+                <span class="w" style="--i:8">C</span>
+                <span class="w" style="--i:9">compiler,</span>
+                <span class="w" style="--i:10">then</span>
+                <span class="w" style="--i:11">actually</span>
+                <span class="w" style="--i:12">write</span>
+                <span class="w" style="--i:13">that</span>
+                <span class="w" style="--i:14">C</span>
+                <span class="w" style="--i:15">program</span>
+                <span class="w" style="--i:16">before</span>
+                <span class="w" style="--i:17">tomorrow,</span>
+                <span class="w" style="--i:18">and</span>
+                <span class="w" style="--i:19">I</span>
+                <span class="w" style="--i:20">keep</span>
+                <span class="w" style="--i:21">forgetting</span>
+                <span class="w" style="--i:22">to</span>
+                <span class="w" style="--i:23">book</span>
+                <span class="w" style="--i:24">the</span>
+                <span class="w" style="--i:25">dentist</span>
+              </div>
+              <div class="pill-btn round"><svg class="i"><use href="#ic-check"/></svg> done</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== FOUND: the same sentence, now as tasks ===== -->
+        <div class="phone" data-wt="found">
+          <div class="island"></div>
+          <div class="phone-screen screen-home">
+            <div class="status"><span>3:03</span><span class="sig"><i></i><i></i><i></i><span class="bat"></span></span></div>
+            <div class="screen-body" style="opacity:.28">
+              <div class="p-top"><span class="av"><i></i></span><span class="search"><svg class="i"><use href="#ic-search"/></svg> Search OurMynd</span></div>
+              <div class="p-hero"><span class="orb" style="--orb:80px"><canvas></canvas></span></div>
+            </div>
+            <div class="sheet">
+              <div class="grab"></div>
+              <!-- The sentence stays on screen above its own results, so the
+                   jump from speech to schedule is never a leap of faith. -->
+              <div class="heard">&ldquo;install the C compiler, write that C program before tomorrow, book the dentist&rdquo;</div>
+              <div class="found-h"><span class="sq"><svg class="i"><use href="#ic-spark"/></svg></span> found 3 tasks</div>
+              <div class="found">
+                <div class="fr" style="--i:0">
+                  <span class="ic"><svg class="i"><use href="#ic-act"/></svg></span>
+                  <span class="tx"><b>Install C compiler and IDE</b><s>high &middot; 3:05 PM</s></span>
+                  <span class="en hi">high energy</span>
+                </div>
+                <div class="fr" style="--i:1">
+                  <span class="ic"><svg class="i"><use href="#ic-act"/></svg></span>
+                  <span class="tx"><b>Write a simple C program</b><s>high &middot; 6:00 PM</s></span>
+                  <span class="en hi">high energy</span>
+                </div>
+                <div class="fr" style="--i:2">
+                  <span class="ic"><svg class="i"><use href="#ic-act"/></svg></span>
+                  <span class="tx"><b>Book the dentist</b><s>low &middot; tomorrow 9:00 AM</s></span>
+                  <span class="en lo">low energy</span>
+                </div>
+              </div>
+              <div class="pill-btn"><svg class="i"><use href="#ic-check"/></svg> add all 3 to my day</div>
+            </div>
+          </div>
+        </div>
+
         <div class="phone" data-wt="sched">
           <div class="island"></div>
           <div class="phone-screen">

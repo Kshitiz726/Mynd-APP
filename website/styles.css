@@ -897,3 +897,80 @@ footer { padding: 56px 0 44px; color: var(--text-2); font-size: 14px; }
 .wt-mini svg { width: 14px; height: 14px; }
 .credit { color: var(--text-2); font-size: 12.5px; }
 .credit a { text-decoration: underline; text-underline-offset: 2px; }
+
+/* ---- 22. Speech becoming tasks ------------------------------------------ */
+/* Two screens carry the whole promise of the app: you talk, and what you said
+   comes back as work. Both animate off the .live class the players put on the
+   scene, so they replay every time the sequence comes round. */
+
+/* The recording pip. */
+.rec {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: "Fredoka", sans-serif; font-size: 12.5px; font-weight: 600; color: var(--text-2);
+}
+.rec i {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--attention);
+  animation: pip 1.4s ease-in-out infinite;
+}
+@keyframes pip { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .35; transform: scale(.8); } }
+
+/* The transcript. Each word knows its own position, so the delay is arithmetic
+   rather than a hand-written list of nth-child rules. */
+.say {
+  margin: 12px 2px 14px; font-size: 11.5px; line-height: 1.75;
+  color: var(--text); min-height: 74px;
+}
+/* Visible by default, hidden only by the animation's own fill. A base state of
+   opacity:0 would leave the line permanently blank if the animation never ran. */
+.live .say .w {
+  animation: wordIn .3s ease-out both;
+  animation-delay: calc(var(--i) * 0.135s);
+}
+@keyframes wordIn { from { opacity: 0; filter: blur(3px); } to { opacity: 1; filter: none; } }
+
+/* The sentence, quoted back above its own results. */
+.heard {
+  margin: 10px 0 12px; padding: 9px 11px; border-radius: 14px;
+  background: color-mix(in srgb, var(--primary) 9%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary) 16%, transparent);
+  font-size: 9.5px; line-height: 1.55; color: var(--text-2); font-style: italic;
+}
+.found-h {
+  display: flex; align-items: center; gap: 7px;
+  font-family: "Fredoka", sans-serif; font-size: 12px; font-weight: 600; margin-bottom: 9px;
+}
+.found-h .sq {
+  width: 20px; height: 20px; border-radius: 7px; display: grid; place-items: center;
+  background: color-mix(in srgb, var(--primary) 16%, transparent); color: var(--primary);
+}
+.found-h .sq svg { width: 11px; height: 11px; }
+
+.found { display: grid; gap: 7px; margin-bottom: 12px; }
+.fr {
+  display: flex; align-items: center; gap: 9px;
+  padding: 9px 11px; border-radius: 15px;
+  background: var(--surface-alt); border: 1px solid var(--border);
+}
+/* Staggered so the three arrive as three, after the sentence has been read. */
+.live .fr { animation: taskIn .45s var(--ease-spring) both; animation-delay: calc(0.5s + var(--i) * 0.34s); }
+@keyframes taskIn { from { opacity: 0; transform: translateY(9px) scale(.97); } to { opacity: 1; transform: none; } }
+
+.fr .ic {
+  width: 22px; height: 22px; flex: none; border-radius: 8px; display: grid; place-items: center;
+  background: color-mix(in srgb, var(--primary) 13%, transparent); color: var(--primary);
+}
+.fr .ic svg { width: 12px; height: 12px; }
+.fr .tx { flex: 1; display: grid; line-height: 1.3; min-width: 0; }
+.fr .tx b { font-size: 10px; font-weight: 600; }
+.fr .tx s { text-decoration: none; font-size: 8.5px; color: var(--text-2); }
+.fr .en {
+  flex: none; font-size: 7.5px; font-weight: 600; padding: 3px 7px; border-radius: var(--r-pill);
+  white-space: nowrap;
+}
+.fr .en.hi { color: var(--attention); background: color-mix(in srgb, var(--attention) 15%, transparent); }
+.fr .en.lo { color: var(--success);   background: color-mix(in srgb, var(--success) 15%, transparent); }
+
+@media (prefers-reduced-motion: reduce) {
+  .rec i { animation: none; }
+  .live .say .w, .live .fr { animation-duration: .01ms; animation-delay: 0ms; }
+}
