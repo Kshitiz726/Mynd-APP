@@ -66,20 +66,7 @@
 </defs></svg>
 
 <!-- ======================= NAV ======================= -->
-<nav class="nav" id="nav">
-  <a class="brand" href="#top">
-    <span class="orb still" style="--orb:30px"><canvas></canvas></span>
-    <span>OurMynd</span>
-  </a>
-  <div class="nav-links">
-    <a href="#dump">Capture</a>
-    <a href="#schedule">Schedule</a>
-    <a href="#focus">Focus</a>
-    <a href="#coach">Coach</a>
-    <a href="#pricing">Pricing</a>
-  </div>
-  <a class="btn btn-primary" href="#pricing">Get early access <svg class="i" style="font-size:15px"><use href="#ic-arrow"/></svg></a>
-</nav>
+<!-- The nav is gone with the pages it pointed at. See _parked-sections.html. -->
 
 <!-- ======================= HERO ======================= -->
 <header class="hero" id="top">
@@ -99,7 +86,6 @@
              the right, so the hero explains the product instead of describing
              it. -->
         <div class="hero-cap" id="hero-cap">
-          <div class="hc-step"><span class="n">1</span><span class="of">of 15</span></div>
           <div class="hc-text">
             <h2></h2>
             <p></p>
@@ -108,16 +94,11 @@
         <div class="hero-ticks" id="hero-ticks"></div>
 
         <div class="hero-cta">
-          <a class="btn btn-store" href="#pricing">
-            <svg class="i st"><use href="#ic-apple"/></svg>
-            <span><s>Download for</s><b>iPhone</b></span>
-          </a>
-          <a class="btn btn-store ghost" href="#pricing">
-            <svg class="i st"><use href="#ic-android"/></svg>
-            <span><s>Download for</s><b>Android</b></span>
+          <a class="btn btn-primary btn-lg" href="mailto:hello@ourmynd.app?subject=Early%20access">
+            Request early access <svg class="i" style="font-size:16px"><use href="#ic-arrow"/></svg>
           </a>
         </div>
-        <p class="hero-note">Free to start, no card. iPhone build is in TestFlight; Android follows.</p>
+        <p class="hero-note">Free while it is in beta. We will write back with a build.</p>
       </div>
 
       <div class="hero-stage">
@@ -176,35 +157,6 @@
             </div>
           </div>
         </div>
-        </div><!-- /hero-source -->
-      </div>
-    </div>
-  </div>
-</header>
-
-<!-- ======================= THE LOOP ======================= -->
-<section class="section" id="dump" style="background:var(--surface-alt)">
-  <div class="wrap">
-    <div class="section-head rise">
-      <div class="eyebrow"><span class="orb"><canvas></canvas></span> Every screen, in the order you meet it</div>
-      <h2>One loop, ten screens</h2>
-      <p class="lede">Nothing below asks you to organise anything first. Each step is a real screen from the app, and each one hands its output to the next.</p>
-    </div>
-
-    <!-- 1. HOME + MOOD -->
-    <div class="feature rise">
-      <div class="f-copy">
-        <div class="step-tag"><span class="n">1</span><span class="l">Home<s>where you land</s></span></div>
-        <h3>The orb first, the list second</h3>
-        <p>Home opens on Mynd, not on an empty checklist demanding to be filled in. The count tells you where the day stands, the streak keeps score quietly, and one tap on the orb starts recording. Everything else on the page is the app reporting back to you.</p>
-        <div class="f-list">
-          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> <b style="font-weight:600">refresh memory</b>&nbsp;re-reads everything you've told it and rewrites what it thinks</div>
-          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> "do this now" surfaces the single next thing, with its energy cost and time</div>
-          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> The mood dial asks once a day and never argues with your answer</div>
-        </div>
-      </div>
-      <div class="f-shot">
-        <!-- ===== MOOD DIAL ===== -->
         <div class="phone" data-wt="mood">
           <div class="island"></div>
           <div class="phone-screen screen-home">
@@ -231,22 +183,6 @@
             </div>
           </div>
         </div>
-      </div>
-    </div>
-
-    <!-- 2. BRAIN DUMP -->
-    <div class="feature flip rise">
-      <div class="f-copy">
-        <div class="step-tag"><span class="n">2</span><span class="l">Brain Dump<s>typed capture</s></span></div>
-        <h3>Type it messy. It comes back sorted.</h3>
-        <p>One box, no fields, no categories, no due-date picker. Write the run-on sentence exactly as it exists in your head and hit Process with AI. It comes back as separate tasks, each one small enough to actually start.</p>
-        <div class="f-list">
-          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> "buy milk, text mom, finish the report" becomes three tasks</div>
-          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> Each gets an energy cost: high, low, or brain-dead</div>
-          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> Straight into the backlog, ready for the scheduler</div>
-        </div>
-      </div>
-      <div class="f-shot">
         <div class="phone" data-wt="dump">
           <div class="island"></div>
           <div class="phone-screen screen-home">
@@ -274,22 +210,6 @@
             </div>
           </div>
         </div>
-      </div>
-    </div>
-
-    <!-- 3. VOICE DUMP -->
-    <div class="feature rise">
-      <div class="f-copy">
-        <div class="step-tag"><span class="n">3</span><span class="l">Voice dump<s>tap the orb</s></span></div>
-        <h3>Talk as long as you like. Nothing interrupts you.</h3>
-        <p>Most voice features cut you off the moment you pause to think, which for an ADHD brain is exactly the wrong moment. This one records straight through until you tap done. Then the whole recording is transcribed at once and run through the same breakdown the typed dump uses.</p>
-        <div class="f-list">
-          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> No pause detection, no silence timeout, no lost sentence</div>
-          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> The orb swells with your voice, so you can see it listening</div>
-          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> Ends in the same place as typing: real tasks in the backlog</div>
-        </div>
-      </div>
-      <div class="f-shot">
         <div class="phone" data-wt="voice">
           <div class="island"></div>
           <div class="phone-screen screen-home">
@@ -311,24 +231,6 @@
             </div>
           </div>
         </div>
-      </div>
-    </div>
-
-    <!-- 4. SCHEDULE -->
-    <div class="feature flip rise" id="schedule">
-      <div class="f-copy">
-        <div class="step-tag"><span class="n">4</span><span class="l">Your day<s>auto-schedule</s></span></div>
-        <h3>Laid out by energy, inside the hours you actually have</h3>
-        <p>Auto-Schedule knows when you wake and when you sleep, so nothing lands in the middle of the night and the hard thing gets your good hours. Everything unscheduled waits in the backlog, filterable by what it will cost you, so a brain-dead evening still has something in it you can do.</p>
-        <div class="f-list">
-          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> Wake and sleep pills bound the whole day</div>
-          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> A live NOW marker, so you always know where you are in it</div>
-          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> Backlog filters: all, high, low, brain-dead</div>
-          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> Past days keep their score: done, focused, missed</div>
-        </div>
-      </div>
-      <div class="f-shot">
-        <!-- today -->
         <div class="phone" data-wt="sched">
           <div class="island"></div>
           <div class="phone-screen">
@@ -376,8 +278,6 @@
             </div>
           </div>
         </div>
-
-        <!-- a finished day -->
         <div class="phone" data-wt="done">
           <div class="island"></div>
           <div class="phone-screen">
@@ -410,22 +310,6 @@
             </div>
           </div>
         </div>
-      </div>
-    </div>
-
-    <!-- 5. REMINDERS -->
-    <div class="feature rise" id="reminders">
-      <div class="f-copy">
-        <div class="step-tag"><span class="n">5</span><span class="l">Reminders<s>things to remember, big or small</s></span></div>
-        <h3>The plan reaches you when the app is closed</h3>
-        <p>Every scheduled block can fire a real system notification at its time, with its own alarm tone. Each one is a switch you can flip off without deleting the task, and there is a test button so you find out now, not at 6:05 PM, whether your phone will actually let it through.</p>
-        <div class="f-list">
-          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> One toggle per block, energy label shown next to it</div>
-          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> Selectable alarm tone, or the system default</div>
-          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> "send a test notification" proves permissions before you rely on it</div>
-        </div>
-      </div>
-      <div class="f-shot">
         <div class="phone" data-wt="rem">
           <div class="island"></div>
           <div class="phone-screen">
@@ -445,23 +329,6 @@
             </div>
           </div>
         </div>
-      </div>
-    </div>
-
-    <!-- 6. FOCUS SETUP -->
-    <div class="feature flip rise" id="focus">
-      <div class="f-copy">
-        <div class="step-tag"><span class="n">6</span><span class="l">Focus<s>set it up once</s></span></div>
-        <h3>Pick a length, a scene, and whether you want company</h3>
-        <p>Focus greets you by your anonymous handle and shows what's up next with the option to start it early. Save the focuses you keep repeating, choose a preset from sprint to flow, set the mood, and decide whether you want somebody sitting on the other end of it.</p>
-        <div class="f-list">
-          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> Presets: 15 sprint, 25 pomodoro, 45 deep work, 90 flow</div>
-          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> Scenes: none, ocean, forest, rain</div>
-          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> Saved focuses you can name and reuse</div>
-          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> "Need help? Talk to Mynd" is one tap from here</div>
-        </div>
-      </div>
-      <div class="f-shot">
         <div class="phone" data-wt="setup">
           <div class="island"></div>
           <div class="phone-screen">
@@ -510,7 +377,6 @@
             </div>
           </div>
         </div>
-
         <div class="phone" data-wt="presets">
           <div class="island"></div>
           <div class="phone-screen">
@@ -553,22 +419,6 @@
             </div>
           </div>
         </div>
-      </div>
-    </div>
-
-    <!-- 7. BODY DOUBLING -->
-    <div class="feature rise">
-      <div class="f-copy">
-        <div class="step-tag"><span class="n">7</span><span class="l">Focus together<s>body doubling</s></span></div>
-        <h3>Someone quietly on the other end of it</h3>
-        <p>Body doubling works because a person is there, not because they help. Turn it on and OurMynd looks for a partner. If nobody is free yet it keeps matching in the background while your timer runs, so waiting for company never becomes another reason not to start.</p>
-        <div class="f-list">
-          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> Pairs you the moment someone else is ready</div>
-          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> Matching continues silently, your session never waits</div>
-          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> Ambience to sit under it: café, library, typing</div>
-        </div>
-      </div>
-      <div class="f-shot">
         <div class="phone" data-wt="together">
           <div class="island"></div>
           <div class="phone-screen">
@@ -585,22 +435,6 @@
             </div>
           </div>
         </div>
-      </div>
-    </div>
-
-    <!-- 8. FOCUS ACTIVE -->
-    <div class="feature flip rise">
-      <div class="f-copy">
-        <div class="step-tag"><span class="n">8</span><span class="l">Locked in<s>the session itself</s></span></div>
-        <h3>One task, one dial, and somewhere to put the intrusions</h3>
-        <p>The whole screen becomes the scene you picked and the only text on it is what you are doing. When your brain throws something unrelated at you mid-session, park it: it drops into your inbox and you carry on without leaving the timer. That is the difference between a stray thought costing you five seconds and costing you the afternoon.</p>
-        <div class="f-list">
-          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> Drag along the scene bar to switch mood mid-session</div>
-          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> "park a thought" without pausing or navigating away</div>
-          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> Mynd is reachable from inside the session if you stall</div>
-        </div>
-      </div>
-      <div class="f-shot">
         <div class="phone" data-wt="live">
           <div class="island"></div>
           <div class="phone-screen scene-forest">
@@ -624,7 +458,6 @@
             </div>
           </div>
         </div>
-
         <div class="phone" data-wt="rain">
           <div class="island"></div>
           <div class="phone-screen scene-rain">
@@ -650,22 +483,6 @@
             </div>
           </div>
         </div>
-      </div>
-    </div>
-
-    <!-- 9. COACH -->
-    <div class="feature rise" id="coach">
-      <div class="f-copy">
-        <div class="step-tag"><span class="n">9</span><span class="l">Mynd<s>the coach</s></span></div>
-        <h3>It has already read your day</h3>
-        <p>Mynd is not a blank chatbot. It knows what you dumped, what you moved four times, how you rated your mood and how long you actually focused. So "i'm stuck" gets an answer about the real thing. Your earlier chats stay reachable, and the three chips cover the states you are usually in when you open it.</p>
-        <div class="f-list">
-          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> One tap for "i'm stuck", "i'm overwhelmed", "plan my morning"</div>
-          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> Full history, so a thread from last week is still there</div>
-          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> Speak instead of typing when typing is too much</div>
-        </div>
-      </div>
-      <div class="f-shot">
         <div class="phone" data-wt="coach">
           <div class="island"></div>
           <div class="phone-screen">
@@ -693,22 +510,6 @@
             </div>
           </div>
         </div>
-      </div>
-    </div>
-
-    <!-- 10. MEMORY -->
-    <div class="feature flip rise" id="memory">
-      <div class="f-copy">
-        <div class="step-tag"><span class="n">10</span><span class="l">Memory<s>what it knows about you</s></span></div>
-        <h3>It writes you back, in its own words</h3>
-        <p>Everything you dump, finish, postpone and feel gets re-read, and Mynd writes a plain-language picture of where you are. Not a dashboard of streak graphs, a paragraph that says what it thinks is going on. Underneath it sits every thought you parked mid-session, waiting for a moment you have capacity for.</p>
-        <div class="f-list">
-          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> "written by Mynd", timestamped, rewritten on demand</div>
-          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> Parked thoughts kept verbatim, dismissed when you're done</div>
-          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> This is the context the coach and the scheduler both read</div>
-        </div>
-      </div>
-      <div class="f-shot">
         <div class="phone" data-wt="memory">
           <div class="island"></div>
           <div class="phone-screen">
@@ -732,29 +533,6 @@
             </div>
           </div>
         </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ======================= PRICING ======================= -->
-<section class="section" id="pricing">
-  <span class="orb deco" style="--orb:80px;top:60px;left:5%;opacity:.4"></span>
-  <div class="wrap">
-    <div class="section-head rise">
-      <div class="eyebrow"><span class="orb"><canvas></canvas></span> Choose your plan</div>
-      <h2>Unlock the full OurMynd.<br>Cancel anytime.</h2>
-      <p class="lede">The capture loop is free. Paid raises the message limit, opens up better models, and lets memory grow instead of forgetting.</p>
-    </div>
-
-
-    <!-- Two real paywall screens, monthly and yearly, side by side. No web
-         buy buttons: the purchase happens in the app, so the site only shows
-         what the app itself shows. -->
-    <div class="pw-pair rise">
-
-      <!-- ===== PAYWALL - MONTHLY ===== -->
-      <figure class="pw-one">
         <div class="phone" data-wt="paywall">
           <div class="island"></div>
           <div class="phone-screen">
@@ -803,95 +581,20 @@
             </div>
           </div>
         </div>
-        <figcaption>Monthly &middot; billed every month, cancel any time</figcaption>
-      </figure>
-
-      <!-- ===== PAYWALL - YEARLY ===== -->
-      <figure class="pw-one">
-        <div class="phone">
-          <div class="island"></div>
-          <div class="phone-screen">
-            <div class="status"><span>3:05</span><span class="sig"><i></i><i></i><i></i><span class="bat"></span></span></div>
-            <div class="screen-body">
-              <div style="display:flex;justify-content:flex-end;color:var(--text-2)"><svg class="i" style="font-size:14px"><use href="#ic-x"/></svg></div>
-              <div class="pw-h">
-                <h5>Choose your plan</h5>
-                <s>Unlock the full OurMynd. Cancel anytime.</s>
-              </div>
-              <div class="seg"><span>Monthly</span><span class="on">Yearly <em class="save" style="font-style:normal">SAVE</em></span></div>
-
-              <div class="pwc sel">
-                <div class="hd">
-                  <span class="sq"><svg class="i"><use href="#ic-spark"/></svg></span>
-                  <span><b>OurMynd Plus</b> <span class="tagm">MOST POPULAR</span><s>More room to think, every day.</s></span>
-                  <span class="rd on"><svg class="i"><use href="#ic-check"/></svg></span>
-                </div>
-                <div class="price"><b>£99.99</b><s>/year</s><em>2 months free</em></div>
-                <div class="rule"></div>
-                <ul>
-                  <li><svg class="i"><use href="#ic-check"/></svg> Extended message limit</li>
-                  <li><svg class="i"><use href="#ic-check"/></svg> More schedule</li>
-                  <li><svg class="i"><use href="#ic-check"/></svg> Better AI models</li>
-                  <li><svg class="i"><use href="#ic-check"/></svg> Extended memory</li>
-                  <li><svg class="i"><use href="#ic-check"/></svg> Editing memory allowed</li>
-                </ul>
-              </div>
-
-              <div class="pwc">
-                <div class="hd">
-                  <span class="sq pro"><svg class="i"><use href="#ic-crown"/></svg></span>
-                  <span><b>OurMynd Pro</b><s>The full power of OurMynd.</s></span>
-                  <span class="rd"></span>
-                </div>
-                <div class="price"><b>£199</b><s>/year</s><em>save £40</em></div>
-                <div class="rule"></div>
-                <ul>
-                  <li><svg class="i"><use href="#ic-check"/></svg> Everything in Plus</li>
-                  <li><svg class="i"><use href="#ic-check"/></svg> Unlimited messages</li>
-                  <li><svg class="i"><use href="#ic-check"/></svg> Best schedule management</li>
-                  <li><svg class="i"><use href="#ic-check"/></svg> Enhanced task automation</li>
-                  <li><svg class="i"><use href="#ic-check"/></svg> Super memory</li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        </div>
-        <figcaption>Yearly &middot; the same plans, two months lighter</figcaption>
-      </figure>
-    </div>
-
-    <p class="pw-foot rise">Free covers the whole capture loop: brain dump, voice dump, auto-schedule, reminders, focus timer, scenes, body doubling, memory and parked thoughts. No card. Paid plans are bought inside the app.</p>
-
-  </div>
-</section>
-
-<!-- ======================= CTA ======================= -->
-<section class="section" style="padding-top:0">
-  <div class="wrap">
-    <div class="cta rise">
-      <div class="bloom" style="width:340px;height:340px;background:#fff;opacity:.16;top:-120px;right:-60px"></div>
-      <div style="position:relative;z-index:2;display:grid;place-items:center;gap:22px;justify-items:center">
-        <span class="orb" style="--orb:100px"><canvas></canvas></span>
-        <h2>Stop holding it all in your head</h2>
-        <p>Open the app, hold the orb, and say the thing you've been carrying around all morning. It'll be a scheduled day before you put the phone down.</p>
-        <a class="btn btn-primary" href="#pricing">Get early access <svg class="i" style="font-size:15px"><use href="#ic-arrow"/></svg></a>
+        </div><!-- /hero-source -->
       </div>
     </div>
   </div>
-</section>
+</header>
 
 <footer>
   <div class="wrap foot-grid">
     <a class="brand" href="#top">
-      <span class="orb still" style="--orb:30px"><canvas></canvas></span>
+      <span class="orb still" style="--orb:28px"><canvas></canvas></span>
       <span>OurMynd</span>
     </a>
-    <div class="foot-links">
-      <a href="#dump">Capture</a><a href="#schedule">Schedule</a>
-      <a href="#focus">Focus</a><a href="#coach">Coach</a><a href="#memory">Memory</a>
-    </div>
     <div>&copy; 2026 OurMynd. Made for loud heads.</div>
-    <div class="credit">Walkthrough music: <a href="https://archive.org/details/mt012" rel="noopener">&ldquo;In the Flow&rdquo; by Softspace</a>, <a href="https://creativecommons.org/licenses/by/3.0/" rel="noopener">CC BY 3.0</a>, trimmed to a loop.</div>
+    <div class="credit">Music: <a href="https://archive.org/details/mt012" rel="noopener">&ldquo;In the Flow&rdquo; by Softspace</a>, <a href="https://creativecommons.org/licenses/by/3.0/" rel="noopener">CC BY 3.0</a>.</div>
   </div>
 </footer>
 

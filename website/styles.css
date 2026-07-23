@@ -189,21 +189,22 @@ img { max-width: 100%; display: block; }
 /* ---- 5. Hero ------------------------------------------------------------ */
 /* The hero is the walkthrough: the phone on the right plays the product, the
    copy on the left changes with it. The two are driven by one timeline. */
-.hero { position: relative; padding: 150px 0 74px; overflow: hidden; }
+/* No nav above it any more, so the hero starts where the page starts. */
+.hero { position: relative; padding: 84px 0 74px; overflow: hidden; min-height: calc(100vh - 96px); display: flex; align-items: center; }
 .hero-bg {
   position: absolute; inset: 0; z-index: 0; opacity: .82;
   /* Cooler and shallower than it was. The old wash ran coral all the way to
      the top, which under a warm bloom turned the whole corner orange. */
   background: linear-gradient(to bottom, var(--home-lilac) 0%, var(--home-pale) 62%, var(--bg) 100%);
 }
-.hero .wrap { position: relative; z-index: 2; }
+.hero .wrap { position: relative; z-index: 2; width: 100%; }
 .hero-grid { display: grid; grid-template-columns: 1.02fr 0.98fr; gap: 56px; align-items: center; }
 .hero h1 { font-size: clamp(38px, 4.9vw, 62px); margin-bottom: 26px; }
 .hero-note { margin-top: 18px; font-size: 13.5px; color: var(--text-2); }
 .hero-stage { position: relative; display: flex; justify-content: center; }
 
 /* ---- 5a. The rotating caption ------------------------------------------- */
-.hero-cap { display: flex; gap: 16px; align-items: flex-start; min-height: 132px; }
+.hero-cap { min-height: 126px; }
 .hc-step {
   flex: none; display: grid; place-items: center; gap: 1px;
   width: 46px; padding: 8px 0; border-radius: 16px;
@@ -236,6 +237,8 @@ img { max-width: 100%; display: block; }
 
 /* ---- 5b. Store buttons --------------------------------------------------- */
 .hero-cta { display: flex; gap: 13px; flex-wrap: wrap; }
+.btn-lg { padding: 15px 28px; font-size: 16.5px; }
+
 .btn-store {
   display: inline-flex; align-items: center; gap: 12px;
   padding: 11px 22px 11px 18px; border-radius: var(--r-pill);
@@ -270,7 +273,7 @@ img { max-width: 100%; display: block; }
 @keyframes heroFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
 
 @media (max-width: 940px) {
-  .hero { padding-top: 122px; }
+  .hero { padding-top: 70px; min-height: 0; }
   .hero-grid { grid-template-columns: 1fr; gap: 40px; }
   .hero-stage { order: -1; }
   .hero-ticks { max-width: none; }

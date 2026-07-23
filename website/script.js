@@ -2,11 +2,14 @@
    Kept deliberately small: no framework, no build step, no dependencies, so the
    whole site is four files you can drop on any static host. */
 
-// 1. The nav lifts off the page once you leave the hero.
+// 1. The nav lifted off the page once you left the hero. The nav is parked
+//    along with the pages it pointed at, so this only runs if it comes back.
 const nav = document.getElementById('nav');
-const onScroll = () => nav.classList.toggle('scrolled', window.scrollY > 24);
-onScroll();
-addEventListener('scroll', onScroll, { passive: true });
+if (nav) {
+  const onScroll = () => nav.classList.toggle('scrolled', window.scrollY > 24);
+  onScroll();
+  addEventListener('scroll', onScroll, { passive: true });
+}
 
 // 2. Sections rise in as they arrive, staggered so a row of cards arrives as a
 //    row rather than all at once. Matches the app's springy easing.

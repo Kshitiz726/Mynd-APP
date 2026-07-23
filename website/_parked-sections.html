@@ -1,0 +1,707 @@
+<!-- Parked, not deleted.
+     Everything below used to sit between the hero and the footer on
+     index.html: the ten feature sections, the pricing pair and the closing
+     call to action. Paste it back in at the same place to restore the long
+     page. The phone markup it contained now lives inside .hero-source in
+     index.html, because the hero film clones from it - lift it back out
+     before restoring, or you will have every screen twice. -->
+
+
+<!-- ======================= THE LOOP ======================= -->
+<section class="section" id="dump" style="background:var(--surface-alt)">
+  <div class="wrap">
+    <div class="section-head rise">
+      <div class="eyebrow"><span class="orb"><canvas></canvas></span> Every screen, in the order you meet it</div>
+      <h2>One loop, ten screens</h2>
+      <p class="lede">Nothing below asks you to organise anything first. Each step is a real screen from the app, and each one hands its output to the next.</p>
+    </div>
+
+    <!-- 1. HOME + MOOD -->
+    <div class="feature rise">
+      <div class="f-copy">
+        <div class="step-tag"><span class="n">1</span><span class="l">Home<s>where you land</s></span></div>
+        <h3>The orb first, the list second</h3>
+        <p>Home opens on Mynd, not on an empty checklist demanding to be filled in. The count tells you where the day stands, the streak keeps score quietly, and one tap on the orb starts recording. Everything else on the page is the app reporting back to you.</p>
+        <div class="f-list">
+          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> <b style="font-weight:600">refresh memory</b>&nbsp;re-reads everything you've told it and rewrites what it thinks</div>
+          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> "do this now" surfaces the single next thing, with its energy cost and time</div>
+          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> The mood dial asks once a day and never argues with your answer</div>
+        </div>
+      </div>
+      <div class="f-shot">
+        <!-- ===== MOOD DIAL ===== -->
+        <div class="phone" data-wt="mood">
+          <div class="island"></div>
+          <div class="phone-screen screen-home">
+            <div class="status"><span>3:03</span><span class="sig"><i></i><i></i><i></i><span class="bat"></span></span></div>
+            <div class="screen-body" style="opacity:.34">
+              <div class="p-top">
+                <span class="av"><i></i></span>
+                <span class="search"><svg class="i"><use href="#ic-search"/></svg> Search OurMynd</span>
+                <span class="streak"><svg class="i" style="font-size:9px"><use href="#ic-flame"/></svg> 2</span>
+              </div>
+              <div class="p-hero">
+                <span class="orb" style="--orb:80px"><canvas></canvas></span>
+                <div class="count">19 done today</div>
+                <div class="sub">3 scheduled · 1 goals</div>
+                <span class="refresh"><svg class="i"><use href="#ic-refresh"/></svg> refresh memory</span>
+              </div>
+            </div>
+            <div class="sheet">
+              <div class="grab"></div>
+              <h5>how are you today?</h5>
+              <div class="sd">drag the dial. no wrong answer, and you can change it later.</div>
+              <div class="gauge"><span class="knob"></span><span class="val">good</span></div>
+              <div class="pill-btn">log it</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. BRAIN DUMP -->
+    <div class="feature flip rise">
+      <div class="f-copy">
+        <div class="step-tag"><span class="n">2</span><span class="l">Brain Dump<s>typed capture</s></span></div>
+        <h3>Type it messy. It comes back sorted.</h3>
+        <p>One box, no fields, no categories, no due-date picker. Write the run-on sentence exactly as it exists in your head and hit Process with AI. It comes back as separate tasks, each one small enough to actually start.</p>
+        <div class="f-list">
+          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> "buy milk, text mom, finish the report" becomes three tasks</div>
+          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> Each gets an energy cost: high, low, or brain-dead</div>
+          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> Straight into the backlog, ready for the scheduler</div>
+        </div>
+      </div>
+      <div class="f-shot">
+        <div class="phone" data-wt="dump">
+          <div class="island"></div>
+          <div class="phone-screen screen-home">
+            <div class="status"><span>3:03</span><span class="sig"><i></i><i></i><i></i><span class="bat"></span></span></div>
+            <div class="screen-body" style="opacity:.34">
+              <div class="p-top">
+                <span class="av"><i></i></span>
+                <span class="search"><svg class="i"><use href="#ic-search"/></svg> Search OurMynd</span>
+                <span class="streak"><svg class="i" style="font-size:9px"><use href="#ic-flame"/></svg> 3</span>
+              </div>
+              <div class="p-hero"><span class="orb" style="--orb:80px"><canvas></canvas></span><div class="count">19 done today</div></div>
+              <div class="bd-card">
+                <span class="sq"><svg class="i"><use href="#ic-spark"/></svg></span>
+                <span><b>Brain Dump</b><s>Let AI organize your thoughts</s></span>
+                <svg class="i plus"><use href="#ic-plus"/></svg>
+              </div>
+              <div class="sec-h">do this now</div>
+            </div>
+            <div class="sheet">
+              <div class="grab"></div>
+              <h5>Brain Dump</h5>
+              <div class="sd">Dump your messy thoughts. AI will break them into actionable tasks.</div>
+              <div class="field">I need to buy milk, text mom, and finish the report by tomorrow…</div>
+              <div class="pill-btn"><svg class="i"><use href="#ic-spark"/></svg> Process with AI</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. VOICE DUMP -->
+    <div class="feature rise">
+      <div class="f-copy">
+        <div class="step-tag"><span class="n">3</span><span class="l">Voice dump<s>tap the orb</s></span></div>
+        <h3>Talk as long as you like. Nothing interrupts you.</h3>
+        <p>Most voice features cut you off the moment you pause to think, which for an ADHD brain is exactly the wrong moment. This one records straight through until you tap done. Then the whole recording is transcribed at once and run through the same breakdown the typed dump uses.</p>
+        <div class="f-list">
+          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> No pause detection, no silence timeout, no lost sentence</div>
+          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> The orb swells with your voice, so you can see it listening</div>
+          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> Ends in the same place as typing: real tasks in the backlog</div>
+        </div>
+      </div>
+      <div class="f-shot">
+        <div class="phone" data-wt="voice">
+          <div class="island"></div>
+          <div class="phone-screen screen-home">
+            <div class="status"><span>3:03</span><span class="sig"><i></i><i></i><i></i><span class="bat"></span></span></div>
+            <div class="screen-body" style="opacity:.3">
+              <div class="p-top"><span class="av"><i></i></span><span class="search"><svg class="i"><use href="#ic-search"/></svg> Search OurMynd</span></div>
+              <div class="p-hero"><span class="orb" style="--orb:80px"><canvas></canvas></span></div>
+            </div>
+            <div class="sheet" style="padding-bottom:26px">
+              <div class="grab"></div>
+              <div style="display:grid;place-items:center;padding:8px 0 0">
+                <span class="orb" style="--orb:86px"><canvas></canvas></span>
+              </div>
+              <div style="text-align:center;margin-top:14px">
+                <div style="font-family:Fredoka,sans-serif;font-weight:600;font-size:14px">listening…</div>
+                <div class="sd" style="margin-top:4px">talk as long as you like, tap done when you finish</div>
+              </div>
+              <div class="pill-btn round"><svg class="i"><use href="#ic-check"/></svg> done</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. SCHEDULE -->
+    <div class="feature flip rise" id="schedule">
+      <div class="f-copy">
+        <div class="step-tag"><span class="n">4</span><span class="l">Your day<s>auto-schedule</s></span></div>
+        <h3>Laid out by energy, inside the hours you actually have</h3>
+        <p>Auto-Schedule knows when you wake and when you sleep, so nothing lands in the middle of the night and the hard thing gets your good hours. Everything unscheduled waits in the backlog, filterable by what it will cost you, so a brain-dead evening still has something in it you can do.</p>
+        <div class="f-list">
+          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> Wake and sleep pills bound the whole day</div>
+          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> A live NOW marker, so you always know where you are in it</div>
+          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> Backlog filters: all, high, low, brain-dead</div>
+          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> Past days keep their score: done, focused, missed</div>
+        </div>
+      </div>
+      <div class="f-shot">
+        <!-- today -->
+        <div class="phone" data-wt="sched">
+          <div class="island"></div>
+          <div class="phone-screen">
+            <div class="status"><span>3:03</span><span class="sig"><i></i><i></i><i></i><span class="bat"></span></span></div>
+            <div class="screen-body">
+              <div class="sec-h">your day</div>
+              <div class="sch-pills">
+                <span><svg class="i" style="font-size:9px"><use href="#ic-sun"/></svg> Wake · 8:00 AM</span>
+                <span><svg class="i" style="font-size:9px"><use href="#ic-moon"/></svg> Sleep · 10:00 PM</span>
+                <span class="hot"><svg class="i" style="font-size:9px"><use href="#ic-spark"/></svg> Auto-Schedule</span>
+              </div>
+              <div class="week">
+                <div><b>20</b>mon</div><div><b>21</b>tue</div><div><b>22</b>wed</div>
+                <div class="today"><b>23</b>today</div><div><b>24</b>fri</div><div><b>25</b>sat</div><div><b>26</b>sun</div>
+              </div>
+              <div class="nowline">3:03 PM <span class="dot"></span> <span class="tag">NOW</span></div>
+              <div class="blk lilac">
+                <span class="bi"><svg class="i"><use href="#ic-sun"/></svg></span>
+                <span class="bt"><b>Wake Up Routine</b><s>8:00 AM - 8:30 AM</s></span>
+              </div>
+              <div class="blk">
+                <span class="bi"><svg class="i"><use href="#ic-note"/></svg></span>
+                <span class="bt"><b>Write a simple C program</b><s>6:00 PM - 7:00 PM</s></span>
+                <span class="act"><i class="x">×</i><i class="v">✓</i></span>
+              </div>
+              <div class="addrow"><span>+</span> add something here</div>
+              <div class="blk lilac">
+                <span class="bi"><svg class="i"><use href="#ic-bed"/></svg></span>
+                <span class="bt"><b>Wind Down / Sleep</b><s>9:30 PM - 10:00 PM</s></span>
+              </div>
+              <div class="sec-h">backlog</div>
+              <div class="filters">
+                <span class="on">all</span>
+                <span><svg class="i" style="font-size:9px"><use href="#ic-zap"/></svg> high</span>
+                <span><svg class="i" style="font-size:9px"><use href="#ic-leaf"/></svg> low</span>
+                <span>brain-dead</span>
+              </div>
+              <div class="bl-item"><span class="rd"></span><span style="flex:1"><b>Create project timeline</b><s>today</s></span><svg class="i lf"><use href="#ic-leaf"/></svg></div>
+            </div>
+            <div class="tabbar">
+              <div class="tab"><svg class="i"><use href="#ic-home"/></svg></div>
+              <div class="tab on"><svg class="i"><use href="#ic-cal"/></svg></div>
+              <div class="tab"><svg class="i"><use href="#ic-timer"/></svg></div>
+              <div class="tab"><svg class="i"><use href="#ic-chat"/></svg></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- a finished day -->
+        <div class="phone" data-wt="done">
+          <div class="island"></div>
+          <div class="phone-screen">
+            <div class="status"><span>3:04</span><span class="sig"><i></i><i></i><i></i><span class="bat"></span></span></div>
+            <div class="screen-body">
+              <div class="sec-h">your day</div>
+              <div class="week">
+                <div><b>20</b>mon</div><div><b>21</b>tue</div><div class="today"><b>22</b>wed</div>
+                <div class="ring"><b>23</b>today</div><div><b>24</b>fri</div><div><b>25</b>sat</div><div><b>26</b>sun</div>
+              </div>
+              <div class="pc" style="padding:11px 12px">
+                <div class="pc-s" style="margin-bottom:6px">wednesday, jul 22</div>
+                <div class="daystat" style="border:none;padding:0;background:none">
+                  <div><b>8</b><s>done</s></div>
+                  <div><b style="color:var(--primary)">10h</b><s>focused</s></div>
+                  <div><b>0</b><s>missed</s></div>
+                </div>
+              </div>
+              <div class="done-row"><span class="ck"><svg class="i"><use href="#ic-check"/></svg></span><span><b>Plan hangout with friends</b><s>8:30 AM - 9:30 AM</s></span></div>
+              <div class="done-row"><span class="ck"><svg class="i"><use href="#ic-check"/></svg></span><span><b>Research AI project topic</b><s>9:30 AM - 10:30 AM</s></span></div>
+              <div class="done-row"><span class="ck"><svg class="i"><use href="#ic-check"/></svg></span><span><b>Meet project deadline</b><s>10:30 AM - 11:30 AM</s></span></div>
+              <div class="done-row"><span class="ck"><svg class="i"><use href="#ic-check"/></svg></span><span><b>Develop AI project plan</b><s>11:30 AM - 12:30 PM</s></span></div>
+              <div class="done-row"><span class="ck"><svg class="i"><use href="#ic-check"/></svg></span><span><b>Collaborate with team members</b><s>12:30 PM - 1:30 PM</s></span></div>
+            </div>
+            <div class="tabbar">
+              <div class="tab"><svg class="i"><use href="#ic-home"/></svg></div>
+              <div class="tab on"><svg class="i"><use href="#ic-cal"/></svg></div>
+              <div class="tab"><svg class="i"><use href="#ic-timer"/></svg></div>
+              <div class="tab"><svg class="i"><use href="#ic-chat"/></svg></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5. REMINDERS -->
+    <div class="feature rise" id="reminders">
+      <div class="f-copy">
+        <div class="step-tag"><span class="n">5</span><span class="l">Reminders<s>things to remember, big or small</s></span></div>
+        <h3>The plan reaches you when the app is closed</h3>
+        <p>Every scheduled block can fire a real system notification at its time, with its own alarm tone. Each one is a switch you can flip off without deleting the task, and there is a test button so you find out now, not at 6:05 PM, whether your phone will actually let it through.</p>
+        <div class="f-list">
+          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> One toggle per block, energy label shown next to it</div>
+          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> Selectable alarm tone, or the system default</div>
+          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> "send a test notification" proves permissions before you rely on it</div>
+        </div>
+      </div>
+      <div class="f-shot">
+        <div class="phone" data-wt="rem">
+          <div class="island"></div>
+          <div class="phone-screen">
+            <div class="status"><span>3:05</span><span class="sig"><i></i><i></i><i></i><span class="bat"></span></span></div>
+            <div class="screen-body">
+              <div style="display:flex;align-items:center;gap:9px">
+                <svg class="i" style="font-size:15px;color:var(--text-2)"><use href="#ic-back"/></svg>
+                <div><div class="sec-h2">reminders</div><div class="pc-s">things to remember, big or small.</div></div>
+              </div>
+              <div class="rem-hd"><span>♪&nbsp; Alarm Tone</span><span class="r">Default ▾</span></div>
+              <div class="rem-test"><svg class="i"><use href="#ic-bell"/></svg> send a test notification</div>
+              <div class="sec-h">today's blocks</div>
+              <div class="rem"><span class="tx"><b>Install C compiler and IDE</b><span class="en">high</span><span class="when"><span class="once">Once</span><span class="tm">3:05 PM</span></span></span><span class="toggle"></span></div>
+              <div class="rem"><span class="tx"><b>Write a simple C program</b><span class="en">high</span><span class="when"><span class="once">Once</span><span class="tm">4:05 PM</span></span></span><span class="toggle"></span></div>
+              <div class="rem"><span class="tx"><b>Create project timeline</b><span class="en">low</span><span class="when"><span class="once">Once</span><span class="tm">5:05 PM</span></span></span><span class="toggle"></span></div>
+              <div class="rem"><span class="tx"><b>Identify team members</b><span class="en">low</span><span class="when"><span class="once">Once</span><span class="tm">6:05 PM</span></span></span><span class="toggle"></span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6. FOCUS SETUP -->
+    <div class="feature flip rise" id="focus">
+      <div class="f-copy">
+        <div class="step-tag"><span class="n">6</span><span class="l">Focus<s>set it up once</s></span></div>
+        <h3>Pick a length, a scene, and whether you want company</h3>
+        <p>Focus greets you by your anonymous handle and shows what's up next with the option to start it early. Save the focuses you keep repeating, choose a preset from sprint to flow, set the mood, and decide whether you want somebody sitting on the other end of it.</p>
+        <div class="f-list">
+          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> Presets: 15 sprint, 25 pomodoro, 45 deep work, 90 flow</div>
+          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> Scenes: none, ocean, forest, rain</div>
+          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> Saved focuses you can name and reuse</div>
+          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> "Need help? Talk to Mynd" is one tap from here</div>
+        </div>
+      </div>
+      <div class="f-shot">
+        <div class="phone" data-wt="setup">
+          <div class="island"></div>
+          <div class="phone-screen">
+            <div class="status"><span>3:03</span><span class="sig"><i></i><i></i><i></i><span class="bat"></span></span></div>
+            <div class="screen-body">
+              <div class="focus-hd">
+                <div class="g">good afternoon,</div>
+                <h5>VelvetRaven87</h5>
+                <div class="s">let's get you locked in.</div>
+                <div class="stats">
+                  <div><svg class="i"><use href="#ic-check"/></svg><span><b>0</b><s>done today</s></span></div>
+                  <div><svg class="i"><use href="#ic-clock"/></svg><span><b>0m</b><s>focused</s></span></div>
+                </div>
+              </div>
+              <div class="upnext">
+                <div class="lbl">UP NEXT</div>
+                <b>Install C compiler and IDE</b>
+                <s>3:05 pm - 4:05 pm · 1h 0m left</s>
+                <div class="btn-orange">start this early</div>
+              </div>
+              <div style="display:flex;align-items:baseline;justify-content:space-between">
+                <div class="sec-h2">your focuses</div><div class="pc-s">hold to remove</div>
+              </div>
+              <div class="focus-cards">
+                <div class="fcard new"><span class="p">+</span><b>new focus</b><s>name it, keep it</s></div>
+                <div class="fcard saved">
+                  <span class="m"><b>15</b><s>min</s><svg class="i arrow" style="font-size:11px"><use href="#ic-up"/></svg></span>
+                  <s style="display:flex;gap:4px;align-items:center"><svg class="i" style="font-size:9px"><use href="#ic-note"/></svg> I wanna work</s>
+                </div>
+              </div>
+              <div class="pc-s" style="text-align:center">focus time in mins</div>
+              <div class="mins"><span>20</span><span class="on">25</span><span>30</span></div>
+              <div class="pc-s" style="text-align:center;color:var(--primary);font-weight:600">pomodoro</div>
+              <div class="presets">
+                <div><svg class="i"><use href="#ic-zap"/></svg><b>15</b><s>sprint</s></div>
+                <div class="on"><svg class="i"><use href="#ic-timer"/></svg><b>25</b><s>pomodoro</s></div>
+                <div><svg class="i"><use href="#ic-brain"/></svg><b>45</b><s>deep work</s></div>
+                <div><svg class="i"><use href="#ic-waves"/></svg><b>90</b><s>flow</s></div>
+              </div>
+            </div>
+            <div class="tabbar">
+              <div class="tab"><svg class="i"><use href="#ic-home"/></svg></div>
+              <div class="tab"><svg class="i"><use href="#ic-cal"/></svg></div>
+              <div class="tab on"><svg class="i"><use href="#ic-timer"/></svg></div>
+              <div class="tab"><svg class="i"><use href="#ic-chat"/></svg></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="phone" data-wt="presets">
+          <div class="island"></div>
+          <div class="phone-screen">
+            <div class="status"><span>3:03</span><span class="sig"><i></i><i></i><i></i><span class="bat"></span></span></div>
+            <div class="screen-body">
+              <div class="pc-s" style="text-align:center">focus time in mins</div>
+              <div class="mins"><span>20</span><span class="on">25</span><span>30</span></div>
+              <div class="pc-s" style="text-align:center;color:var(--primary);font-weight:600">pomodoro</div>
+              <div class="presets">
+                <div><svg class="i"><use href="#ic-zap"/></svg><b>15</b><s>sprint</s></div>
+                <div class="on"><svg class="i"><use href="#ic-timer"/></svg><b>25</b><s>pomodoro</s></div>
+                <div><svg class="i"><use href="#ic-brain"/></svg><b>45</b><s>deep work</s></div>
+                <div><svg class="i"><use href="#ic-waves"/></svg><b>90</b><s>flow</s></div>
+              </div>
+              <div style="display:flex;align-items:baseline;gap:6px">
+                <div class="sec-h2">scene</div><div class="pc-s">sets the mood while you focus</div>
+              </div>
+              <div class="scenes"><span class="on">× none</span><span>ocean</span><span>forest</span><span>rain</span></div>
+              <div class="bdouble">
+                <div class="hd">
+                  <span class="ic"><svg class="i"><use href="#ic-users"/></svg></span>
+                  <span><b>body doubling</b><s>focus alongside someone else who's working right now</s></span>
+                  <span class="toggle"></span>
+                </div>
+                <div class="note">we'll pair you with someone in a session - if no one's free yet, we keep matching quietly while your timer runs.</div>
+                <div class="sec-h" style="margin-bottom:5px">ambience</div>
+                <div class="filters">
+                  <span class="on"><svg class="i" style="font-size:9px"><use href="#ic-coffee"/></svg> café</span>
+                  <span>library</span><span>typing</span>
+                </div>
+              </div>
+              <div class="btn-orange" style="border-radius:15px;padding:11px">start pomodoro · 25m</div>
+              <div style="text-align:center;font-size:9px;color:var(--primary);font-weight:600">Need help? Talk to Mynd</div>
+            </div>
+            <div class="tabbar">
+              <div class="tab"><svg class="i"><use href="#ic-home"/></svg></div>
+              <div class="tab"><svg class="i"><use href="#ic-cal"/></svg></div>
+              <div class="tab on"><svg class="i"><use href="#ic-timer"/></svg></div>
+              <div class="tab"><svg class="i"><use href="#ic-chat"/></svg></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 7. BODY DOUBLING -->
+    <div class="feature rise">
+      <div class="f-copy">
+        <div class="step-tag"><span class="n">7</span><span class="l">Focus together<s>body doubling</s></span></div>
+        <h3>Someone quietly on the other end of it</h3>
+        <p>Body doubling works because a person is there, not because they help. Turn it on and OurMynd looks for a partner. If nobody is free yet it keeps matching in the background while your timer runs, so waiting for company never becomes another reason not to start.</p>
+        <div class="f-list">
+          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> Pairs you the moment someone else is ready</div>
+          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> Matching continues silently, your session never waits</div>
+          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> Ambience to sit under it: café, library, typing</div>
+        </div>
+      </div>
+      <div class="f-shot">
+        <div class="phone" data-wt="together">
+          <div class="island"></div>
+          <div class="phone-screen">
+            <div class="status"><span>3:04</span><span class="sig"><i></i><i></i><i></i><span class="bat"></span></span></div>
+            <div style="display:flex;align-items:center;gap:9px;padding:6px 16px 0">
+              <svg class="i" style="font-size:15px;color:var(--text-2)"><use href="#ic-back"/></svg>
+              <div class="sec-h2">Focus together</div>
+            </div>
+            <div class="together">
+              <span class="pulse"><svg class="i"><use href="#ic-users"/></svg></span>
+              <b>Looking for a focus partner…</b>
+              <s>You'll be paired the moment someone else is ready.</s>
+              <div class="cancel">Cancel</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 8. FOCUS ACTIVE -->
+    <div class="feature flip rise">
+      <div class="f-copy">
+        <div class="step-tag"><span class="n">8</span><span class="l">Locked in<s>the session itself</s></span></div>
+        <h3>One task, one dial, and somewhere to put the intrusions</h3>
+        <p>The whole screen becomes the scene you picked and the only text on it is what you are doing. When your brain throws something unrelated at you mid-session, park it: it drops into your inbox and you carry on without leaving the timer. That is the difference between a stray thought costing you five seconds and costing you the afternoon.</p>
+        <div class="f-list">
+          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> Drag along the scene bar to switch mood mid-session</div>
+          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> "park a thought" without pausing or navigating away</div>
+          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> Mynd is reachable from inside the session if you stall</div>
+        </div>
+      </div>
+      <div class="f-shot">
+        <div class="phone" data-wt="live">
+          <div class="island"></div>
+          <div class="phone-screen scene-forest">
+            <div class="status on-dark"><span>3:04</span><span class="sig"><i></i><i></i><i></i><span class="bat"></span></span></div>
+            <div class="fa">
+              <div style="align-self:flex-start;opacity:.85"><svg class="i" style="font-size:15px"><use href="#ic-back"/></svg></div>
+              <div class="lock">locked in on</div>
+              <h5>Install C compiler and IDE</h5>
+              <div class="dial"><span><b>59:58</b><s>remaining</s></span></div>
+              <div class="scenebar">
+                <svg class="i"><use href="#ic-x"/></svg><svg class="i"><use href="#ic-waves"/></svg>
+                <svg class="i"><use href="#ic-leaf"/></svg><svg class="i"><use href="#ic-rain"/></svg>
+                <svg class="i"><use href="#ic-sun"/></svg><svg class="i"><use href="#ic-coffee"/></svg>
+                <svg class="i"><use href="#ic-moon"/></svg>
+              </div>
+              <div class="hint">forest · drag to switch</div>
+              <div class="acts"><span>‖ pause</span><span>× end</span></div>
+              <div class="park">park a thought</div>
+              <div class="help">Need help? Talk to Mynd</div>
+              <div class="tiny">brain pinging you? park it without leaving - it drops to your inbox.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="phone" data-wt="rain">
+          <div class="island"></div>
+          <div class="phone-screen scene-rain">
+            <div class="status on-dark"><span>3:04</span><span class="sig"><i></i><i></i><i></i><span class="bat"></span></span></div>
+            <div class="fa" style="opacity:.55">
+              <div class="lock">locked in on</div>
+              <h5>Install C compiler and IDE</h5>
+              <div class="dial"><span><b>59:48</b><s>remaining</s></span></div>
+              <div class="scenebar">
+                <svg class="i"><use href="#ic-x"/></svg><svg class="i"><use href="#ic-waves"/></svg>
+                <svg class="i"><use href="#ic-leaf"/></svg><svg class="i"><use href="#ic-rain"/></svg>
+                <svg class="i"><use href="#ic-sun"/></svg><svg class="i"><use href="#ic-coffee"/></svg>
+                <svg class="i"><use href="#ic-moon"/></svg>
+              </div>
+              <div class="hint">rain · drag to switch</div>
+            </div>
+            <div class="sheet">
+              <div class="grab"></div>
+              <h5>park it</h5>
+              <div class="sd">Put it down here and get back to what you were doing.</div>
+              <div class="field" style="min-height:34px">what just popped into your head?</div>
+              <div class="pill-btn">park it</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 9. COACH -->
+    <div class="feature rise" id="coach">
+      <div class="f-copy">
+        <div class="step-tag"><span class="n">9</span><span class="l">Mynd<s>the coach</s></span></div>
+        <h3>It has already read your day</h3>
+        <p>Mynd is not a blank chatbot. It knows what you dumped, what you moved four times, how you rated your mood and how long you actually focused. So "i'm stuck" gets an answer about the real thing. Your earlier chats stay reachable, and the three chips cover the states you are usually in when you open it.</p>
+        <div class="f-list">
+          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> One tap for "i'm stuck", "i'm overwhelmed", "plan my morning"</div>
+          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> Full history, so a thread from last week is still there</div>
+          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> Speak instead of typing when typing is too much</div>
+        </div>
+      </div>
+      <div class="f-shot">
+        <div class="phone" data-wt="coach">
+          <div class="island"></div>
+          <div class="phone-screen">
+            <div class="status"><span>3:03</span><span class="sig"><i></i><i></i><i></i><span class="bat"></span></span></div>
+            <div class="screen-body">
+              <div class="coach-hd">
+                <svg class="i" style="font-size:15px;color:var(--text-2)"><use href="#ic-back"/></svg>
+                <span class="orb still" style="--orb:24px"><canvas></canvas></span>
+                <span class="nm"><b>Mynd</b><s>GPT-5.4 Nano (fast) · alw… ›</s></span>
+                <span class="ico"><svg class="i"><use href="#ic-hist"/></svg><svg class="i"><use href="#ic-plus"/></svg></span>
+              </div>
+              <div class="coach-mid">
+                <span class="orb" style="--orb:86px"><canvas></canvas></span>
+                <div class="h" style="margin-top:8px">hey Anj,</div>
+                <div class="q">what's going on?</div>
+                <span class="earlier"><svg class="i" style="font-size:9px"><use href="#ic-hist"/></svg> 10 earlier chats ›</span>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:6px;margin-top:6px">
+                <div class="bub ai">hey Anj. i'm Mynd. what's going on right now?</div>
+              </div>
+              <div style="margin-top:auto;padding-bottom:14px;display:flex;flex-direction:column;gap:7px">
+                <div class="chips"><span class="warm">i'm stuck</span><span>i'm overwhelmed</span><span>plan my mo…</span></div>
+                <div class="inputbar">ask anything… <span class="go"><svg class="i" style="font-size:10px"><use href="#ic-arrow"/></svg></span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 10. MEMORY -->
+    <div class="feature flip rise" id="memory">
+      <div class="f-copy">
+        <div class="step-tag"><span class="n">10</span><span class="l">Memory<s>what it knows about you</s></span></div>
+        <h3>It writes you back, in its own words</h3>
+        <p>Everything you dump, finish, postpone and feel gets re-read, and Mynd writes a plain-language picture of where you are. Not a dashboard of streak graphs, a paragraph that says what it thinks is going on. Underneath it sits every thought you parked mid-session, waiting for a moment you have capacity for.</p>
+        <div class="f-list">
+          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> "written by Mynd", timestamped, rewritten on demand</div>
+          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> Parked thoughts kept verbatim, dismissed when you're done</div>
+          <div><span class="tick"><svg class="i"><use href="#ic-check"/></svg></span> This is the context the coach and the scheduler both read</div>
+        </div>
+      </div>
+      <div class="f-shot">
+        <div class="phone" data-wt="memory">
+          <div class="island"></div>
+          <div class="phone-screen">
+            <div class="status"><span>3:04</span><span class="sig"><i></i><i></i><i></i><span class="bat"></span></span></div>
+            <div class="screen-body">
+              <div style="display:flex;align-items:center;gap:9px">
+                <svg class="i" style="font-size:15px;color:var(--text-2)"><use href="#ic-back"/></svg>
+                <div class="sec-h2">memory</div>
+                <span style="margin-left:auto;display:flex;gap:9px;color:var(--text-2)"><svg class="i" style="font-size:13px"><use href="#ic-refresh"/></svg><svg class="i" style="font-size:13px"><use href="#ic-edit"/></svg></span>
+              </div>
+              <div class="mem-card">
+                You tend to excel when tackling challenging tasks, as seen in your rapid progress on the IELTS exam, research paper, and guitar learning goals. Your high energy levels today suggest you're well-positioned to tackle the task of installing the C compiler and IDE, which has been a source of frustration for you. You've been consistently tracking your habits, showing a strong commitment to self-care, and have been ahead of schedule on most of your goals. Your recent low mood and hunger suggest you may be feeling overwhelmed.
+                <div class="by">written by Mynd · Jul 23 3:03 PM</div>
+              </div>
+              <div style="display:flex;align-items:baseline;justify-content:space-between">
+                <div class="sec-h2">parked thoughts</div><div class="pc-s">3</div>
+              </div>
+              <div class="pc-s" style="margin-top:-4px">the things you put down so you could keep going.</div>
+              <div class="parked"><span class="tx"><b>distracted…</b><s>Jul 22 12:08 AM</s></span><svg class="i x"><use href="#ic-x"/></svg></div>
+              <div class="parked"><span class="tx"><b>i am feeling low at the moment and really hungry</b></span><svg class="i x"><use href="#ic-x"/></svg></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= PRICING ======================= -->
+<section class="section" id="pricing">
+  <span class="orb deco" style="--orb:80px;top:60px;left:5%;opacity:.4"></span>
+  <div class="wrap">
+    <div class="section-head rise">
+      <div class="eyebrow"><span class="orb"><canvas></canvas></span> Choose your plan</div>
+      <h2>Unlock the full OurMynd.<br>Cancel anytime.</h2>
+      <p class="lede">The capture loop is free. Paid raises the message limit, opens up better models, and lets memory grow instead of forgetting.</p>
+    </div>
+
+
+    <!-- Two real paywall screens, monthly and yearly, side by side. No web
+         buy buttons: the purchase happens in the app, so the site only shows
+         what the app itself shows. -->
+    <div class="pw-pair rise">
+
+      <!-- ===== PAYWALL - MONTHLY ===== -->
+      <figure class="pw-one">
+        <div class="phone" data-wt="paywall">
+          <div class="island"></div>
+          <div class="phone-screen">
+            <div class="status"><span>3:05</span><span class="sig"><i></i><i></i><i></i><span class="bat"></span></span></div>
+            <div class="screen-body">
+              <div style="display:flex;justify-content:flex-end;color:var(--text-2)"><svg class="i" style="font-size:14px"><use href="#ic-x"/></svg></div>
+              <div class="pw-h">
+                <h5>Choose your plan</h5>
+                <s>Unlock the full OurMynd. Cancel anytime.</s>
+              </div>
+              <div class="seg"><span class="on">Monthly</span><span>Yearly <em class="save" style="font-style:normal">SAVE</em></span></div>
+
+              <div class="pwc sel">
+                <div class="hd">
+                  <span class="sq"><svg class="i"><use href="#ic-spark"/></svg></span>
+                  <span><b>OurMynd Plus</b> <span class="tagm">MOST POPULAR</span><s>More room to think, every day.</s></span>
+                  <span class="rd on"><svg class="i"><use href="#ic-check"/></svg></span>
+                </div>
+                <div class="price"><b>£9.99</b><s>/month</s></div>
+                <div class="rule"></div>
+                <ul>
+                  <li><svg class="i"><use href="#ic-check"/></svg> Extended message limit</li>
+                  <li><svg class="i"><use href="#ic-check"/></svg> More schedule</li>
+                  <li><svg class="i"><use href="#ic-check"/></svg> Better AI models</li>
+                  <li><svg class="i"><use href="#ic-check"/></svg> Extended memory</li>
+                  <li><svg class="i"><use href="#ic-check"/></svg> Editing memory allowed</li>
+                </ul>
+              </div>
+
+              <div class="pwc">
+                <div class="hd">
+                  <span class="sq pro"><svg class="i"><use href="#ic-crown"/></svg></span>
+                  <span><b>OurMynd Pro</b><s>The full power of OurMynd.</s></span>
+                  <span class="rd"></span>
+                </div>
+                <div class="price"><b>£19.99</b><s>/month</s></div>
+                <div class="rule"></div>
+                <ul>
+                  <li><svg class="i"><use href="#ic-check"/></svg> Everything in Plus</li>
+                  <li><svg class="i"><use href="#ic-check"/></svg> Unlimited messages</li>
+                  <li><svg class="i"><use href="#ic-check"/></svg> Best schedule management</li>
+                  <li><svg class="i"><use href="#ic-check"/></svg> Enhanced task automation</li>
+                  <li><svg class="i"><use href="#ic-check"/></svg> Super memory</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+        <figcaption>Monthly &middot; billed every month, cancel any time</figcaption>
+      </figure>
+
+      <!-- ===== PAYWALL - YEARLY ===== -->
+      <figure class="pw-one">
+        <div class="phone">
+          <div class="island"></div>
+          <div class="phone-screen">
+            <div class="status"><span>3:05</span><span class="sig"><i></i><i></i><i></i><span class="bat"></span></span></div>
+            <div class="screen-body">
+              <div style="display:flex;justify-content:flex-end;color:var(--text-2)"><svg class="i" style="font-size:14px"><use href="#ic-x"/></svg></div>
+              <div class="pw-h">
+                <h5>Choose your plan</h5>
+                <s>Unlock the full OurMynd. Cancel anytime.</s>
+              </div>
+              <div class="seg"><span>Monthly</span><span class="on">Yearly <em class="save" style="font-style:normal">SAVE</em></span></div>
+
+              <div class="pwc sel">
+                <div class="hd">
+                  <span class="sq"><svg class="i"><use href="#ic-spark"/></svg></span>
+                  <span><b>OurMynd Plus</b> <span class="tagm">MOST POPULAR</span><s>More room to think, every day.</s></span>
+                  <span class="rd on"><svg class="i"><use href="#ic-check"/></svg></span>
+                </div>
+                <div class="price"><b>£99.99</b><s>/year</s><em>2 months free</em></div>
+                <div class="rule"></div>
+                <ul>
+                  <li><svg class="i"><use href="#ic-check"/></svg> Extended message limit</li>
+                  <li><svg class="i"><use href="#ic-check"/></svg> More schedule</li>
+                  <li><svg class="i"><use href="#ic-check"/></svg> Better AI models</li>
+                  <li><svg class="i"><use href="#ic-check"/></svg> Extended memory</li>
+                  <li><svg class="i"><use href="#ic-check"/></svg> Editing memory allowed</li>
+                </ul>
+              </div>
+
+              <div class="pwc">
+                <div class="hd">
+                  <span class="sq pro"><svg class="i"><use href="#ic-crown"/></svg></span>
+                  <span><b>OurMynd Pro</b><s>The full power of OurMynd.</s></span>
+                  <span class="rd"></span>
+                </div>
+                <div class="price"><b>£199</b><s>/year</s><em>save £40</em></div>
+                <div class="rule"></div>
+                <ul>
+                  <li><svg class="i"><use href="#ic-check"/></svg> Everything in Plus</li>
+                  <li><svg class="i"><use href="#ic-check"/></svg> Unlimited messages</li>
+                  <li><svg class="i"><use href="#ic-check"/></svg> Best schedule management</li>
+                  <li><svg class="i"><use href="#ic-check"/></svg> Enhanced task automation</li>
+                  <li><svg class="i"><use href="#ic-check"/></svg> Super memory</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+        <figcaption>Yearly &middot; the same plans, two months lighter</figcaption>
+      </figure>
+    </div>
+
+    <p class="pw-foot rise">Free covers the whole capture loop: brain dump, voice dump, auto-schedule, reminders, focus timer, scenes, body doubling, memory and parked thoughts. No card. Paid plans are bought inside the app.</p>
+
+  </div>
+</section>
+
+<!-- ======================= CTA ======================= -->
+<section class="section" style="padding-top:0">
+  <div class="wrap">
+    <div class="cta rise">
+      <div class="bloom" style="width:340px;height:340px;background:#fff;opacity:.16;top:-120px;right:-60px"></div>
+      <div style="position:relative;z-index:2;display:grid;place-items:center;gap:22px;justify-items:center">
+        <span class="orb" style="--orb:100px"><canvas></canvas></span>
+        <h2>Stop holding it all in your head</h2>
+        <p>Open the app, hold the orb, and say the thing you've been carrying around all morning. It'll be a scheduled day before you put the phone down.</p>
+        <a class="btn btn-primary" href="#pricing">Get early access <svg class="i" style="font-size:15px"><use href="#ic-arrow"/></svg></a>
+      </div>
+    </div>
+  </div>
+</section>
+

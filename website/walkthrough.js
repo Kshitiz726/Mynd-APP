@@ -274,8 +274,6 @@
 
       cap.classList.remove('swap');
       void cap.offsetWidth;
-      cap.querySelector('.n').textContent = hIdx + 1;
-      cap.querySelector('.of').textContent = `of ${SCENES.length}`;
       cap.querySelector('h2').textContent = title;
       cap.querySelector('p').textContent = body;
       cap.classList.add('swap');
