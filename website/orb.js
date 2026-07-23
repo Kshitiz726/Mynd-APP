@@ -212,3 +212,7 @@ function initOrb(canvas) {
 }
 
 document.querySelectorAll('.orb canvas').forEach(initOrb);
+
+// The walkthrough clones phone screens into its stage, and a cloned <canvas>
+// carries no WebGL context, so it needs initialising again.
+window.OrbInit = initOrb;

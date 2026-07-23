@@ -210,7 +210,10 @@ img { max-width: 100%; display: block; }
 
 /* ---- 6. The orb --------------------------------------------------------- */
 .orb {
-  position: relative; width: var(--orb, 190px); aspect-ratio: 1;
+  /* inline-block, not the default inline: a bare inline span ignores width, so
+     inside any non-flex parent the canvas stretched the orb into an ellipse. */
+  display: inline-block; line-height: 0;
+  position: relative; width: var(--orb, 190px); height: var(--orb, 190px); aspect-ratio: 1;
   border-radius: 50%; flex: none;
   background:
     radial-gradient(circle at 34% 30%, rgba(255,255,255,.55), rgba(255,255,255,0) 42%),
@@ -306,7 +309,7 @@ img { max-width: 100%; display: block; }
 :root[data-theme="dark"] .streak { color: var(--accent); }
 
 .p-hero { display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 6px 0 0; position: relative; }
-.p-hero .orbwrap { position: relative; }
+.p-hero .orbwrap { position: relative; display: inline-block; line-height: 0; }
 .p-hero .orbwrap .streak { position: absolute; right: -6px; bottom: 2px; }
 .p-hero .count { font-family: "Fredoka", sans-serif; font-size: 17px; font-weight: 600; margin-top: 4px; }
 .p-hero .sub { color: var(--text-2); font-size: 8.5px; }
@@ -686,3 +689,121 @@ footer { padding: 56px 0 44px; color: var(--text-2); font-size: 14px; }
   *, *::before, *::after { animation: none !important; transition-duration: .01ms !important; }
   .rise { opacity: 1; transform: none; }
 }
+
+/* ---- 20. Pricing: the two paywall screens, side by side ------------------ */
+/* No "choose plan" buttons on the web. The purchase happens inside the app,
+   so the site's job is only to show what the app will ask for. */
+.pw-pair {
+  display: flex; justify-content: center; align-items: flex-start;
+  gap: clamp(20px, 5vw, 64px); flex-wrap: wrap; padding-top: 28px;
+}
+.pw-one { margin: 0; display: grid; justify-items: center; gap: 16px; }
+.pw-one figcaption {
+  color: var(--text-2); font-size: 13.5px; text-align: center; max-width: 260px;
+}
+/* The price line the real paywall shows under each plan header. */
+.pwc .price { display: flex; align-items: baseline; gap: 6px; padding: 2px 0 6px; }
+.pwc .price b { font-family: "Fredoka", sans-serif; font-size: 19px; letter-spacing: -.4px; }
+.pwc .price s { text-decoration: none; color: var(--text-2); font-size: 9.5px; }
+.pwc .price em {
+  margin-left: auto; font-style: normal; font-size: 8.5px; font-weight: 600;
+  color: var(--success); background: rgba(111,178,140,.14);
+  padding: 3px 7px; border-radius: var(--r-pill);
+}
+.pwc.sel .price s { color: rgba(255,255,255,.62); }
+.pw-foot {
+  max-width: 720px; margin: 40px auto 0; text-align: center;
+  color: var(--text-2); font-size: 15px; line-height: 1.7;
+}
+
+/* ---- 21. The walkthrough: a full-screen scripted sequence ---------------- */
+/* Clicking "Walk through it" plays the product as a short film - one phone,
+   captions under it, screens changing on a timeline - instead of asking the
+   visitor to scroll and assemble the story themselves. */
+.wt {
+  position: fixed; inset: 0; z-index: 200;
+  display: grid; grid-template-rows: auto 1fr auto;
+  background: radial-gradient(120% 90% at 50% 0%, #2b2a4d, #14131f 62%, #0d0c14);
+  opacity: 0; pointer-events: none; transition: opacity .45s ease;
+}
+.wt.on { opacity: 1; pointer-events: auto; }
+.wt-bar { display: flex; align-items: center; gap: 14px; padding: 20px clamp(16px, 4vw, 34px); }
+.wt-bar .brand { color: #fff; }
+.wt-bar .sp { flex: 1; }
+.wt-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  border: 1px solid rgba(255,255,255,.22); background: rgba(255,255,255,.08);
+  color: #fff; font: inherit; font-size: 13.5px; font-weight: 500;
+  padding: 9px 15px; border-radius: var(--r-pill); cursor: pointer;
+  backdrop-filter: blur(12px); transition: background .2s ease, border-color .2s ease;
+}
+.wt-btn:hover { background: rgba(255,255,255,.16); border-color: rgba(255,255,255,.34); }
+.wt-btn.off { opacity: .45; }
+
+.wt-stage { position: relative; display: grid; place-items: center; padding: 0 20px; }
+/* Every scene is stacked; only the live one is opaque. The slight scale and
+   lift is the app's own page transition, borrowed. */
+.wt-scene {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  opacity: 0; transform: translateY(18px) scale(.975);
+  transition: opacity .6s ease, transform .6s cubic-bezier(.22,1,.36,1);
+  pointer-events: none;
+}
+.wt-scene.live { opacity: 1; transform: none; }
+.wt-stage .phone { transform: scale(var(--wt-scale, 1)); transform-origin: center; }
+/* A soft bloom behind the phone so it reads as lit, not pasted on. */
+.wt-glow {
+  position: absolute; width: 520px; height: 520px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(141,132,230,.42), transparent 62%);
+  filter: blur(30px); pointer-events: none;
+}
+
+.wt-foot { padding: 0 clamp(16px, 4vw, 34px) 30px; display: grid; justify-items: center; gap: 18px; }
+.wt-cap { text-align: center; min-height: 74px; max-width: 620px; }
+.wt-cap h4 {
+  font-family: "Fredoka", sans-serif; color: #fff; font-size: clamp(20px, 3.2vw, 30px);
+  letter-spacing: -.5px; margin: 0 0 6px;
+}
+.wt-cap p { color: rgba(255,255,255,.66); font-size: clamp(13.5px, 1.7vw, 16px); margin: 0; line-height: 1.55; }
+/* Caption text arrives a beat after the screen, the way a title card does. */
+.wt-cap.swap h4, .wt-cap.swap p { animation: capIn .55s cubic-bezier(.22,1,.36,1) both; }
+.wt-cap.swap p { animation-delay: .07s; }
+@keyframes capIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+/* The chapter ticks double as a scrubber. */
+.wt-ticks { display: flex; gap: 6px; width: min(560px, 86vw); }
+.wt-ticks button {
+  flex: 1; height: 4px; border: 0; padding: 0; cursor: pointer;
+  border-radius: var(--r-pill); background: rgba(255,255,255,.18); position: relative; overflow: hidden;
+}
+.wt-ticks button i {
+  position: absolute; inset: 0; transform-origin: left; transform: scaleX(0);
+  background: linear-gradient(90deg, var(--grad-start), var(--accent));
+  border-radius: inherit;
+}
+.wt-ticks button.done i { transform: scaleX(1); }
+.wt-ticks button.now i { animation: tick linear forwards; }
+@keyframes tick { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
+.wt-open { overflow: hidden; }
+
+@media (max-width: 720px) {
+  .wt-stage { --wt-scale: .82; }
+  .wt-foot { padding-bottom: 20px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wt-scene, .wt-cap.swap h4, .wt-cap.swap p { transition: none; animation: none; }
+}
+
+/* Each feature can play its own chapter of the film. */
+.step-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.step-row .step-tag { margin-bottom: 0; }
+.wt-mini {
+  display: inline-flex; align-items: center; gap: 7px;
+  font: inherit; font-size: 13px; font-weight: 500; color: var(--text-2);
+  background: var(--glass-fill); border: 1px solid var(--glass-line);
+  padding: 7px 14px; border-radius: var(--r-pill); cursor: pointer;
+  backdrop-filter: blur(12px); transition: color .2s ease, transform .3s var(--ease-spring);
+}
+.wt-mini:hover { color: var(--primary); transform: translateY(-1px); }
+.wt-mini svg { width: 14px; height: 14px; }
