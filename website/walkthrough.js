@@ -8,10 +8,10 @@
       page (data-wt="...") and the player clones it. So the film can never
       drift out of sync with the site - fix a screen once, it is fixed in both.
 
-   2. The music is synthesised, not a file. A slow four-chord pad built from
-      oscillators costs nothing to download, loops forever without a seam, and
-      keeps the site to files you can drop on any static host. It only ever
-      starts from a click, which is also what browsers require.
+   2. The music is a real recording, licensed CC BY 3.0 and trimmed to a clean
+      100-second loop. An earlier version synthesised a pad from oscillators;
+      it was cheaper but it read as a drone, not as music. It only ever starts
+      from a click, which is also what browsers require.
    ======================================================================== */
 
 (() => {
@@ -79,6 +79,21 @@
     built = true;
   }
 
+  /* The phones are a fixed 300px wide and each one is a different height, so on
+     a short window the tallest would run over the captions. Scale the stage
+     down to whatever actually fits, per scene. */
+  function fit() {
+    const phone = stage.querySelector('.wt-scene.live .phone') || stage.querySelector('.phone');
+    if (!phone) return;
+    const box = stage.getBoundingClientRect();
+    const h = phone.offsetHeight;
+    const w = phone.offsetWidth;
+    if (!h || !w) return;
+    const s = Math.min(1, (box.height - 28) / h, (box.width - 40) / w);
+    stage.style.setProperty('--wt-scale', Math.max(0.45, s).toFixed(3));
+  }
+  addEventListener('resize', fit);
+
   function go(i) {
     idx = (i + SCENES.length) % SCENES.length;
     const [, title, body, dur] = SCENES[idx];
@@ -104,7 +119,7 @@
     });
 
     remaining = dur;
-    chord(idx);          // the pad moves with the cut
+    fit();
   }
 
   function schedule(ms) {
@@ -135,69 +150,29 @@
   }
 
   /* ---- Music ------------------------------------------------------------ */
-  /* Four voices over a lowpass: root, fifth, and two detuned upper tones that
-     beat slowly against each other. Quiet enough to sit under speech, which is
-     what a walkthrough soundtrack is for. */
-  let ac = null, master = null, voices = [], wantSound = true;
-  const CHORDS = [
-    [146.83, 220.00, 293.66, 369.99],  // D minor-ish
-    [130.81, 196.00, 261.63, 329.63],  // C
-    [174.61, 261.63, 349.23, 440.00],  // F
-    [110.00, 164.81, 220.00, 277.18],  // A minor
-  ];
+  /* A real recording, not a synth: the oscillator pad read as a drone rather
+     than as music. This is a 100s excerpt of "In the Flow" by Softspace
+     (Room With A View, mt012), CC BY 3.0, trimmed and faded at both ends so it
+     loops without a seam. Credited in the footer, as the licence requires. */
+  const LEVEL = 0.34;
+  let wantSound = true;
 
-  function audio() {
-    if (ac) return;
-    const AC = window.AudioContext || window.webkitAudioContext;
-    if (!AC) return;
-    ac = new AC();
+  const track = new Audio('assets/audio/walkthrough.mp3');
+  track.loop = true;
+  track.preload = 'auto';
+  track.volume = 0;
 
-    const filter = ac.createBiquadFilter();
-    filter.type = 'lowpass';
-    filter.frequency.value = 900;
-
-    master = ac.createGain();
-    master.gain.value = 0;
-    filter.connect(master).connect(ac.destination);
-
-    voices = [0, 1, 2, 3].map((n) => {
-      const osc = ac.createOscillator();
-      osc.type = n < 2 ? 'sine' : 'triangle';
-      osc.detune.value = n === 3 ? 6 : n === 2 ? -5 : 0;   // slow beating
-      const g = ac.createGain();
-      g.gain.value = n < 2 ? 0.30 : 0.16;
-      osc.connect(g).connect(filter);
-      osc.start();
-      return osc;
-    });
-
-    // A breath on the whole pad so it never sits perfectly still.
-    const lfo = ac.createOscillator();
-    const lfoGain = ac.createGain();
-    lfo.frequency.value = 0.07;
-    lfoGain.gain.value = 0.018;
-    lfo.connect(lfoGain).connect(master.gain);
-    lfo.start();
+  let fadeTimer = null;
+  function fade(to, ms) {
+    clearInterval(fadeTimer);
+    const from = track.volume;
+    const t0 = performance.now();
+    fadeTimer = setInterval(() => {
+      const k = Math.min(1, (performance.now() - t0) / ms);
+      track.volume = Math.max(0, Math.min(1, from + (to - from) * k));
+      if (k === 1) clearInterval(fadeTimer);
+    }, 40);
   }
-
-  function chord(i) {
-    if (!ac || !voices.length) return;
-    const notes = CHORDS[i % CHORDS.length];
-    voices.forEach((osc, n) => {
-      // Glide rather than jump: a stepped frequency clicks.
-      osc.frequency.cancelScheduledValues(ac.currentTime);
-      osc.frequency.setTargetAtTime(notes[n], ac.currentTime, 0.9);
-    });
-  }
-
-  function fade(to, secs) {
-    if (!ac || !master) return;
-    master.gain.cancelScheduledValues(ac.currentTime);
-    master.gain.setValueAtTime(master.gain.value, ac.currentTime);
-    master.gain.linearRampToValueAtTime(to, ac.currentTime + secs);
-  }
-
-  const LEVEL = 0.055;
 
   bSound.addEventListener('click', () => {
     wantSound = !wantSound;
@@ -205,7 +180,7 @@
     bSound.classList.toggle('off', !wantSound);
     bSound.querySelector('use').setAttribute('href', wantSound ? '#ic-vol' : '#ic-mute');
     bSound.querySelector('span').textContent = wantSound ? 'Sound on' : 'Sound off';
-    fade(wantSound ? LEVEL : 0, 0.5);
+    fade(wantSound ? LEVEL : 0, 500);
   });
 
   /* ---- Open / close ----------------------------------------------------- */
@@ -218,22 +193,23 @@
     root.classList.add('on');
     document.documentElement.classList.add('wt-open');
 
-    audio();
-    if (ac && ac.state === 'suspended') ac.resume();
-    if (wantSound) fade(LEVEL, 2.2);
+    // Autoplay is allowed here because open() only ever runs from a click.
+    track.play().catch(() => {});
+    if (wantSound) fade(LEVEL, 2200);
 
     const at = key ? SCENES.findIndex(([k]) => k === key) : 0;
     go(at < 0 ? 0 : at);
+    fit();
     play();
     bClose.focus();
   }
 
   function close() {
     pause();
-    fade(0, 0.6);
+    fade(0, 600);
     root.classList.remove('on');
     document.documentElement.classList.remove('wt-open');
-    setTimeout(() => { root.hidden = true; if (ac) ac.suspend(); }, 480);
+    setTimeout(() => { root.hidden = true; track.pause(); track.currentTime = 0; }, 640);
   }
 
   document.querySelectorAll('[data-walkthrough]').forEach((el) =>

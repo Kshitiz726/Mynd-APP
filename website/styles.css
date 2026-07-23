@@ -740,7 +740,12 @@ footer { padding: 56px 0 44px; color: var(--text-2); font-size: 14px; }
 .wt-btn:hover { background: rgba(255,255,255,.16); border-color: rgba(255,255,255,.34); }
 .wt-btn.off { opacity: .45; }
 
-.wt-stage { position: relative; display: grid; place-items: center; padding: 0 20px; }
+.wt-stage {
+  position: relative; display: grid; place-items: center; padding: 0 20px;
+  /* A grid row is min-height:auto by default, so a phone taller than the row
+     spilled over the captions instead of being scaled to fit. */
+  min-height: 0; overflow: hidden;
+}
 /* Every scene is stacked; only the live one is opaque. The slight scale and
    lift is the app's own page transition, borrowed. */
 .wt-scene {
@@ -758,8 +763,14 @@ footer { padding: 56px 0 44px; color: var(--text-2); font-size: 14px; }
   filter: blur(30px); pointer-events: none;
 }
 
-.wt-foot { padding: 0 clamp(16px, 4vw, 34px) 30px; display: grid; justify-items: center; gap: 18px; }
-.wt-cap { text-align: center; min-height: 74px; max-width: 620px; }
+.wt-foot {
+  padding: 22px clamp(16px, 4vw, 34px) 30px;
+  display: grid; justify-items: center; gap: 18px;
+  /* Lifted off the dark, so a scaled phone can never read as sitting on top
+     of the words. */
+  background: linear-gradient(to top, rgba(13,12,20,.96), rgba(13,12,20,0));
+}
+.wt-cap { text-align: center; min-height: 86px; max-width: 620px; }
 .wt-cap h4 {
   font-family: "Fredoka", sans-serif; color: #fff; font-size: clamp(20px, 3.2vw, 30px);
   letter-spacing: -.5px; margin: 0 0 6px;
@@ -788,7 +799,7 @@ footer { padding: 56px 0 44px; color: var(--text-2); font-size: 14px; }
 .wt-open { overflow: hidden; }
 
 @media (max-width: 720px) {
-  .wt-stage { --wt-scale: .82; }
+  .wt-cap { min-height: 96px; }
   .wt-foot { padding-bottom: 20px; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -807,3 +818,5 @@ footer { padding: 56px 0 44px; color: var(--text-2); font-size: 14px; }
 }
 .wt-mini:hover { color: var(--primary); transform: translateY(-1px); }
 .wt-mini svg { width: 14px; height: 14px; }
+.credit { color: var(--text-2); font-size: 12.5px; }
+.credit a { text-decoration: underline; text-underline-offset: 2px; }
