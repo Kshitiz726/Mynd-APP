@@ -325,7 +325,7 @@ img { max-width: 100%; display: block; }
   display: flex; justify-content: space-between; align-items: center;
   padding: 12px 20px 2px; font-size: 9.5px; font-weight: 600; color: var(--text); z-index: 30;
 }
-.status.on-dark { color: rgba(255,255,255,.9); }
+.status.on-dark { color: rgba(255,255,255,.9); position: relative; z-index: 2; }
 .status .sig { display: flex; gap: 3px; align-items: center; }
 .status .sig i { display: block; width: 3px; border-radius: 1px; background: currentColor; }
 .status .sig i:nth-child(1) { height: 4px; }
@@ -590,7 +590,7 @@ img { max-width: 100%; display: block; }
 /* focus active (full-bleed scene) */
 .scene-forest { background: linear-gradient(to bottom, var(--forest-1), var(--forest-2)); color: #fff; }
 .scene-rain   { background: linear-gradient(to bottom, var(--rain-1), var(--rain-2)); color: #fff; }
-.fa { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 4px 18px 0; text-align: center; }
+.fa { position: relative; z-index: 2; flex: 1; display: flex; flex-direction: column; align-items: center; padding: 4px 18px 0; text-align: center; }
 .fa .lock { font-size: 8.5px; opacity: .8; }
 .fa h5 { font-family: "Fredoka", sans-serif; font-size: 14px; font-weight: 600; margin: 2px 0 12px; }
 .fa .dial { position: relative; width: 132px; height: 132px; border-radius: 50%; border: 2px solid rgba(255,255,255,.22); display: grid; place-items: center; }
