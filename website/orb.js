@@ -110,6 +110,9 @@ const THEME = {
 };
 const norm = (c) => c.map((v) => v / 255);
 
+// How fast the surface moves. Deliberately slow.
+const RATE = 0.32;
+
 function compile(gl, type, src) {
   const s = gl.createShader(type);
   gl.shaderSource(s, src);
@@ -197,7 +200,10 @@ function initOrb(canvas) {
       const th = isDark() ? THEME.dark : THEME.light;
       // A held frame still looks like the orb, because a still orb is just this
       // shader with the clock stopped - exactly what FluidOrb.still does.
-      gl.uniform1f(uTime, reduce ? 12.0 : (now - start) / 1000);
+      // RATE slows the clock rather than the maths: at 1.0 the surface churns
+      // like boiling water, which reads cheap. A third of that is the pace of
+      // something heavy and slow-moving, which is the whole point of the mark.
+      gl.uniform1f(uTime, reduce ? 12.0 : ((now - start) / 1000) * RATE);
       gl.uniform2f(uSize, w, h);
       gl.uniform3fv(uPrimary, norm(th.primary));
       gl.uniform3fv(uAccent, norm(th.accent));

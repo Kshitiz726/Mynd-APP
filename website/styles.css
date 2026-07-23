@@ -295,11 +295,11 @@ img { max-width: 100%; display: block; }
     radial-gradient(circle at 62% 34%, var(--flow), rgba(92,138,208,0) 62%),
     linear-gradient(150deg, var(--primary), #3B2B63);
   box-shadow: 0 34px 70px -24px rgba(107, 112, 201, .68);
-  animation: orbFloat 9s ease-in-out infinite;
+  animation: orbFloat 17s ease-in-out infinite;
 }
 .orb canvas { display: block; width: 100%; height: 100%; border-radius: 50%; position: relative; z-index: 2; }
 .orb canvas.orb-fallback { opacity: 0; }
-@keyframes orbFloat { 0%,100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-14px) scale(1.02); } }
+@keyframes orbFloat { 0%,100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-10px) scale(1.015); } }
 .orb.still { animation: none; box-shadow: 0 6px 14px -6px rgba(107,112,201,.7); }
 .orb.flat  { animation: none; box-shadow: none; }
 .orb.deco  { position: absolute; z-index: 1; pointer-events: none; opacity: .8; }
@@ -1186,3 +1186,50 @@ footer { padding: 56px 0 44px; color: var(--text-2); font-size: 14px; }
     animation-duration: .01ms; animation-delay: 0ms; animation-iteration-count: 1;
   }
 }
+
+/* ---- 27. A device, not a rectangle --------------------------------------- */
+/* Filmed at an angle the phone reads as a slab of glass in a metal frame, so
+   it needs the things a slab of glass has: side buttons that catch the light,
+   a bright edge where the frame turns, and a sheen across the screen. All
+   pseudo-elements - no extra markup, and harmless at web size. */
+.phone::before, .phone::after {
+  content: ""; position: absolute; pointer-events: none; z-index: 6;
+}
+/* The rail highlight: a hairline of lit metal down each long edge. */
+.phone::before {
+  inset: 0; border-radius: inherit;
+  background:
+    linear-gradient(90deg, rgba(255,255,255,.34), rgba(255,255,255,0) 3%),
+    linear-gradient(270deg, rgba(255,255,255,.22), rgba(255,255,255,0) 3%);
+  mix-blend-mode: screen;
+}
+/* Volume pair and wake button, as raised nubs on the frame. */
+.phone .btns { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
+.phone .btns i {
+  position: absolute; display: block; width: 3px; border-radius: 3px;
+  background: linear-gradient(180deg, #4a4a56, #23232b);
+  box-shadow: 0 0 0 .5px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.22);
+}
+.phone .btns i:nth-child(1) { left: -2px; top: 96px;  height: 26px; }
+.phone .btns i:nth-child(2) { left: -2px; top: 138px; height: 46px; }
+.phone .btns i:nth-child(3) { left: -2px; top: 196px; height: 46px; }
+.phone .btns i:nth-child(4) { right: -2px; top: 160px; height: 66px; }
+/* The sheen. Kept faint so it never fights the interface underneath. */
+.phone-screen::after {
+  content: ""; position: absolute; inset: 0; z-index: 45; pointer-events: none;
+  border-radius: inherit;
+  background: linear-gradient(118deg,
+    rgba(255,255,255,.10) 0%, rgba(255,255,255,.03) 22%,
+    rgba(255,255,255,0) 46%, rgba(255,255,255,0) 100%);
+}
+
+/* ---- 28. The scene really changes ---------------------------------------- */
+/* Switching ambience in the app repaints the whole session, not one chip. The
+   overlay crossfades the new scene in over the old across the entire screen. */
+.amb {
+  position: absolute; inset: 0; z-index: 1; opacity: 0; pointer-events: none;
+  border-radius: inherit;
+}
+.amb.rain { background: linear-gradient(165deg, var(--rain-1), var(--rain-2)); }
+.live .amb { animation: ambIn 1.1s ease both; animation-delay: var(--d, 1.4s); }
+@keyframes ambIn { to { opacity: 1; } }
