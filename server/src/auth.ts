@@ -95,15 +95,7 @@ async function issueSessionForEmail(
       [email, randomUsername(), colorFor(seed), email, fullName],
     );
   }
-  // `select *` / `returning *` carry the avatar bytes, which have no business
-  // in a sign-in response. Strip them and hand back a URL instead.
-  const { avatar_image, ...publicUser } = u as Record<string, unknown>;
-  u = {
-    ...publicUser,
-    avatar_url: avatar_image
-      ? `/api/users/${u.id}/avatar?v=${new Date((u.avatar_updated_at as string) ?? 0).getTime()}`
-      : null,
-  };
+  u = publicUser(u);
 
   const token = jwt.sign(
     { sub: u.id, name: u.display_name, handle: u.handle, color: u.avatar_color },
@@ -285,9 +277,31 @@ authRouter.post('/auth/google-mock', async (req, res) => {
       config.jwtSecret,
       { expiresIn: '30d' }
     );
-    res.json({ token, user: u });
+    res.json({ token, user: publicUser(u) });
   } catch (e) {
     console.error('Google mock auth error:', e);
     res.status(500).json({ error: 'internal server error' });
   }
 });
+
+/**
+ * A user row as it may leave the server.
+ *
+ * `select *` and `returning *` both carry `avatar_image`, which is the picture
+ * itself and has no business inside a sign-in response. Strip it and hand back
+ * the URL that serves it instead.
+ *
+ * Shared by every auth path on purpose: the mock endpoint used to shape its own
+ * response, so a client talking to it saw a different user object than the real
+ * Google flow returns, which is exactly the kind of difference you only find
+ * when it is already confusing you.
+ */
+export function publicUser(u: any) {
+  const { avatar_image, ...rest } = u;
+  return {
+    ...rest,
+    avatar_url: avatar_image
+      ? `/api/users/${u.id}/avatar?v=${new Date(u.avatar_updated_at ?? 0).getTime()}`
+      : null,
+  };
+}
