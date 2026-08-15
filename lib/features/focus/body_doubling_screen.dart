@@ -51,7 +51,8 @@ class _BodyDoublingScreenState extends State<BodyDoublingScreen> {
 
   List<BdFriend>? _friends;
   bool _loadingFriends = false;
-  String? _invitedName;
+  /// Who we invited, kept whole so the session shows their face too.
+  BdPartner? _invited;
 
   @override
   void initState() {
@@ -97,6 +98,17 @@ class _BodyDoublingScreenState extends State<BodyDoublingScreen> {
     setState(() => _phase = _Phase.searching);
     Haptics.medium();
     try {
+      // Being told you were paired arrives over the socket and nowhere else, so
+      // queueing without one means waiting forever while the other person sits
+      // in a room you never hear about. Better to fail here, where we can say
+      // so, than to look like it is working.
+      if (!await _rt.ensureConnected()) {
+        if (!mounted) return;
+        setState(() => _phase = _Phase.idle);
+        Toast.show(context, 'no connection to the focus server - try again');
+        return;
+      }
+
       final m = await ApiClient.instance.bodyDoublingMatch();
       if (!mounted) return;
       if (m.matched) {
@@ -129,10 +141,10 @@ class _BodyDoublingScreenState extends State<BodyDoublingScreen> {
     
     if (widget.mode != null) {
       context.read<FocusProvider>().start(
-        widget.mode!, 
-        true, 
+        widget.mode!,
+        true,
         preMatchedRoomId: id,
-        preMatchedPartnerName: _partner?.name ?? _invitedName,
+        preMatchedPartner: _partner ?? _invited,
       );
       Navigator.of(context).maybePop();
     } else {
@@ -161,7 +173,8 @@ class _BodyDoublingScreenState extends State<BodyDoublingScreen> {
       if (!mounted) return;
       setState(() {
         _roomId = roomId;
-        _invitedName = f.name;
+        _invited = BdPartner(
+            id: f.id, name: f.name, initial: f.initial, color: f.color);
       });
       Toast.show(context, 'Invited ${f.name} - they\'ll get a notification');
     } catch (_) {
@@ -241,13 +254,13 @@ class _BodyDoublingScreenState extends State<BodyDoublingScreen> {
 
   // ── Invite a friend ──
   Widget _inviteView(OmColors c) {
-    if (_invitedName != null) {
+    if (_invited != null) {
       return Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(OmIcons.byName('check'), size: 56, color: c.success),
           const SizedBox(height: AppSpacing.lg),
-          Text('Invited $_invitedName',
+          Text('Invited ${_invited!.name}',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
           const SizedBox(height: 6),
           Text('They’ll get a notification to join. You can head in now.',

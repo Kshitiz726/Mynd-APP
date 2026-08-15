@@ -103,7 +103,7 @@ class FocusProvider extends ChangeNotifier {
     FocusMode mode,
     bool bodyDoubling, {
     String? preMatchedRoomId,
-    String? preMatchedPartnerName,
+    BdPartner? preMatchedPartner,
     String? taskTitle,
     int? seconds,
     String ambienceId = 'none',
@@ -118,7 +118,8 @@ class FocusProvider extends ChangeNotifier {
     _startTimer();
     notifyListeners();
     if (bodyDoubling) {
-      _startBodyDoublingMatch(preMatchedRoomId: preMatchedRoomId, preMatchedPartnerName: preMatchedPartnerName);
+      _startBodyDoublingMatch(
+          preMatchedRoomId: preMatchedRoomId, preMatchedPartner: preMatchedPartner);
     }
   }
 
@@ -128,7 +129,8 @@ class FocusProvider extends ChangeNotifier {
   /// away; otherwise we stay queued in the background (no blocking UI) and get
   /// paired the moment someone else toggles body doubling. The solo pomodoro
   /// keeps running the whole time.
-  Future<void> _startBodyDoublingMatch({String? preMatchedRoomId, String? preMatchedPartnerName}) async {
+  Future<void> _startBodyDoublingMatch(
+      {String? preMatchedRoomId, BdPartner? preMatchedPartner}) async {
     _bdActive = true;
     _searchingPartner = true;
     _partner = null;
@@ -139,20 +141,24 @@ class FocusProvider extends ChangeNotifier {
     notifyListeners();
 
     if (preMatchedRoomId != null) {
-      _onMatched(
-        preMatchedPartnerName == null
-            ? null
-            : BdPartner(
-                id: '',
-                name: preMatchedPartnerName,
-                initial: preMatchedPartnerName.isNotEmpty ? preMatchedPartnerName[0].toUpperCase() : '?',
-                color: null),
-        preMatchedRoomId,
-      );
+      // The partner themselves, not a name we rebuild a stranger around.
+      //
+      // This used to take a String and construct a BdPartner with an empty id,
+      // which threw away the two things that identify a person: their picture
+      // (OmAvatar has no user to fetch without an id) and any change they made
+      // to their name. You ended up sitting an hour across from an initial in a
+      // circle, labelled with whatever they were called when you matched.
+      _onMatched(preMatchedPartner, preMatchedRoomId);
       return;
     }
 
     try {
+      // Same reason as the matchmaking screen: the pairing is announced over
+      // the socket, so joining the queue without one is joining nothing. Here
+      // it stays silent, because the pomodoro is already running and this is
+      // the background half of the feature.
+      await RealtimeService.instance.ensureConnected();
+
       final m = await ApiClient.instance.bodyDoublingMatch();
       if (!_bdActive) return; // session ended while we were requesting
       if (m.matched && m.roomId != null) {

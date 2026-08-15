@@ -21,8 +21,31 @@ class RealtimeService {
 
   bool get connected => _socket?.connected ?? false;
 
+  /// The token the live socket authenticated with, so a socket belonging to a
+  /// previous session can be told apart from a usable one.
+  String? _socketToken;
+
   void connect() {
-    if (_socket != null) return;
+    final token = ApiConfig.instance.authToken;
+
+    // A socket built for a different token is not a connection, it is a dead
+    // one that happens to exist.
+    //
+    // This returned early whenever `_socket != null`, which quietly broke
+    // everything realtime after any sign-in that was not the first. The socket
+    // gets built at launch with whatever token is around (often none, or one
+    // the server has since stopped accepting), and the connect() call right
+    // after signing in then did nothing at all. The socket kept retrying with
+    // the old credentials, `ensureConnected` timed out, and body doubling
+    // matched two people who could never be told about each other, because
+    // `bd_matched` is pushed down exactly this socket.
+    if (_socket != null && _socketToken == token) return;
+    if (_socket != null) {
+      debugPrint('[rt] token changed, rebuilding the socket');
+      dispose();
+    }
+
+    _socketToken = token;
     final s = io.io(
       ApiConfig.instance.baseUrl,
       io.OptionBuilder()
@@ -89,6 +112,9 @@ class RealtimeService {
   void dispose() {
     _socket?.dispose();
     _socket = null;
+    // Cleared with the socket, or the next connect() would compare against the
+    // credentials of a socket that no longer exists and skip rebuilding.
+    _socketToken = null;
   }
 
   // ── Emit (client → server) ──
