@@ -95,6 +95,16 @@ async function issueSessionForEmail(
       [email, randomUsername(), colorFor(seed), email, fullName],
     );
   }
+  // `select *` / `returning *` carry the avatar bytes, which have no business
+  // in a sign-in response. Strip them and hand back a URL instead.
+  const { avatar_image, ...publicUser } = u as Record<string, unknown>;
+  u = {
+    ...publicUser,
+    avatar_url: avatar_image
+      ? `/api/users/${u.id}/avatar?v=${new Date((u.avatar_updated_at as string) ?? 0).getTime()}`
+      : null,
+  };
+
   const token = jwt.sign(
     { sub: u.id, name: u.display_name, handle: u.handle, color: u.avatar_color },
     config.jwtSecret,

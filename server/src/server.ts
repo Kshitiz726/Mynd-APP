@@ -11,6 +11,7 @@ import chat from './routes/chat.js';
 import notifications from './routes/notifications.js';
 import devRoutes from './routes/dev.js';
 import notesRouter from './routes/notes.js';
+import profileRouter from './routes/profile.js';
 import { authRouter } from './auth.js';
 import { sessionsRouter } from './routes/sessions.js';
 import { roomsRouter } from './routes/rooms.js';
@@ -24,7 +25,9 @@ app.use(cors({ origin: config.clientOrigin }));
 // registered before the JSON body parser swallows the stream.
 app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), billingWebhookHandler);
 
-app.use(express.json({ limit: '256kb' }));
+// 2mb: a profile picture arrives as base64 in a JSON body (see routes/profile.ts),
+// and 256kb rejected every photo a phone camera produces.
+app.use(express.json({ limit: '2mb' }));
 
 app.get('/health', (_req, res) =>
   res.json({
@@ -70,6 +73,7 @@ app.use('/api', authRouter);
 app.use('/api', feed);
 app.use('/api', social);
 app.use('/api', notesRouter);
+app.use('/api', profileRouter);
 app.use('/api', chat);
 app.use('/api', notifications);
 app.use('/api', roomsRouter(io));

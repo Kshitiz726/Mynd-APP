@@ -21,6 +21,8 @@ interface PublicProfile {
   displayName: string;
   initial: string;
   avatarColor: string | null;
+  /** Their picture, if they have set one. Null falls back to the initial. */
+  avatarUrl: string | null;
 }
 
 interface WaitingEntry {
@@ -36,7 +38,9 @@ export function bodyDoublingRouter(io: Server) {
 
   async function profileOf(userId: string): Promise<PublicProfile> {
     const u = await db.one(
-      `select id, display_name, initial, avatar_color from users where id=$1`,
+      `select id, display_name, initial, avatar_color, avatar_updated_at,
+              (avatar_image is not null) as has_avatar
+       from users where id=$1`,
       [userId],
     );
     return {
@@ -44,6 +48,11 @@ export function bodyDoublingRouter(io: Server) {
       displayName: u.display_name,
       initial: u.initial,
       avatarColor: u.avatar_color,
+      // Stamped so a partner who changed their picture mid-session is not
+      // shown behind yesterday's cached one.
+      avatarUrl: u.has_avatar
+        ? `/api/users/${u.id}/avatar?v=${new Date(u.avatar_updated_at ?? 0).getTime()}`
+        : null,
     };
   }
 

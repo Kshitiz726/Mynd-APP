@@ -154,11 +154,15 @@ r.get('/friends/requests', requireAuth, async (req, res) => {
 
 r.get('/users/:id', requireAuth, async (req, res) => {
   const u = await db.oneOrNone(
-    `select id, display_name, initial, avatar_color, current_energy, last_seen_at
+    `select id, display_name, initial, avatar_color, current_energy, last_seen_at,
+            avatar_updated_at, (avatar_image is not null) as has_avatar
      from users where id=$1`,
     [req.params.id],
   );
   if (!u) return res.status(404).json({ error: 'not found' });
+  u.avatar_url = u.has_avatar
+    ? `/api/users/${u.id}/avatar?v=${new Date(u.avatar_updated_at ?? 0).getTime()}`
+    : null;
   const isMe = u.id === req.user.id;
   const fs = isMe ? null : await friendshipState(req.user.id, u.id);
   // NOTE: `handle` is the user's Google email - it is deliberately NOT selected
