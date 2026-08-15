@@ -139,7 +139,14 @@ window.omRecStart = async function(){
       }, 140);
     } catch(e){}
     flh('onVoiceState', { state: 'listening' });
-  } catch(e){ flh('onAudio', { b64: '', error: 'mic: ' + String(e && (e.message || e)) }); }
+    flh('onRecStarted', { ok: true });
+  } catch(e){
+    // Reported on its own channel, not through onAudio. A start failure happens
+    // when nothing is waiting for audio yet - the Dart side only arms that
+    // completer in stopCapture - so routing it there dropped it on the floor
+    // and the sheet sat on "listening..." with a mic that was never open.
+    flh('onRecStarted', { ok: false, error: String(e && (e.message || e)) });
+  }
 };
 window.omRecStop = function(){ try { if (__rec && __rec.state !== 'inactive') __rec.stop(); } catch(e){} };
 window.omRecCancel = function(){

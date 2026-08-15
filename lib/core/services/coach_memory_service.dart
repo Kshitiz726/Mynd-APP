@@ -49,6 +49,17 @@ class CoachMemoryService {
     }
   }
 
+  /// Re-read from disk, dropping what is held in memory first.
+  ///
+  /// [init] appends, so calling it twice would merge one account's brain dumps
+  /// into another's. Used when the signed-in account changes underneath us and
+  /// this singleton - unlike the providers - is not rebuilt.
+  Future<void> reload() async {
+    _memorySummary = '';
+    _brainDumps.clear();
+    await init();
+  }
+
   // ─── Getters ──────────────────────────────────────────────────────────────
 
   String get memorySummary => _memorySummary;

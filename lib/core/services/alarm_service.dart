@@ -77,9 +77,13 @@ class AlarmService {
 
   Future<void> playLoop(String ringtoneName) async {
     await stop();
-    String path = 'audio/chime.mp3';
+    // These are .wav and they exist. They used to be 'audio/chime.mp3' and
+    // 'audio/beep.mp3', neither of which was ever in assets/audio - so the
+    // wake screen played nothing at all, and the failure went into the empty
+    // catch below where nobody could see it.
+    String path = 'audio/chime.wav';
     if (ringtoneName.toLowerCase() == 'beep') {
-      path = 'audio/beep.mp3';
+      path = 'audio/beep.wav';
     }
     
     _isPlaying = true;

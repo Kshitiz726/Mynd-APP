@@ -24,22 +24,45 @@ class NotificationService {
 
   final _plugin = FlutterLocalNotificationsPlugin();
 
-  /// Reminders and alarms get separate channels so they can be silenced
-  /// separately in system settings. Somebody who wants their 6:30 alarm loud
-  /// and their nudges quiet should not have to choose between them.
-  static const _reminderChannel = AndroidNotificationChannel(
-    'om_reminders',
-    'Reminders',
-    description: 'The things you asked to be reminded about.',
-    importance: Importance.high,
-  );
+  /// The tones the picker offers, lowercased to match `res/raw` file names.
+  ///
+  /// 'default' means the system notification sound and has no raw resource.
+  static const tones = <String>['Default', 'Chime', 'Beep'];
 
-  static const _alarmChannel = AndroidNotificationChannel(
-    'om_alarms',
-    'Alarms',
-    description: 'Alarms you set, at the time you set them.',
-    importance: Importance.max,
-  );
+  /// One channel per tone, because Android freezes a channel's sound when the
+  /// channel is created and ignores every later change to it. Editing the sound
+  /// of a single 'om_reminders' channel therefore did nothing at all - which is
+  /// why every tone in the picker sounded identical no matter what was chosen.
+  /// Switching tone now switches which channel the notification is posted to.
+  ///
+  /// The ids carry a v2 suffix: the original ids already exist on installed
+  /// devices with the default sound baked in, and a channel cannot be mutated
+  /// or meaningfully recreated under the same id once Android knows about it.
+  static String _channelId({required bool alarm, required String tone}) =>
+      '${alarm ? 'om_alarms' : 'om_reminders'}_v2_${tone.toLowerCase()}';
+
+  static String _channelName({required bool alarm, required String tone}) =>
+      alarm ? 'Alarms ($tone)' : 'Reminders ($tone)';
+
+  static AndroidNotificationChannel _channel(
+      {required bool alarm, required String tone}) {
+    final raw = tone.toLowerCase();
+    return AndroidNotificationChannel(
+      _channelId(alarm: alarm, tone: tone),
+      _channelName(alarm: alarm, tone: tone),
+      description: alarm
+          ? 'Alarms you set, at the time you set them.'
+          : 'The things you asked to be reminded about.',
+      importance: alarm ? Importance.max : Importance.high,
+      // 'Default' deliberately passes no sound, so the phone's own
+      // notification sound is used rather than one of ours.
+      sound: raw == 'default'
+          ? null
+          : RawResourceAndroidNotificationSound(raw),
+      playSound: true,
+      enableVibration: true,
+    );
+  }
 
   bool _ready = false;
 
@@ -65,8 +88,18 @@ class NotificationService {
 
     final android = _plugin.resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin>();
-    await android?.createNotificationChannel(_reminderChannel);
-    await android?.createNotificationChannel(_alarmChannel);
+    // All six up front. Creating a channel is idempotent and cheap, and it has
+    // to happen before anything is posted to it - a notification sent to an
+    // unknown channel is dropped by Android without a word.
+    for (final tone in tones) {
+      await android?.createNotificationChannel(_channel(alarm: false, tone: tone));
+      await android?.createNotificationChannel(_channel(alarm: true, tone: tone));
+    }
+    // The pre-v2 channels are stale now: their sound is baked in and nothing
+    // posts to them any more. Left behind they would sit in system settings as
+    // two dead entries the user can still toggle.
+    await android?.deleteNotificationChannel('om_reminders');
+    await android?.deleteNotificationChannel('om_alarms');
 
     _ready = true;
   }
@@ -150,25 +183,72 @@ class NotificationService {
 
   // ─── Scheduling ───────────────────────────────────────────────────────────
 
-  NotificationDetails _details({required bool alarm}) {
+  /// The tone the user picked, as persisted by SettingsProvider.
+  ///
+  /// Read here rather than passed down from the UI: scheduling happens from
+  /// providers and from the OS boot receiver, and neither has a BuildContext to
+  /// read settings from.
+  static const _kTone = 'om_selected_ringtone';
+
+  Future<String> _selectedTone() async {
+    final p = await SharedPreferences.getInstance();
+    final saved = p.getString(_kTone) ?? 'Default';
+    return tones.contains(saved) ? saved : 'Default';
+  }
+
+  Future<NotificationDetails> _details({required bool alarm}) async {
+    final tone = await _selectedTone();
+    final raw = tone.toLowerCase();
     return NotificationDetails(
       android: AndroidNotificationDetails(
-        alarm ? _alarmChannel.id : _reminderChannel.id,
-        alarm ? _alarmChannel.name : _reminderChannel.name,
+        _channelId(alarm: alarm, tone: tone),
+        _channelName(alarm: alarm, tone: tone),
         channelDescription: alarm
-            ? _alarmChannel.description
-            : _reminderChannel.description,
+            ? 'Alarms you set, at the time you set them.'
+            : 'The things you asked to be reminded about.',
+        // Repeated on the notification as well as the channel. The channel is
+        // what Android actually honours, but a mismatch here makes the two
+        // disagree in system settings.
+        sound: raw == 'default'
+            ? null
+            : RawResourceAndroidNotificationSound(raw),
         importance: alarm ? Importance.max : Importance.high,
         priority: alarm ? Priority.max : Priority.high,
         category: alarm
             ? AndroidNotificationCategory.alarm
             : AndroidNotificationCategory.reminder,
         fullScreenIntent: alarm,
+        // Show the whole thing on the lock screen. The default hides content
+        // behind "contents hidden", which is exactly the moment a reminder is
+        // most useful: phone face down, screen off, glance at it and see what
+        // it was without unlocking.
+        visibility: NotificationVisibility.public,
+        // Wake the display for it. Without this a reminder can land silently in
+        // the shade while the screen stays dark, which is indistinguishable
+        // from never arriving.
+        ticker: alarm ? 'alarm' : 'reminder',
+        enableLights: true,
+        ledColor: const Color(0xFF6C5CE7),
+        ledOnMs: 1000,
+        ledOffMs: 500,
         // Brand colour behind the monochrome glyph, so a reminder is
         // recognisably ours in a crowded shade.
         color: const Color(0xFF6C5CE7),
       ),
-      iOS: const DarwinNotificationDetails(),
+      // iOS gets the same treatment rather than the defaults: a banner with
+      // sound, and time-sensitive so it still breaks through a Focus mode the
+      // way a reminder is expected to. Critical alerts are deliberately not
+      // used - those need an Apple entitlement and are for safety alerts.
+      iOS: const DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+        // Time-sensitive for both: it breaks through Focus modes and shows on
+        // the lock screen, which is the Android behaviour above. Critical would
+        // also ignore the silent switch, but that needs an entitlement Apple
+        // grants for safety alerts, so it is not something to reach for here.
+        interruptionLevel: InterruptionLevel.timeSensitive,
+      ),
     );
   }
 
@@ -190,16 +270,28 @@ class NotificationService {
     var when = tz.TZDateTime.from(at, tz.local);
     final now = tz.TZDateTime.now(tz.local);
     if (!when.isAfter(now)) {
-      if (!daily) return;
+      if (!daily) {
+        // Logged rather than silent. Setting a one-off for a minute that has
+        // just gone looks identical to setting one that works, and then nothing
+        // ever arrives - which reads as broken notifications rather than as a
+        // time already past.
+        debugPrint('[notify] #$id at $when is already past, not scheduled');
+        return;
+      }
       when = when.add(const Duration(days: 1)); // same clock time, tomorrow
+      debugPrint('[notify] #$id today has passed, first fire is $when');
     }
+
+    // Resolved once, not per attempt: the ladder below can call put() three
+    // times, and re-reading prefs each time is pointless work.
+    final details = await _details(alarm: alarm);
 
     Future<void> put(AndroidScheduleMode mode) => _plugin.zonedSchedule(
           id,
           title,
           body,
           when,
-          _details(alarm: alarm),
+          details,
           androidScheduleMode: mode,
           // The wall-clock time in the user's own zone, which is what a
           // reminder means. Interpreting it as wall time would move it when
@@ -209,16 +301,83 @@ class NotificationService {
           matchDateTimeComponents: daily ? DateTimeComponents.time : null,
         );
 
+    // Ask whether exact alarms are actually permitted rather than waiting to be
+    // told by an exception - because we never are. Without the "alarms &
+    // reminders" grant the plugin does not refuse `exactAllowWhileIdle`, it
+    // silently downgrades it to an inexact alarm with a delivery window up to an
+    // hour wide. Every reminder therefore reported itself as "scheduled exact"
+    // in the log while the OS held it as inexact, and the alarmClock fallback
+    // below could never be reached.
+    final android = _plugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+    final canExact = await android?.canScheduleExactNotifications() ?? true;
+
+    // setAlarmClock() first, for everything.
+    //
+    // It is the one delivery mode Android will not batch, defer past Doze, or
+    // let an OEM battery manager sit on, because it is what the clock app uses,
+    // and it needs no exact-alarm permission. Measured on a ColorOS phone:
+    // `exactAllowWhileIdle` was accepted without complaint and the OS still
+    // held every alarm with `windowLength 3600000`, a full hour of slack, which
+    // is why reminders kept arriving late or seeming not to arrive at all. Only
+    // alarmClock produced a zero window there.
+    //
+    // The cost is the system's next-alarm indicator. For an app whose whole
+    // promise is that a reminder finds you, that is the right trade.
+    try {
+      await put(AndroidScheduleMode.alarmClock);
+      lastScheduleWasApproximate = false;
+      debugPrint('[notify] scheduled #$id via alarmClock for $when');
+      return;
+    } on PlatformException catch (e) {
+      debugPrint('[notify] alarmClock refused, falling back: $e '
+          '(canExact=$canExact)');
+    }
+
     try {
       await put(AndroidScheduleMode.exactAllowWhileIdle);
+      lastScheduleWasApproximate = false;
+      debugPrint('[notify] scheduled #$id exact for $when');
+      return;
     } on PlatformException catch (e) {
-      // Exact alarms can be refused: the user declined the permission, or the
-      // OEM is strict about them. A reminder a few minutes late beats no
-      // reminder, so fall back rather than losing it.
-      debugPrint('[notify] exact schedule refused, falling back: $e');
+      debugPrint('[notify] exact schedule refused: $e');
+    }
+
+    // Exact was refused - the user never granted "alarms & reminders", or the
+    // OEM is strict. Do NOT drop to inexact yet: Android gives those a window
+    // up to an hour wide, and a reminder that lands 40 minutes late reads as one
+    // that never came. setAlarmClock is refused far less often and needs no
+    // permission, so it is the better second choice even for a plain reminder.
+    try {
+      await put(AndroidScheduleMode.alarmClock);
+      lastScheduleWasApproximate = false;
+      debugPrint('[notify] scheduled #$id via alarmClock for $when');
+      return;
+    } on PlatformException catch (e) {
+      debugPrint('[notify] alarmClock refused too: $e');
+    }
+
+    // Last resort. Late beats never, but the user deserves to know their
+    // reminders are approximate rather than concluding the app is broken.
+    //
+    // Guarded because a throw here escapes schedule() and aborts the caller's
+    // whole loop: one reminder the OS dislikes would take every reminder after
+    // it down with it, which is how a single failure became "notifications do
+    // not work at all".
+    try {
       await put(AndroidScheduleMode.inexactAllowWhileIdle);
+      lastScheduleWasApproximate = true;
+      debugPrint('[notify] scheduled #$id INEXACT for $when - delivery may be '
+          'up to an hour late until exact alarms are allowed');
+    } catch (e) {
+      debugPrint('[notify] #$id could not be scheduled at all: $e');
     }
   }
+
+  /// True when the last schedule could only be placed inexactly, so reminders
+  /// may arrive up to an hour late. The reminders screen surfaces this: the
+  /// alternative is a user who thinks notifications are simply broken.
+  bool lastScheduleWasApproximate = false;
 
   /// Fire one right now. This is how the reminders screen can prove
   /// notifications work, which otherwise you only learn by waiting.
@@ -228,7 +387,7 @@ class NotificationService {
     required String body,
   }) async {
     await init();
-    await _plugin.show(id, title, body, _details(alarm: false));
+    await _plugin.show(id, title, body, await _details(alarm: false));
   }
 
   Future<void> cancel(int id) async {

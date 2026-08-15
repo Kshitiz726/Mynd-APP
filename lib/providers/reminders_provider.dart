@@ -175,7 +175,7 @@ class RemindersProvider extends ChangeNotifier {
         await _notify.schedule(
           id: r.notificationId,
           title: r.title,
-          body: r.note.isEmpty ? 'you asked me to remind you.' : r.note,
+          body: r.note.isEmpty ? 'time for this one.' : r.note,
           at: r.nextOccurrence(),
           daily: r.repeat == ReminderRepeat.daily,
         );

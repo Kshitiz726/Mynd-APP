@@ -343,7 +343,11 @@ class TaskProvider extends ChangeNotifier {
   /// reached it yet), packing un-done tasks - including goal-derived ones - into
   /// the remaining time before wind-down. Past blocks are left in the backlog,
   /// and any heavy task is broken into focus-sized chunks so it still fits.
-  void autoScheduleDay(
+  ///
+  /// Returns how many tasks were placed and how many would not fit inside the
+  /// waking day, so the caller can say so rather than leaving the user staring
+  /// at a backlog that did not move.
+  ({int placed, int noRoom}) autoScheduleDay(
     TimeOfDay wakeUp,
     TimeOfDay sleep,
     AlertsProvider alerts,
@@ -353,7 +357,7 @@ class TaskProvider extends ChangeNotifier {
     final now = DateTime.now();
     final target = day ?? now;
     // The past is a record - you can't plan a day that's already gone.
-    if (!canPlan(target)) return;
+    if (!canPlan(target)) return (placed: 0, noRoom: 0);
     final packingToday = _isSameDay(target, now);
     final floor = packingToday ? now : DateTime(target.year, target.month, target.day);
 
@@ -407,10 +411,28 @@ class TaskProvider extends ChangeNotifier {
         ? wakeTime.add(const Duration(minutes: 30))
         : _roundUpToFive(floor);
 
+    // Work stops when wind-down begins. Auto-Schedule used to pack from the
+    // cursor with no end at all, so pressing it at 11pm with a 10pm bedtime
+    // cheerfully booked the night: it read the sleep time only to decide
+    // whether to draw the bookend, never to stop laying blocks. A planner that
+    // schedules you through your own bedtime is worse than one that says there
+    // is no room.
+    var placed = 0;
+    var noRoom = 0;
     for (final t in items) {
       final dur = t.duration ??= const Duration(hours: 1);
+      if (cursor.add(dur).isAfter(windDown)) {
+        // Back to the backlog, same as an overflowing manual repack. Skipping
+        // rather than stopping, because a shorter task later in the list may
+        // still fit in what is left of the evening.
+        t.scheduled = false;
+        t.startTime = null;
+        noRoom++;
+        continue;
+      }
       t.startTime = cursor;
       t.scheduled = true;
+      placed++;
       alerts.addLocalReminder(AppNotification(
         id: 'rem-${t.id}', kind: 'reminder', read: false,
         payload: {'title': t.title, 'time': DateFormat.jm().format(cursor)},
@@ -431,6 +453,7 @@ class TaskProvider extends ChangeNotifier {
     }
 
     notifyListeners();
+    return (placed: placed, noRoom: noRoom);
   }
 
   /// Repack a manually reordered timeline. Available slots stay put - only the

@@ -41,6 +41,27 @@ class GoogleAuth {
     }
   }
 
+  /// Sign in, always letting the person choose which account.
+  ///
+  /// Not `signInSilently() ?? signIn()`. That reused whichever Google account
+  /// the device had already granted us, so "Continue with Google" never asked
+  /// anything: the first account to ever authorise the app became the only
+  /// account it could use. On a shared or handed-over phone that means the
+  /// second person is silently signed in as the first, and there is no way to
+  /// switch without uninstalling.
+  ///
+  /// Clearing the cached grant first is what makes the chooser appear, rather
+  /// than Google quietly re-picking the last account.
+  static Future<GoogleSignInAccount?> chooseAccount() async {
+    if (!supported) return null;
+    try {
+      await instance.signOut();
+    } catch (e) {
+      debugPrint('[google] pre-chooser sign-out failed: $e');
+    }
+    return instance.signIn();
+  }
+
   /// Drop the Google grant as well as our session, so signing out means signing
   /// out. Failing here is not worth blocking on: the app session is already
   /// gone by the time this runs.

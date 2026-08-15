@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  Lets a reminder through a Focus mode and onto the lock screen, which is
+	  the iOS equivalent of the Android channel's high importance plus public
+	  lockscreen visibility. Without it, DarwinNotificationDetails asking for
+	  InterruptionLevel.timeSensitive is quietly downgraded and reminders wait
+	  until the user next picks the phone up - the same "it never arrived"
+	  complaint the Android side had.
+
+	  This entitlement needs no Apple review. (Critical alerts, which also
+	  override the silent switch, do - they are not used here.)
+	-->
+	<key>com.apple.developer.usernotifications.time-sensitive</key>
+	<true/>
+</dict>
+</plist>

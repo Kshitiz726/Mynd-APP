@@ -2,7 +2,6 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 
 import '../../core/constants/legal.dart';
 import '../../core/routes/app_routes.dart';
@@ -41,8 +40,6 @@ class _LoginScreenState extends State<LoginScreen>
   static const _desktopClientId =
       String.fromEnvironment('GOOGLE_DESKTOP_CLIENT_ID');
 
-  GoogleSignIn get _googleSignIn => GoogleAuth.instance;
-
   bool get _googleNativeSupported => GoogleAuth.supported;
 
   @override
@@ -63,31 +60,18 @@ class _LoginScreenState extends State<LoginScreen>
       if (mounted) setState(() => _showAuth = true);
     });
 
-    _tryResume();
-  }
-
-  /// Land signed in, if we already know who this is.
-  ///
-  /// A saved session normally means the login screen is never built at all.
-  /// This covers the other route in: the session expired or was cleared, but
-  /// the device still has our Google grant, so there is nothing to ask. Signing
-  /// out drops that grant too, so leaving stays left.
-  Future<void> _tryResume() async {
-    final account = await GoogleAuth.silent();
-    if (account == null || !mounted) return;
-    try {
-      final idToken = (await account.authentication).idToken;
-      if (idToken == null) return;
-      await ApiClient.instance.authWithGoogleIdToken(idToken);
-      RealtimeService.instance.connect();
-      if (mounted) {
-        Navigator.of(context).pushReplacementNamed(AppRoutes.shell);
-      }
-    } catch (e) {
-      // Quietly. They can still press the button, and an error toast for
-      // something nobody asked for is just noise on a splash screen.
-      debugPrint('[login] silent resume failed: $e');
-    }
+    // Deliberately no silent auto-resume here.
+    //
+    // This screen used to call signInSilently() on build and, if the device had
+    // ever granted us a Google account, sign straight in and navigate away -
+    // without showing the login screen's buttons at all. On a fresh install
+    // that reads as "the app decided who I am": a second person on the same
+    // phone never saw "Continue with Google", they just landed inside somebody
+    // else's account. Reaching this screen means we have no session, and the
+    // right response to that is to ask, not to guess.
+    //
+    // A saved session still skips this screen entirely (see SessionStore in
+    // main()), so the common case is unchanged.
   }
 
   @override
@@ -122,13 +106,12 @@ class _LoginScreenState extends State<LoginScreen>
 
     try {
       if (_googleNativeSupported) {
-        // Silent first. If this device has already granted us an account, that
-        // is the answer, and "continue with Google" should just continue: no
-        // chooser, no consent sheet, no second decision they already made.
-        // Only a device we have never been authorised on falls through to the
-        // interactive flow.
-        final account = await _googleSignIn.signInSilently() ??
-            await _googleSignIn.signIn();
+        // Always ask which account. Trying silently first meant the first
+        // Google account to authorise this app became the only one it would
+        // ever use - handing the phone to someone else signed them in as you,
+        // and there was no way to switch. Pressing a button labelled "continue
+        // with Google" should let you say which Google.
+        final account = await GoogleAuth.chooseAccount();
         if (account == null) return; // they backed out of the chooser
 
         final auth = await account.authentication;

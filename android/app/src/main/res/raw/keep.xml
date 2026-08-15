@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Keeps the notification icon out of the release resource shrinker's jaws.
+
+  `ic_notification` is never named in XML or Kotlin - it is looked up by string
+  at runtime, by flutter_local_notifications, from the name we hand it in
+  NotificationService.init. The shrinker only sees static references, so in a
+  release build it concluded nothing used the drawable and deleted it, and the
+  plugin's initialize() then threw PlatformException(invalid_icon). That throw
+  was awaited before runApp, so the app never built its first frame: a release
+  APK sat on the Android launch window forever while the debug build, which
+  does no shrinking, was fine.
+
+  The notification tones are here for the same reason. They are named as
+  strings too - RawResourceAndroidNotificationSound('chime') - so the shrinker
+  dropped them just as silently, and the plugin then threw invalid_sound for
+  every single reminder, taking scheduling down with it.
+-->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/ic_notification,@raw/chime,@raw/beep" />

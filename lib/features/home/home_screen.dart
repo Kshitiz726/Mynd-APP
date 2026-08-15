@@ -5,6 +5,7 @@ import '../../providers/alerts_provider.dart';
 import '../../core/constants/app_spacing.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/om_icons.dart';
+import '../../core/utils/toast.dart';
 import '../../models/task.dart';
 import '../../providers/goal_provider.dart';
 import '../../providers/mood_provider.dart';
@@ -274,7 +275,7 @@ class SleepScheduleBarX extends StatelessWidget {
               // so planning a future day schedules that day's step rather than
               // today's.
               context.read<GoalProvider>().showDay(tasks.selectedDate);
-              tasks.autoScheduleDay(
+              final r = tasks.autoScheduleDay(
                 settings.wakeUpTime,
                 settings.sleepTime,
                 context.read<AlertsProvider>(),
@@ -282,6 +283,16 @@ class SleepScheduleBarX extends StatelessWidget {
                 // Plan the day being looked at, not always today.
                 day: tasks.selectedDate,
               );
+              // Nothing fitting before bedtime looks identical to a button that
+              // did not work, so say which it was.
+              if (r.noRoom > 0) {
+                Toast.show(
+                  context,
+                  r.placed == 0
+                      ? 'no room left before bed - try tomorrow'
+                      : '${r.noRoom} left over - past your bedtime',
+                );
+              }
             },
             feedback: OmTapFeedback.medium,
             pressedScale: 0.95,

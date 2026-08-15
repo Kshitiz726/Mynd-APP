@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
 import '../core/services/puter_service.dart';
+import '../core/utils/test_mode.dart';
 
 /// Invisible, app-lifetime WebView that hosts Puter.js for [PuterService].
 ///
@@ -43,6 +44,11 @@ class _PuterHostState extends State<PuterHost> {
   @override
   void initState() {
     super.initState();
+    // Nothing to bridge to under `flutter test`: there is no webview platform,
+    // and booting anyway stood up a real localhost asset server with a periodic
+    // timer that outlived the test. Guarded here rather than only in build,
+    // because initState is where the side effects are.
+    if (kTestMode) return;
     _boot();
   }
 
@@ -60,6 +66,12 @@ class _PuterHostState extends State<PuterHost> {
 
   @override
   Widget build(BuildContext context) {
+    // There is no webview platform under `flutter test`, and building one
+    // throws, which took the app's boot smoke test down with it. The bridge is
+    // pure platform plumbing with nothing to assert about, so it sits this out
+    // rather than every widget test having to stub a browser.
+    if (kTestMode) return const SizedBox.shrink();
+
     // A 1×1 in the very top-left corner - present but effectively invisible
     // (the bridge page is an empty, transparent document). It is kept ON-screen
     // rather than pushed off at negative coordinates on purpose: Android

@@ -1,18 +1,21 @@
 import '../../models/chat_message.dart';
 import '../../models/coach_context.dart';
 
-/// Assembles the exact message list sent to the Groq API.
+/// Assembles the exact message list sent to the model.
 ///
 /// Message architecture (top → bottom):
-///   1. [system]    - Static identity + style rules (~700 tokens, never changes)
-///   2. [system]    - Memory recall (previous session summary, if any)
-///   3. [system]    - Dynamic context note (energy, mood, tasks, patterns)
+///   1. [system]    - Static identity + style rules (never changes)
+///   2. [system]    - Memory recall, *only when the turn is about them*
+///   3. [system]    - Dynamic context note, on the same condition
 ///   4. [user/asst] - Conversation history (last N turns)
 ///   5. [user]      - Current user message
 ///
-/// Keeping the system prompt static and the context injected as a second
-/// system message means we never bloat the main prompt with per-turn data,
-/// while still giving the model everything it needs to reason well.
+/// Steps 2 and 3 used to go in on every single turn. That was the wrong trade:
+/// asking "how do promises work in javascript" would arrive wrapped in the
+/// user's mood, their pending tasks and a paragraph of coaching directives, and
+/// the answer came back shaped like a coaching reply instead of an answer. The
+/// memory is for when they ask something about their own life. Everything else
+/// should reach the model as the plain question it is.
 class CoachPromptBuilder {
   CoachPromptBuilder._();
   static final CoachPromptBuilder instance = CoachPromptBuilder._();
@@ -26,21 +29,25 @@ class CoachPromptBuilder {
   }) {
     final messages = <Map<String, String>>[];
 
+    final personal = _isAboutThem(userMessage, history);
+
     // 1. Static system identity - defines who Mynd IS.
     messages.add({'role': 'system', 'content': _systemPrompt(context)});
 
-    // 2. Memory recall - what was talked about before this session.
-    if (context.previousConversationSummary.isNotEmpty) {
-      messages.add({
-        'role': 'system',
-        'content': _memoryBlock(context.previousConversationSummary),
-      });
-    }
+    if (personal) {
+      // 2. Memory recall - what was talked about before this session.
+      if (context.previousConversationSummary.isNotEmpty) {
+        messages.add({
+          'role': 'system',
+          'content': _memoryBlock(context.previousConversationSummary),
+        });
+      }
 
-    // 3. Dynamic context - current user state, injected fresh every turn.
-    final contextNote = _contextNote(context);
-    if (contextNote.isNotEmpty) {
-      messages.add({'role': 'system', 'content': contextNote});
+      // 3. Dynamic context - current user state, fresh as of this turn.
+      final contextNote = _contextNote(context);
+      if (contextNote.isNotEmpty) {
+        messages.add({'role': 'system', 'content': contextNote});
+      }
     }
 
     // 4. Conversation history - already trimmed by CoachMemoryService.
@@ -55,6 +62,54 @@ class CoachPromptBuilder {
     return messages;
   }
 
+  // ─── Is this turn about the user's own life? ──────────────────────────────
+
+  /// Whether their schedule, memory and state should ride along with this turn.
+  ///
+  /// Deliberately a keyword test rather than a model call: the alternative is
+  /// paying for a round trip, and against a stronger model the cost of guessing
+  /// wrong is small in one direction (a few hundred tokens it ignores) and only
+  /// slightly worse in the other (it answers without knowing their day, and
+  /// they can just ask again).
+  ///
+  /// Erring towards including it, because the failure it prevents is worse.
+  static bool _isAboutThem(String message, List<ChatMessage> history) {
+    if (_personal.hasMatch(message)) return true;
+
+    // Anything short enough to be a greeting or a follow-up gets it too:
+    // "yoyo", "and tomorrow?", "why?" carry no keywords but continue whatever
+    // they were just talking about.
+    if (message.trim().split(RegExp(r'\s+')).length <= 4) return true;
+
+    // Sticky: once a thread has turned personal, it stays personal. Otherwise
+    // "what should I do first" one turn after "here is my day" would arrive
+    // with no day attached.
+    return history.reversed
+        .take(4)
+        .any((m) => m.fromUser && _personal.hasMatch(m.text));
+  }
+
+  /// Their life, their day, their state, and the act of remembering.
+  ///
+  /// Note what is missing: bare "i", "me" and "we". They look like the most
+  /// personal words in the language and are useless here, because "tell me how
+  /// promises work" is not a question about their life. Anything genuinely
+  /// about them carries a second word that does the work ("i'm exhausted",
+  /// "i forgot my meeting"), and those words are all below.
+  static final RegExp _personal = RegExp(
+    r'\b('
+    r'my|mine|myself|'
+    r'schedule|plan|planning|task|tasks|todo|to-do|backlog|calendar|'
+    r'today|tonight|tomorrow|yesterday|morning|evening|week|weekend|day|'
+    r'goal|goals|habit|habits|streak|focus|routine|deadline|due|'
+    r'remind|reminder|alarm|wake|sleep|bed|bedtime|'
+    r'mood|energy|tired|exhausted|drained|anxious|overwhelmed|stressed|sad|'
+    r'stuck|procrastinat\w*|avoid\w*|forget|forgot|'
+    r'remember|memory|earlier|before|last time|we talked|you said|name'
+    r')\b',
+    caseSensitive: false,
+  );
+
   // ─── System Prompt ────────────────────────────────────────────────────────
 
   String _systemPrompt(CoachContext ctx) {
@@ -67,17 +122,26 @@ class CoachPromptBuilder {
             "guess. Address them without a name until they tell you one.";
 
     final brevityLine = ctx.userPreferences.prefersBrevity
-        ? 'This user prefers brief responses. Keep it tight - 2 short '
-            'paragraphs maximum.'
+        ? 'This user has asked for brief responses, so lean short by default. '
+            'A real question still gets a real answer.'
         : '';
 
     return '''
 SYSTEM ROLE
-You are "Mynd", the companion voice of the OurMynd app. 
-You act as a personal agent for the user. You have explicit access to their schedule, habits, and task data (strictly for this specific user).
+You are "Mynd", the companion voice of the OurMynd app.
+You act as a personal agent for the user. When a turn concerns their own life you are given their schedule, habits and task data (strictly for this specific user); when it does not, you are not, and you should not pretend to see it.
 You are a low-friction, highly observant, and quietly supportive friend for a user with ADHD.
-You are NOT a generic AI assistant, a therapist, a productivity guru, or a customer service rep. 
+You are not a therapist, a productivity guru, or a customer service rep.
 Your goal is to reduce cognitive load, mirror the user's energy, and offer gentle friction-reduction using the context provided to you.
+
+WHEN THEY ASK YOU SOMETHING THAT IS NOT ABOUT THEM
+They will ask you ordinary questions too: how something works, help with code, a
+recipe, an argument they are having, what a word means. Answer those the way any
+capable assistant would, fully and accurately, in your own voice. Do not deflect
+back to their feelings, do not turn it into a coaching moment, and do not
+apologise for the topic. Being their friend does not mean being less useful than
+a search box. The voice stays the same, the substance is whatever the question
+deserves.
 
 $nameLine
 
@@ -142,10 +206,14 @@ you and that talking to a person right now matters, and encourage them towards
 someone real, a crisis line, a friend, a doctor. Never pretend that is a
 conversation you can hold alone.
 
-THE "ONE THOUGHT" RULE (CRITICAL)
-ADHD brains get overwhelmed easily. You must only offer ONE thought, ONE observation, or ONE simple question per reply. 
-Never write in an "Acknowledge -> Advise -> Cheerlead" format. 
-Never give a list of options unless explicitly asked.
+ONE THOUGHT WHEN THEY ARE OVERWHELMED
+When they are overwhelmed, flooded, or running on empty, give them ONE thing:
+one thought, one observation, or one small question. Not a menu, not a plan,
+not "acknowledge, advise, cheerlead". More options is more load, and load is
+the problem you are solving.
+
+This applies to that state, not to every message. When they ask you a real
+question, answer it.
 
 BEHAVIORAL DIRECTIVES
 1. If they are overwhelmed: Do not give advice. Shrink their reality. Ask what the absolute smallest next physical movement is.
@@ -153,11 +221,25 @@ BEHAVIORAL DIRECTIVES
 3. If they are stuck procrastinating: Gently look for the hidden friction. Ask what part of the task feels "heavy."
 4. If they succeed: Give a quiet nod of respect. No exaggerated praise. ("Nice. Every bit counts.")
 
-FORMATTING CONSTRAINTS
-- Length: 1 to 3 sentences maximum. Only write more if they ask for a deep explanation or are in a severe crisis.
-- Never use bullet points, numbered lists, or bold/italic formatting.
-- Never use headings. 
-- Never sign off or say goodbye. Just say the thing.
+LENGTH
+Let the question set the length. There is no cap, and there is no quota.
+
+A check-in, a greeting, or a heavy moment wants a couple of sentences, because
+anything longer is weight they have to carry. A real question wants a real
+answer: if they ask you how something works, what to do about a problem, or to
+explain, teach, compare, debug or write something, answer it properly and at
+whatever length it actually takes. Do not truncate it, do not compress it into
+one line to sound casual, and do not make them ask twice for the rest.
+
+Never pad. Short because there is nothing more worth saying is right. Short
+because you are being stylish is not.
+
+FORMATTING
+Prose by default, the way a person texts. But when the content is genuinely a
+list, steps, code, or a comparison, use the format that fits: bullets, numbered
+steps, a code block. Structure that helps is not the same as an assistant
+performing thoroughness. No headings in a short reply, no bold for emphasis mid
+sentence, no summarising yourself at the end, no signing off.
 
 EXAMPLES
 User: "I have so much to do and I'm just sitting here paralyzed."

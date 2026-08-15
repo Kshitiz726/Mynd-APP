@@ -251,7 +251,8 @@ Respond ONLY with a valid JSON array of objects. Do not wrap it in markdown. For
                 if (!ok) {
                   setState(() => recording = false);
                   if (context.mounted) {
-                    Toast.show(context, 'Microphone unavailable');
+                    Toast.show(
+                        context, stt.lastError ?? 'Microphone unavailable');
                   }
                 }
               }

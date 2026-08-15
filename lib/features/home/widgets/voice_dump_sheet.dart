@@ -78,7 +78,11 @@ class _VoiceDumpSheetState extends State<VoiceDumpSheet> {
     if (!ok && mounted) {
       setState(() {
         _phase = _Vp.error;
-        _error = 'Microphone unavailable, check the app permissions.';
+        // The service's own words: whether the grant is missing, permanently
+        // refused, or the recorder failed to open are three different problems,
+        // and telling the user "check the app permissions" for all three sent
+        // them to a settings screen that was often already correct.
+        _error = _stt.lastError ?? 'Microphone unavailable.';
       });
       return;
     }
@@ -216,8 +220,17 @@ class _VoiceDumpSheetState extends State<VoiceDumpSheet> {
       case _Vp.listening:
         return _button(c, icon: 'check', label: 'done', onTap: _stopAndProcess);
       case _Vp.empty:
-      case _Vp.error:
         return _button(c, icon: 'mic', label: 'try again', onTap: _start);
+      case _Vp.error:
+        // "Try again" is a dead end once the user has permanently refused the
+        // mic - the system dialog will not come back, so tapping it just fails
+        // again. Send them where the switch actually is.
+        return _stt.micBlockedInSettings
+            ? _button(c,
+                icon: 'settings',
+                label: 'open settings',
+                onTap: _stt.openMicSettings)
+            : _button(c, icon: 'mic', label: 'try again', onTap: _start);
       case _Vp.processing:
         return const SizedBox(
           height: 24,

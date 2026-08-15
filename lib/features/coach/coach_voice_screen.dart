@@ -139,7 +139,7 @@ class _CoachVoiceScreenState extends State<CoachVoiceScreen>
       _active = false;
       setState(() {
         _phase = _Phase.idle;
-        _status = 'Microphone unavailable, check the app permissions.';
+        _status = _stt.lastError ?? 'Microphone unavailable.';
       });
     }
   }

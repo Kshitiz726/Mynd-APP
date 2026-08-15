@@ -71,6 +71,7 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _run() async {
+    debugPrint('[splash] start, next=${widget.next} bootAt=${widget.bootAt}');
     _moving = !context.read<SettingsProvider>().reduceMotion;
 
     // Whatever is left of the budget after boot. There is nothing to preload -
@@ -79,20 +80,24 @@ class _SplashScreenState extends State<SplashScreen> {
     // this is purely about how long the entrance should last.
     final spent = DateTime.now().difference(widget.bootAt);
     final left = _total - spent;
+    debugPrint('[splash] spent=${spent.inMilliseconds}ms '
+        'waiting=${(left < _floor ? _floor : left).inMilliseconds}ms');
     await Future<void>.delayed(left < _floor ? _floor : left);
     if (!mounted) return;
 
+    debugPrint('[splash] fading out');
     setState(() => _leaving = true);
     await Future<void>.delayed(_fadeOut);
     if (!mounted) return;
+    debugPrint('[splash] handing over to ${widget.next}');
     // Built straight from the router rather than pushed by name.
     //
-    // Not a style choice: this screen is MaterialApp's `home`, and WidgetsApp
-    // registers `home` in its route table under '/'. AppRoutes.shell *is* '/',
-    // so pushReplacementNamed(shell) resolved back to this screen - which
-    // started another timer and pushed '/' again, forever, spawning a video
-    // decoder each time round. Handing the router the settings directly skips
-    // the table and lands on the screen we actually meant.
+    // This used to be load-bearing: the shell was named '/', which is also
+    // where WidgetsApp registers `home` - this screen - so pushing the shell by
+    // name landed back here and looped forever. The shell now has a name of its
+    // own (see AppRoutes.shell), so the name would resolve correctly today.
+    // Kept because it is still the more direct thing to do, and because it does
+    // not depend on the route table agreeing with us.
     Navigator.of(context).pushReplacement(
       AppRouter.onGenerateRoute(RouteSettings(name: widget.next)),
     );

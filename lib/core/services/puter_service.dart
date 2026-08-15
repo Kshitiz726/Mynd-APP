@@ -8,12 +8,17 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Default Puter chat model. Puter exposes 400+ models; swap freely.
-const String kPuterChatModel = 'gpt-5.4-nano';
+///
+/// Was `gpt-5.4-nano`, which is where a lot of the coach's "dumbness" actually
+/// came from: nano is a speed tier, and it shows the moment a reply needs to
+/// hold their context and a real answer at the same time. The full model is a
+/// little slower to first token and worth it, since every reply streams.
+const String kPuterChatModel = 'openai/gpt-5.5';
 
 /// The model picker shown in the coach (mirrors index.html's catalog).
 const List<({String id, String label})> kPuterModels = [
-  (id: 'gpt-5.4-nano', label: 'GPT-5.4 Nano (fast)'),
   (id: 'openai/gpt-5.5', label: 'GPT-5.5 (OpenAI)'),
+  (id: 'gpt-5.4-nano', label: 'GPT-5.4 Nano (fast)'),
   (id: 'gpt-5.4', label: 'GPT-5.4'),
   (id: 'anthropic/claude-opus-4-8', label: 'Claude Opus 4.8'),
   (id: 'google/gemini-3.5-flash', label: 'Gemini 3.5 Flash'),
@@ -133,6 +138,11 @@ class PuterService {
   // Mic capture: the bridge records audio and hands the base64 clip back here;
   // Dart transcribes it with Groq Whisper. A live loudness stream drives the orb.
   Completer<String>? _audioCap;
+
+  /// Resolves with null when the mic opened, or the browser's reason when it did
+  /// not. Separate from [_audioCap] because a start failure arrives when no
+  /// audio is pending.
+  Completer<String?>? _recStart;
   final _levelCtrl = StreamController<double>.broadcast();
   Stream<double> get voiceLevel => _levelCtrl.stream;
 
@@ -213,8 +223,20 @@ class PuterService {
           handlerName: 'onAudio',
           callback: (args) {
             final d = args.first as Map;
+            final err = d['error'];
+            if (err != null) debugPrint('[voice] recorder error: $err');
             _audioCap?.complete((d['b64'] ?? '') as String);
             _audioCap = null;
+          })
+      ..addJavaScriptHandler(
+          handlerName: 'onRecStarted',
+          callback: (args) {
+            final d = args.first as Map;
+            final ok = d['ok'] == true;
+            if (!ok) debugPrint('[voice] mic open failed: ${d['error']}');
+            if (_recStart?.isCompleted == false) {
+              _recStart!.complete(ok ? null : '${d['error']}');
+            }
           })
       ..addJavaScriptHandler(
           handlerName: 'onVoiceLevel',
@@ -389,7 +411,23 @@ class PuterService {
 
   /// Start capturing the mic in the bridge WebView (a secure localhost context
   /// where getUserMedia works). Loudness arrives on [voiceLevel] meanwhile.
-  Future<void> startCapture() => _eval('window.omRecStart();');
+  ///
+  /// Waits for the recorder to confirm the mic actually opened, and throws with
+  /// the browser's reason if it did not. Firing the JS and returning was the
+  /// bug behind "it never listens": `_eval` succeeds as long as the script runs,
+  /// so a refused getUserMedia still looked like a successful start, and the
+  /// only symptom was an empty transcript a minute later.
+  Future<void> startCapture() async {
+    _recStart = Completer<String?>();
+    final fut = _recStart!.future;
+    await _eval('window.omRecStart();');
+    final err = await fut.timeout(
+      const Duration(seconds: 10),
+      onTimeout: () => 'the recorder did not respond',
+    );
+    _recStart = null;
+    if (err != null) throw StateError(err);
+  }
 
   /// Stop capturing and resolve with the recorded audio bytes (empty on
   /// failure). The caller sends these to Groq Whisper to get text.

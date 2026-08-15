@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'core/routes/app_router.dart';
 import 'core/routes/app_routes.dart';
+import 'core/services/account_scope.dart';
 import 'core/services/api_client.dart';
 import 'core/services/api_config.dart';
 import 'core/services/alarm_service.dart';
@@ -62,26 +65,95 @@ void main() async {
 
   // Coach memory (parked thoughts + rolling summary) is app-wide; load it once
   // up front so parking a thought outside the coach screen merges, not clobbers.
-  await CoachMemoryService.instance.init();
+  await _bootStep('coach memory', CoachMemoryService.instance.init);
 
   // Auto-login: if a session was saved, restore it and reconnect realtime so we
   // land straight in the shell. Otherwise start at the login screen.
-  final hasSession = await SessionStore.restore();
+  //
+  // A failure here is the one that costs the user something real - it drops
+  // them at the login screen holding a session they never signed out of - so it
+  // falls back to false explicitly rather than by accident.
+  final hasSession =
+      await _bootStep('session restore', SessionStore.restore) ?? false;
   // Demo mode has no session to authenticate the socket with, and an
   // unreachable server would just retry-storm in the background.
   if (hasSession && !kDemoMode) {
-    RealtimeService.instance.connect();
+    await _bootStep('realtime', RealtimeService.instance.connect);
   }
 
-  AlarmService.instance.init();
+  await _bootStep('alarms', AlarmService.instance.init);
   // Channels and the timezone database, up front. The permission itself is
   // asked for on the first screen instead, where there is room to say why.
-  await NotificationService.instance.init();
+  await _bootStep('notifications', NotificationService.instance.init);
+
+  // When the server stops accepting our token, go back to login instead of
+  // sitting in a signed-in-looking app where every request fails. This is not
+  // hypothetical: moving the backend from the laptop to the hosted server left
+  // every device holding a token signed with the old secret, and the app kept
+  // pretending it was logged in while nothing worked.
+  ApiClient.onSessionExpired = () {
+    final nav = rootNavigatorKey.currentState;
+    if (nav == null) return;
+    nav.pushNamedAndRemoveUntil(AppRoutes.login, (_) => false);
+  };
+
+  // A different account just signed in on this device. Its own local data is
+  // already in place and the previous account's is parked (see AccountScope);
+  // this throws away everything still holding the previous user's data in
+  // memory and starts the app over for the new one.
+  //
+  // Rebuilding from the root rather than resetting each provider by hand is
+  // deliberate: there are a dozen of them, they load in their constructors, and
+  // a reset method that someone forgets to add to provider thirteen brings the
+  // whole bug back. Anything that survives this - notification channels, the
+  // timezone database - is device state, not personal.
+  AccountScope.onSwitched = () {
+    // The socket is still authenticated as the previous user, and connect() is
+    // a no-op while one exists. Drop it so the new session opens its own.
+    RealtimeService.instance.dispose();
+    runApp(OurMyndApp(
+      initialRoute: AppRoutes.shell,
+      bootAt: DateTime.now(),
+    ));
+  };
 
   runApp(OurMyndApp(
     initialRoute: (hasSession || kDemoMode) ? AppRoutes.shell : AppRoutes.login,
     bootAt: bootAt,
   ));
+}
+
+/// Run one piece of pre-`runApp` setup, and let the app start even if it fails.
+///
+/// The rule this enforces is that *nothing* before `runApp` may take the app
+/// down. Awaiting a step bare meant any throw escaped `main()` before the first
+/// frame, so no widget tree was ever built and the app sat on the Android
+/// launch window with no error on screen and no way out. That is exactly what
+/// happened on a release build: the resource shrinker had stripped the
+/// notification icon (see android/app/src/main/res/raw/keep.xml), the plugin
+/// threw `invalid_icon`, and a missing status-bar glyph presented as a dead
+/// app.
+///
+/// Every step goes through here rather than only the ones that have failed so
+/// far - a guard that covers the symptom you already found is not a guard. Each
+/// keeps its own try/catch instead of one block around the whole sequence,
+/// because a single catch would let an early failure skip every later step: a
+/// bad coach-memory decode would silently cost the user their session.
+///
+/// Takes [FutureOr] so the synchronous steps are covered too - those throw on
+/// `main()`'s own stack, which is the same dead launch window, not a lesser
+/// case. Returns null on failure, so a step with a result can name its own
+/// fallback at the call site.
+///
+/// The failure is still printed, so it stays diagnosable in `flutter run` and
+/// `adb logcat` rather than being swallowed.
+Future<T?> _bootStep<T>(String what, FutureOr<T> Function() run) async {
+  try {
+    return await run();
+  } catch (e, st) {
+    debugPrint('[boot] $what failed, continuing without it: $e\n$st');
+    return null;
+  }
 }
 
 class OurMyndApp extends StatelessWidget {
@@ -100,7 +172,7 @@ class OurMyndApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => SettingsProvider()),
+        ChangeNotifierProvider(create: (_) => SettingsProvider()..loadRingtone()),
         // Subscription entitlement (Stripe). Gates premium-only features and
         // drives the paywall checkout. Refreshed after sign-in / on the paywall.
         ChangeNotifierProvider(create: (_) => PremiumProvider()..refresh()),
@@ -144,6 +216,17 @@ class OurMyndApp extends StatelessWidget {
         // timed blocks so a block you move takes its nudge with it.
         ChangeNotifierProxyProvider2<TaskProvider, GoalProvider,
             RemindersProvider>(
+          // Built at startup rather than on first read.
+          //
+          // Lazily, this provider only came into existence when something
+          // looked at it - in practice, when the user opened the reminders
+          // screen. Its constructor is what re-arms every pending reminder with
+          // the OS, so until then nothing was re-scheduled: an app update, a
+          // reboot, or the system dropping alarms left reminders silently dead
+          // until you happened to visit that one screen. A reminder you set
+          // last week has to survive without you ever opening the app again,
+          // which means the re-arm cannot wait to be asked for.
+          lazy: false,
           create: (_) => RemindersProvider(),
           update: (_, tasks, goals, previous) => (previous ??
               RemindersProvider())

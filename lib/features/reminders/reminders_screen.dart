@@ -79,55 +79,9 @@ class _RemindersScreenState extends State<RemindersScreen> {
             const SizedBox(height: AppSpacing.md),
             if (_notificationsOn == false)
               _PermissionCard(onEnable: _enableNotifications),
-            Row(
-              children: [
-                Icon(Icons.music_note_rounded,
-                    size: 16, color: Theme.of(context).colorScheme.primary),
-                const SizedBox(width: 8),
-                Text('Alarm Tone',
-                    style: Theme.of(context).textTheme.titleSmall),
-                const Spacer(),
-                DropdownButton<String>(
-                  value: settings.selectedRingtone,
-                  underline: const SizedBox.shrink(),
-                  items: ['Default', 'Chime', 'Beep']
-                      .map((t) => DropdownMenuItem(
-                          value: t,
-                          child: Text(t,
-                              style: Theme.of(context).textTheme.bodySmall)))
-                      .toList(),
-                  onChanged: (val) {
-                    if (val != null) settings.setRingtone(val);
-                  },
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            // Whether notifications actually work on a given phone is not
-            // something anyone should have to discover by missing one.
-            OmTappable(
-              onTap: () async {
-                Haptics.light();
-                await NotificationService.instance.showNow(
-                  id: 424242,
-                  title: 'this is what a reminder looks like',
-                  body: 'if you can see this, they are working.',
-                );
-                if (context.mounted) Toast.show(context, 'sent one just now.');
-              },
-              feedback: OmTapFeedback.none,
-              pressedScale: 0.98,
-              child: Row(
-                children: [
-                  Icon(OmIcons.byName('alarm'),
-                      size: 15, color: context.omColors.primary),
-                  const SizedBox(width: 8),
-                  Text('send a test notification',
-                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: context.omColors.primary,
-                          fontWeight: FontWeight.w700)),
-                ],
-              ),
+            _ToneRow(
+              value: settings.selectedRingtone,
+              onPick: settings.setRingtone,
             ),
             const SizedBox(height: AppSpacing.lg),
             if (reminders.reminders.isEmpty && tasks.isEmpty)
@@ -609,6 +563,177 @@ class _AddButton extends StatelessWidget {
                     ?.copyWith(fontSize: 16, fontWeight: FontWeight.w700)),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// The alarm tone, as a settings row rather than a bare dropdown.
+///
+/// It was an `Icons.music_note_rounded` next to a Material `DropdownButton`,
+/// which is the one control on this screen that looked like a stock Android
+/// form: grey underline gone but still a popup menu, and the current value in
+/// small print. This reads the way the rest of the app does - a card row you
+/// tap, the current choice on the right, and a sheet with the options laid out
+/// and a tick against the active one.
+class _ToneRow extends StatelessWidget {
+  const _ToneRow({required this.value, required this.onPick});
+
+  final String value;
+  final ValueChanged<String> onPick;
+
+  static const _tones = <String, String>{
+    'Default': 'the system notification sound',
+    'Chime': 'soft, two notes',
+    'Beep': 'short and flat, hard to miss',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.omColors;
+    return OmTappable(
+      pressedScale: 0.98,
+      onTap: () {
+        Haptics.light();
+        showModalBottomSheet<void>(
+          context: context,
+          backgroundColor: Colors.transparent,
+          builder: (_) => _TonePicker(value: value, onPick: onPick),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: c.surface,
+          borderRadius: BorderRadius.circular(AppRadius.card),
+          border: Border.all(color: c.border),
+        ),
+        child: Row(
+          children: [
+            Icon(OmIcons.byName('bell'), size: 18, color: c.primary),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('alarm tone',
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleSmall
+                          ?.copyWith(fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 2),
+                  Text(_tones[value] ?? '',
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(color: c.text2)),
+                ],
+              ),
+            ),
+            Text(value,
+                style: Theme.of(context)
+                    .textTheme
+                    .labelLarge
+                    ?.copyWith(color: c.text2, fontWeight: FontWeight.w600)),
+            const SizedBox(width: 4),
+            Icon(OmIcons.byName('chevR'), size: 18, color: c.text2),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TonePicker extends StatelessWidget {
+  const _TonePicker({required this.value, required this.onPick});
+
+  final String value;
+  final ValueChanged<String> onPick;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.omColors;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.xl, AppSpacing.lg, AppSpacing.xl, AppSpacing.xl),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: AppSpacing.lg),
+              decoration: BoxDecoration(
+                color: c.text2.withValues(alpha: 0.25),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          Text('alarm tone',
+              style: Theme.of(context)
+                  .textTheme
+                  .titleLarge
+                  ?.copyWith(fontWeight: FontWeight.w800)),
+          const SizedBox(height: 4),
+          Text('what a reminder sounds like when it arrives.',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodyMedium
+                  ?.copyWith(color: c.text2)),
+          const SizedBox(height: AppSpacing.lg),
+          for (final entry in _ToneRow._tones.entries)
+            OmTappable(
+              pressedScale: 0.98,
+              onTap: () {
+                Haptics.light();
+                onPick(entry.key);
+                Navigator.of(context).maybePop();
+              },
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                decoration: BoxDecoration(
+                  color: entry.key == value
+                      ? c.primary.withValues(alpha: 0.10)
+                      : c.bg,
+                  borderRadius: BorderRadius.circular(AppRadius.card),
+                  border: Border.all(
+                      color: entry.key == value ? c.primary : c.border),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(entry.key,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleSmall
+                                  ?.copyWith(fontWeight: FontWeight.w700)),
+                          const SizedBox(height: 2),
+                          Text(entry.value,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(color: c.text2)),
+                        ],
+                      ),
+                    ),
+                    if (entry.key == value)
+                      Icon(OmIcons.byName('check'), size: 20, color: c.primary),
+                  ],
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

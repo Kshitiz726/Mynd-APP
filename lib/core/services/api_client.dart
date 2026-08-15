@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
+import 'account_scope.dart';
 import 'api_config.dart';
 import 'session_store.dart';
 import '../../models/community/post.dart';
@@ -41,8 +42,34 @@ class ApiClient {
     return _decode(res);
   }
 
+  /// Called once when the server rejects our session, so the app can send the
+  /// user back to the login screen. Set in main().
+  static void Function()? onSessionExpired;
+
+  /// Guards against a burst of 401s (every provider refreshing at once) tearing
+  /// the session down repeatedly and firing the callback for each one.
+  bool _expiring = false;
+
   Map<String, dynamic> _decode(http.Response res) {
     if (res.statusCode >= 400) {
+      // A 401 means this token is no longer anything the server accepts:
+      // expired, signed out elsewhere, or - the case that actually bit us -
+      // minted by a DIFFERENT backend. Pointing the app at the hosted server
+      // left every device holding a token signed with the old local secret, so
+      // every request failed while the app still believed it was signed in.
+      // Nothing sent the user back to login, so it just looked like the
+      // features were broken: matchmaking, feed and chat all failing with
+      // vague "couldn't do that" toasts and no way to recover short of
+      // reinstalling.
+      if (res.statusCode == 401 && !_expiring) {
+        _expiring = true;
+        // Fire and forget: callers are mid-request and should still get their
+        // exception, they just should not also be left signed in.
+        signOut().whenComplete(() {
+          _expiring = false;
+          onSessionExpired?.call();
+        });
+      }
       throw ApiException('${res.statusCode}: ${res.body}', res.statusCode);
     }
     if (res.body.isEmpty) return {};
@@ -54,7 +81,7 @@ class ApiClient {
   /// and exchanges for our own session JWT + the (created-or-existing) user.
   Future<void> authWithGoogleIdToken(String idToken) async {
     final j = await _post('/api/auth/google', {'idToken': idToken});
-    _applyUser(j);
+    await _applyUser(j);
   }
 
   /// Desktop (Windows/Linux) real Google OAuth: hands the backend the auth code
@@ -70,24 +97,38 @@ class ApiClient {
       'codeVerifier': codeVerifier,
       'redirectUri': redirectUri,
     });
-    _applyUser(j);
+    await _applyUser(j);
   }
 
   Future<void> authWithGoogle({required String handle, required String displayName}) async {
     final j = await _post('/api/auth/google-mock', {'handle': handle, 'displayName': displayName});
-    _applyUser(j);
+    await _applyUser(j);
   }
 
-  void _applyUser(Map<String, dynamic> j) {
+  Future<void> _applyUser(Map<String, dynamic> j) async {
     final user = j['user'] as Map<String, dynamic>;
+    final userId = user['id'] as String;
+
+    // Before this account can see anything, make the local data on this device
+    // its own: park whoever had it, hand back this account's if it has been
+    // here before. Runs first so the swap can never touch the session we are
+    // about to write. See AccountScope.
+    final switched = await AccountScope.adopt(userId);
+
     _cfg
       ..authToken = j['token'] as String
-      ..userId = user['id'] as String
+      ..userId = userId
       ..displayName = user['display_name'] as String?
       ..handle = user['handle'] as String?;
     // Persist so the next launch (or "continue with Google" again) restores the
     // whole account without re-authing.
-    SessionStore.save();
+    await SessionStore.save();
+
+    // Swapping the keys is only half of it: the providers built at launch are
+    // still holding the previous user's tasks and goals in memory, and would
+    // write them straight back over the new account's. Rebuild the app once
+    // the new session is in place, so everything reloads from disk.
+    if (switched) AccountScope.onSwitched?.call();
   }
 
   /// Clear the in-memory + on-disk session. Used by sign out.

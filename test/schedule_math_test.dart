@@ -120,6 +120,32 @@ void main() {
     }
   });
 
+  test('auto-schedule never books past wind-down, and says what did not fit', () {
+    // Far more than the 8:30-21:30 working window can hold.
+    tasks.addTasks([make('a', 300), make('b', 300), make('c', 300)]);
+
+    final r = tasks.autoScheduleDay(wake, sleep, alerts, 'Default', day: tomorrow);
+
+    final windDown = DateTime(tomorrow.year, tomorrow.month, tomorrow.day, 21, 30);
+    for (final t in tasks.scheduleOn(tomorrow).where((t) => !t.isAnchor)) {
+      expect(t.endTime!.isAfter(windDown), isFalse,
+          reason: '${t.title} runs into wind-down');
+    }
+    expect(r.placed, 2, reason: 'two 5h blocks fit between 8:30 and 21:30');
+    expect(r.noRoom, 1, reason: 'the third should be reported, not squeezed in');
+  });
+
+  test('what does not fit goes back to the backlog rather than the night', () {
+    final big = make('big', 900); // 15h - longer than any waking day
+    tasks.addTasks([big]);
+
+    final r = tasks.autoScheduleDay(wake, sleep, alerts, 'Default', day: tomorrow);
+
+    expect(big.scheduled, isFalse);
+    expect(big.startTime, isNull);
+    expect(r, (placed: 0, noRoom: 1));
+  });
+
   // ── The ripple: moving a block re-flows the day instead of being refused ──
 
   /// Three touching hour-long blocks, 9:00, 10:00, 11:00, on a free day.
