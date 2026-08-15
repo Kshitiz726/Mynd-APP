@@ -78,6 +78,8 @@ abstract final class OmIcons {
     'userPlus': LucideIcons.userPlus,
     'userCheck': LucideIcons.userCheck,
     'image': LucideIcons.image,
+    'camera': LucideIcons.camera,
+    'pencil': LucideIcons.pencil,
     'paperclip': LucideIcons.paperclip,
     'file': LucideIcons.file,
     'download': LucideIcons.download,

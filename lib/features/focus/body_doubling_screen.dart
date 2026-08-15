@@ -12,6 +12,7 @@ import '../../core/utils/om_icons.dart';
 import '../../widgets/om_back_button.dart';
 import '../../core/utils/toast.dart';
 import '../../models/focus/body_double.dart';
+import '../community/user_profile_sheet.dart';
 import '../../models/focus_mode.dart';
 import '../../providers/focus_provider.dart';
 import '../../providers/focus_room_provider.dart';
@@ -312,8 +313,20 @@ class _BodyDoublingScreenState extends State<BodyDoublingScreen> {
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
                 color: c.primary, fontWeight: FontWeight.w800, letterSpacing: 1.5)),
         const SizedBox(height: AppSpacing.xl),
+        // Tapping the person opens who they are. You are about to sit with
+        // them for an hour, so "who is this" should not be a dead end.
         if (p != null)
-          OmAvatar(userId: p.id, fallbackInitial: p.initial, fallbackColor: _hex(p.color, c.primary), size: 96),
+          OmTappable(
+            onTap: () => UserProfileSheet.show(context, p.id, fallbackName: p.name),
+            feedback: OmTapFeedback.light,
+            pressedScale: 0.96,
+            child: OmAvatar(
+              userId: p.id,
+              fallbackInitial: p.initial,
+              fallbackColor: _hex(p.color, c.primary),
+              size: 96,
+            ),
+          ),
         const SizedBox(height: AppSpacing.md),
         Text(p?.name ?? 'Your partner',
             style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),

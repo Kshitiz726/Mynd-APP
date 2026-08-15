@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data' show Uint8List;
 import 'package:http/http.dart' as http;
 
 import 'account_scope.dart';
@@ -246,6 +247,53 @@ class ApiClient {
     final j = await _get('/api/friends');
     return (j['friends'] as List).map((f) => BdFriend.fromJson((f as Map).cast())).toList();
   }
+
+  // ── Your own profile ──
+  /// Everything about the signed-in account, including the parts only they see.
+  Future<Map<String, dynamic>> fetchMe() async {
+    final j = await _get('/api/me');
+    return (j['user'] as Map).cast<String, dynamic>();
+  }
+
+  /// Change the name everyone else sees. Returns the updated profile.
+  Future<Map<String, dynamic>> updateDisplayName(String name) async {
+    final res = await _client.patch(_cfg.rest('/api/me'),
+        headers: _cfg.authHeaders, body: jsonEncode({'displayName': name}));
+    final j = _decode(res);
+    final user = (j['user'] as Map).cast<String, dynamic>();
+    // Keep the in-memory session in step, or the greeting on Home keeps using
+    // the old name until the next launch.
+    _cfg.displayName = user['display_name'] as String?;
+    SessionStore.save();
+    return user;
+  }
+
+  /// Set your profile picture. [bytes] is already-encoded image data.
+  Future<void> uploadAvatar(Uint8List bytes, {String mime = 'image/jpeg'}) async {
+    final res = await _client.put(
+      _cfg.rest('/api/me/avatar'),
+      headers: _cfg.authHeaders,
+      body: jsonEncode({'data': base64Encode(bytes), 'mime': mime}),
+    );
+    _decode(res);
+  }
+
+  Future<void> removeAvatar() => delete('/api/me/avatar');
+
+  // ── Per-account state (the backlog and friends follow the account) ──
+  /// The document parked under [key], with when it was last written, so the
+  /// caller can tell whether the server's copy or the phone's is the newer one.
+  Future<({Object? value, DateTime? updatedAt})> fetchState(String key) async {
+    final j = await _get('/api/state/$key');
+    final at = j['updatedAt'] as String?;
+    return (
+      value: j['value'],
+      updatedAt: at == null ? null : DateTime.tryParse(at),
+    );
+  }
+
+  Future<void> putState(String key, Object value) =>
+      put('/api/state/$key', {'value': value});
 
   // ── Body doubling ──
   /// Join the matchmaking queue. Either pairs immediately (matched=true with a

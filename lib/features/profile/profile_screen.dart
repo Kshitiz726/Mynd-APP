@@ -5,7 +5,6 @@ import '../../core/constants/app_spacing.dart';
 import '../../core/routes/app_routes.dart';
 import '../../core/services/api_client.dart';
 import '../../core/services/google_auth.dart';
-import '../../core/services/api_config.dart';
 import '../../core/services/coach_memory_service.dart';
 import '../../core/services/realtime_service.dart';
 import '../../core/theme/app_colors.dart';
@@ -15,11 +14,11 @@ import '../../core/utils/toast.dart';
 import '../../providers/nav_provider.dart';
 import '../../providers/premium_provider.dart';
 import '../../providers/settings_provider.dart';
-import '../../widgets/om_avatar.dart';
 import '../../widgets/om_switch.dart';
 import '../../widgets/om_tappable.dart';
 import '../memory/memory_screen.dart';
 import 'about_screen.dart';
+import 'profile_identity.dart';
 
 /// Settings.
 ///
@@ -82,8 +81,6 @@ class ProfileScreen extends StatelessWidget {
     final settings = context.watch<SettingsProvider>();
     final premium = context.watch<PremiumProvider>().isPremium;
     final c = context.omColors;
-    final name = ApiConfig.instance.displayName ?? 'your account';
-    final handle = ApiConfig.instance.handle;
 
     return Scaffold(
       backgroundColor: c.bg,
@@ -122,36 +119,12 @@ class ProfileScreen extends StatelessWidget {
             const SizedBox(height: AppSpacing.lg),
 
             // ── Who you are ──
-            Center(
-              child: Column(
-                children: [
-                  OmAvatar(
-                    userId: ApiConfig.instance.userId ?? '',
-                    fallbackInitial:
-                        name.isNotEmpty ? name[0].toUpperCase() : '?',
-                    fallbackColor: c.primary,
-                    size: 92,
-                  ),
-                  const SizedBox(height: 14),
-                  Text(name,
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleLarge
-                          ?.copyWith(fontSize: 20)),
-                  if (handle != null) ...[
-                    const SizedBox(height: 3),
-                    Text(handle,
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodySmall
-                            ?.copyWith(color: c.text2)),
-                  ],
-                  if (premium) ...[
-                    const SizedBox(height: 8),
-                    _MemberTag(tier: context.watch<PremiumProvider>().tier),
-                  ],
-                ],
-              ),
+            // Both the picture and the name are yours to change here; see
+            // ProfileIdentity.
+            ProfileIdentity(
+              trailing: premium
+                  ? _MemberTag(tier: context.watch<PremiumProvider>().tier)
+                  : null,
             ),
             const SizedBox(height: AppSpacing.xl),
 

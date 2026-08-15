@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/services/state_sync.dart';
 import '../models/community/chat_models.dart';
 import '../models/energy_level.dart';
 import '../models/task.dart';
@@ -58,20 +59,21 @@ class TaskProvider extends ChangeNotifier {
     try {
       final p = await SharedPreferences.getInstance();
       final raw = p.getString(_kTasks);
-      if (raw != null) {
-        final restored = (jsonDecode(raw) as List)
-            .map((t) => Task.fromJson((t as Map).cast<String, dynamic>()))
-            .toList();
-        // Goal-derived tasks are re-injected from GoalProvider on launch, so
-        // restoring them here too would duplicate every milestone.
-        _tasks
-          ..clear()
-          ..addAll(restored.where((t) => !t.isGoalTask));
-      }
+      if (raw != null) _restore(jsonDecode(raw) as List);
     } catch (e) {
       debugPrint('[tasks] load failed: $e');
     }
     _loaded = true;
+
+    // Then see whether the account has a newer backlog than this device does.
+    //
+    // Deliberately after the local read and without blocking it: the day is on
+    // screen from local storage in milliseconds, and if the server has
+    // something newer (you added tasks on your phone, this is your tablet) it
+    // arrives a moment later and replaces it. Signing in on a new device used
+    // to mean starting from an empty backlog, because the whole thing only
+    // ever lived in that device's SharedPreferences.
+    unawaited(_syncFromAccount());
     // Deliberately not the overridden [notifyListeners]: nothing changed that
     // storage does not already know about, so scheduling a save here would
     // write the file back to itself on every cold start.
@@ -86,10 +88,43 @@ class TaskProvider extends ChangeNotifier {
     _saveDebounce = Timer(const Duration(milliseconds: 400), _persist);
   }
 
+  /// Replace the in-memory day from a stored/synced JSON list.
+  void _restore(List<dynamic> json) {
+    final restored = json
+        .map((t) => Task.fromJson((t as Map).cast<String, dynamic>()))
+        .toList();
+    // Goal-derived tasks are re-injected from GoalProvider on launch, so
+    // restoring them here too would duplicate every milestone.
+    _tasks
+      ..clear()
+      ..addAll(restored.where((t) => !t.isGoalTask));
+  }
+
+  /// Take the account's copy if it is newer than this device's.
+  Future<void> _syncFromAccount() async {
+    final remote = await StateSync.newerRemote(_syncKey);
+    if (remote is! List) return;
+    try {
+      _restore(remote);
+      await StateSync.markLocalFresh(_syncKey);
+      final p = await SharedPreferences.getInstance();
+      await p.setString(_kTasks, jsonEncode(remote));
+      super.notifyListeners();
+    } catch (e) {
+      debugPrint('[tasks] could not apply the account copy: $e');
+    }
+  }
+
+  static const _syncKey = 'tasks';
+
   Future<void> _persist() async {
     try {
+      final json = _tasks.map((t) => t.toJson()).toList();
       final p = await SharedPreferences.getInstance();
-      await p.setString(_kTasks, jsonEncode(_tasks.map((t) => t.toJson()).toList()));
+      await p.setString(_kTasks, jsonEncode(json));
+      // And up to the account, so the backlog is yours rather than this
+      // phone's. Debounced and fire-and-forget inside StateSync.
+      StateSync.push(_syncKey, json);
     } catch (e) {
       debugPrint('[tasks] save failed: $e');
     }

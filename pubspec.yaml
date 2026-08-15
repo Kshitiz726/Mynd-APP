@@ -33,6 +33,12 @@ dependencies:
   # every real phone and voice input just said "didn't catch that".
   permission_handler: ^11.3.1
 
+  # Profile pictures: pick from the gallery or take one, then shrink it before
+  # it ever leaves the phone. image_picker's own maxWidth/imageQuality does the
+  # resizing natively, so a 12MP camera photo arrives as a ~50KB square rather
+  # than something the server has to reject.
+  image_picker: ^1.1.2
+
 
   # Cross-session memory — stores conversation summary between app launches.
   shared_preferences: ^2.3.2
