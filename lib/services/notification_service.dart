@@ -178,6 +178,17 @@ class NotificationService {
     if (android != null) {
       return await android.areNotificationsEnabled() ?? false;
     }
+
+    // Ask iOS rather than assume. This returned a bare `true` on every
+    // non-Android platform, so an iPhone that had denied notifications was told
+    // by the reminders screen that everything was fine, and the one screen that
+    // could have explained the silence instead confirmed it was working.
+    final ios = _plugin.resolvePlatformSpecificImplementation<
+        IOSFlutterLocalNotificationsPlugin>();
+    if (ios != null) {
+      final p = await ios.checkPermissions();
+      return p?.isEnabled ?? false;
+    }
     return true;
   }
 
@@ -239,10 +250,18 @@ class NotificationService {
       // sound, and time-sensitive so it still breaks through a Focus mode the
       // way a reminder is expected to. Critical alerts are deliberately not
       // used - those need an Apple entitlement and are for safety alerts.
-      iOS: const DarwinNotificationDetails(
+      iOS: DarwinNotificationDetails(
         presentAlert: true,
         presentBadge: true,
         presentSound: true,
+        // The chosen tone here too. Android carries the sound on the channel,
+        // which is why there is one channel per tone up there; iOS carries it
+        // on the notification, and names a file inside the app bundle rather
+        // than a Flutter asset. The two files live in ios/Runner/Sounds and
+        // have to be members of the Runner target - see the iOS notes in the
+        // setup brief. If one is missing iOS falls back to the default sound
+        // rather than failing, so a mis-set bundle is quiet, not broken.
+        sound: raw == 'default' ? null : '$raw.wav',
         // Time-sensitive for both: it breaks through Focus modes and shows on
         // the lock screen, which is the Android behaviour above. Critical would
         // also ignore the silent switch, but that needs an entitlement Apple
