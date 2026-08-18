@@ -63,3 +63,9 @@ app.*.map.json
 
 # Build outputs of website/tools/record.mjs, and the reference clip.
 website/*.mp4
+
+# Local setup briefs and signing keys — LIVE CREDENTIALS, never commit.
+OURMYND_SETUP.txt
+OURMYND_MAC_HANDOFF.txt
+AuthKey_*.p8
+*.p8

@@ -15,5 +15,21 @@
 	-->
 	<key>com.apple.developer.usernotifications.time-sensitive</key>
 	<true/>
+
+	<!--
+	  Sign in with Apple. Without this entitlement the authorisation request
+	  fails immediately with error 1000 (unknown), which reads like a code bug
+	  rather than a missing capability. "Default" is the plain first-party flow;
+	  the other values are for sharing an account with a web service, which this
+	  app does not do.
+
+	  Unlike the time-sensitive one above, this DOES need the capability enabled
+	  on the com.ourmynd.app App ID, and it is stripped from ad-hoc simulator
+	  builds until a DEVELOPMENT_TEAM is set.
+	-->
+	<key>com.apple.developer.applesignin</key>
+	<array>
+		<string>Default</string>
+	</array>
 </dict>
 </plist>

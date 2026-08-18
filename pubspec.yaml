@@ -75,16 +75,6 @@ dependencies:
   cupertino_icons: ^1.0.9
   video_player: ^2.11.1
 
-# Transitive plugins pulled in by livekit_client. Their newest releases compile
-# against SDKs that Xcode 15.4 doesn't ship:
-#   - connectivity_plus >=7.1.0 uses NWPath.isUltraConstrained (iOS 26 SDK)
-#   - device_info_plus  >=12.4.0 uses NSProcessInfo.isiOSAppOnVision
-# Both pins still satisfy livekit_client's own constraints (^7.0.0 / ^12.3.0),
-# so this only holds back patch bumps. Remove once the toolchain is on Xcode 26.
-dependency_overrides:
-  connectivity_plus: 7.0.0
-  device_info_plus: 12.3.0
-
 dev_dependencies:
   flutter_lints: ^4.0.0
   flutter_test:
