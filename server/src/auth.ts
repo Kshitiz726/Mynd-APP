@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import { createPublicKey } from 'node:crypto';
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import { OAuth2Client } from 'google-auth-library';
 import { config } from './config.js';
@@ -54,6 +55,75 @@ async function verifyGoogleProfile(idToken: string): Promise<{ email: string; na
   const email = payload?.email;
   if (!email) throw new Error('Google token has no email');
   return { email, name: payload?.name ?? null };
+}
+
+// --- Sign in with Apple ---------------------------------------------------
+//
+// Apple signs its identity tokens with rotating RSA keys published as a JWKS at
+// the URL below. Verification needs no secret of ours: fetch the key whose kid
+// matches the token header, check the signature, then check that the token was
+// issued by Apple and addressed to our bundle id.
+//
+// Node can build a verifier straight from a JWK, so this needs no jwks client
+// library on top of the jsonwebtoken we already depend on.
+const APPLE_KEYS_URL = 'https://appleid.apple.com/auth/keys';
+const APPLE_ISSUER = 'https://appleid.apple.com';
+
+type AppleJwk = { kid: string; kty: string; n: string; e: string; alg?: string };
+let appleKeyCache: { keys: AppleJwk[]; fetchedAt: number } | null = null;
+
+// Apple rotates these, so the cache is short and a cache miss on an unknown kid
+// forces a refetch rather than failing a legitimate sign-in.
+async function appleKeys(forceRefresh = false): Promise<AppleJwk[]> {
+  const fresh = appleKeyCache && Date.now() - appleKeyCache.fetchedAt < 60 * 60 * 1000;
+  if (fresh && !forceRefresh) return appleKeyCache!.keys;
+
+  const resp = await fetch(APPLE_KEYS_URL);
+  if (!resp.ok) throw new Error(`Apple JWKS fetch failed: ${resp.status}`);
+  const body = (await resp.json()) as { keys: AppleJwk[] };
+  appleKeyCache = { keys: body.keys ?? [], fetchedAt: Date.now() };
+  return appleKeyCache.keys;
+}
+
+async function applePublicKeyPem(kid: string): Promise<string> {
+  let jwk = (await appleKeys()).find((k) => k.kid === kid);
+  if (!jwk) jwk = (await appleKeys(true)).find((k) => k.kid === kid);
+  if (!jwk) throw new Error(`no Apple key for kid ${kid}`);
+  return createPublicKey({ key: jwk as never, format: 'jwk' })
+    .export({ type: 'spki', format: 'pem' })
+    .toString();
+}
+
+// Verify an Apple identity token and pull out the account's email.
+//
+// Apple only sends the email on the FIRST authorisation for an account; every
+// later sign-in omits the name entirely and, for "Hide My Email" users, the
+// address is a stable private relay one. Either way the `sub` claim is the
+// durable identity, so callers fall back to it when there is no email.
+async function verifyAppleProfile(
+  identityToken: string,
+): Promise<{ email: string | null; sub: string }> {
+  const decoded = jwt.decode(identityToken, { complete: true });
+  const kid = decoded?.header?.kid;
+  if (!kid) throw new Error('Apple token has no kid');
+
+  // Native iOS tokens are addressed to the bundle id; web/Android ones to the
+  // Services ID. Accept both, and nothing else.
+  // Typed as a non-empty tuple: jwt.verify rejects a plain string[], and the
+  // bundle id is always present, so the first element is guaranteed.
+  const audiences: [string, ...string[]] = [
+    config.appleBundleId,
+    ...(config.appleServiceId ? [config.appleServiceId] : []),
+  ];
+
+  const payload = jwt.verify(identityToken, await applePublicKeyPem(kid), {
+    algorithms: ['RS256'],
+    issuer: APPLE_ISSUER,
+    audience: audiences,
+  }) as jwt.JwtPayload;
+
+  if (!payload.sub) throw new Error('Apple token has no sub');
+  return { email: (payload.email as string) ?? null, sub: payload.sub };
 }
 
 // Upsert the user (keyed by email) with a stable anonymous username, mint our
@@ -196,6 +266,42 @@ authRouter.post('/auth/google', async (req, res) => {
     await issueSessionForEmail(res, profile.email, profile.email, profile.name);
   } catch (e) {
     console.error('Google auth error:', e);
+    res.status(500).json({ error: 'internal server error' });
+  }
+});
+
+/**
+ * REAL Sign in with Apple. The iOS client sends Apple's identity token; we
+ * verify its signature against Apple's published keys and check it was issued
+ * to our bundle id, then issue our own session exactly as the Google path does.
+ *
+ * Apple gives a real address only on the first authorisation, and a private
+ * relay address for "Hide My Email" users. On every later sign-in there is no
+ * email at all, so the account is keyed on the stable `sub` claim rendered as
+ * an apple.local address — that keeps one durable identity per Apple ID rather
+ * than minting a fresh user whenever Apple stays quiet. The display name is
+ * left null: profiles here are anonymous by design.
+ */
+authRouter.post('/auth/apple', async (req, res) => {
+  const { identityToken } = req.body ?? {};
+  if (!identityToken) return res.status(400).json({ error: 'missing identityToken' });
+  if (!config.hasDb) {
+    return res.status(503).json({ error: 'DATABASE_URL not configured - run `npm run dev:full`' });
+  }
+
+  let profile: { email: string | null; sub: string };
+  try {
+    profile = await verifyAppleProfile(identityToken);
+  } catch (e) {
+    console.error('Apple token verification failed:', e);
+    return res.status(401).json({ error: 'invalid Apple token' });
+  }
+
+  try {
+    const handle = profile.email ?? `${profile.sub}@apple.local`;
+    await issueSessionForEmail(res, handle, handle, null);
+  } catch (e) {
+    console.error('Apple auth error:', e);
     res.status(500).json({ error: 'internal server error' });
   }
 });

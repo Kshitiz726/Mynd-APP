@@ -61,6 +61,11 @@ dependencies:
   # client id is set via the meta tag in web/index.html).
   google_sign_in: ^6.2.1
 
+  # Sign in with Apple. App Store review requires this wherever a third-party
+  # sign-in is offered, and the button has been on the login screen (inert)
+  # since before there was anything behind it.
+  sign_in_with_apple: ^6.1.3
+
   # Desktop (Windows/Linux) real Google OAuth: the loopback "installed app" flow
   # opens the system browser (url_launcher) and uses PKCE (crypto) — google_sign_in
   # has no desktop implementation.
@@ -69,6 +74,16 @@ dependencies:
   intl: ^0.20.2
   cupertino_icons: ^1.0.9
   video_player: ^2.11.1
+
+# Transitive plugins pulled in by livekit_client. Their newest releases compile
+# against SDKs that Xcode 15.4 doesn't ship:
+#   - connectivity_plus >=7.1.0 uses NWPath.isUltraConstrained (iOS 26 SDK)
+#   - device_info_plus  >=12.4.0 uses NSProcessInfo.isiOSAppOnVision
+# Both pins still satisfy livekit_client's own constraints (^7.0.0 / ^12.3.0),
+# so this only holds back patch bumps. Remove once the toolchain is on Xcode 26.
+dependency_overrides:
+  connectivity_plus: 7.0.0
+  device_info_plus: 12.3.0
 
 dev_dependencies:
   flutter_lints: ^4.0.0

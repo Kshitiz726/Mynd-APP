@@ -31,6 +31,23 @@ export const config = {
   googleDesktopClientId: process.env.GOOGLE_DESKTOP_CLIENT_ID ?? '',
   googleDesktopClientSecret: process.env.GOOGLE_DESKTOP_CLIENT_SECRET ?? '',
 
+  // Sign in with Apple. Apple addresses the identity token to the app's bundle
+  // id, so that doubles as the audience we verify against — no client secret is
+  // involved for plain sign-in, only Apple's public keys. (A .p8 key is needed
+  // for token revocation, which App Store account-deletion will eventually
+  // require; that is deliberately not wired here yet.)
+  appleBundleId: process.env.APPLE_BUNDLE_ID ?? 'com.ourmynd.app',
+
+  // Web/Android Sign in with Apple addresses the token to the Services ID
+  // rather than the bundle id, so both have to be accepted as audiences.
+  appleServiceId: process.env.APPLE_SERVICE_ID ?? '',
+
+  // Revocation credentials. The key is held as a PATH to a file outside the
+  // repo, never as inline key material — see server/.env for why.
+  appleTeamId: process.env.APPLE_TEAM_ID ?? '',
+  appleKeyId: process.env.APPLE_KEY_ID ?? '',
+  applePrivateKeyPath: process.env.APPLE_PRIVATE_KEY_PATH ?? '',
+
   // iOS OAuth: the "iOS" client id. Unlike Android - where serverClientId makes
   // Google mint a token addressed to the WEB client - the iOS SDK always
   // addresses the ID token to the iOS client itself, so it has to be accepted as

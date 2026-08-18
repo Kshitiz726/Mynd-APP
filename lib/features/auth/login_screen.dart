@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import '../../core/constants/legal.dart';
 import '../../core/routes/app_routes.dart';
@@ -100,6 +101,64 @@ class _LoginScreenState extends State<LoginScreen>
     }
   }
 
+  /// Apple only implements this on its own platforms. Elsewhere the button is
+  /// not shown at all, so nobody is offered a sign-in that cannot happen.
+  bool get _appleSupported =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.iOS ||
+          defaultTargetPlatform == TargetPlatform.macOS);
+
+  Future<void> _handleAppleSignIn() async {
+    setState(() => _loading = true);
+    Haptics.medium();
+
+    try {
+      debugPrint('[apple] 1/3 requesting credential…');
+      final credential = await SignInWithApple.getAppleIDCredential(
+        scopes: const [
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
+      );
+
+      // Apple returns the name only on the very first authorisation, and never
+      // again. We deliberately do not keep it: profiles here are anonymous, and
+      // the server derives a stable display name of its own.
+      final identityToken = credential.identityToken;
+      debugPrint(
+          '[apple] 2/3 credential ok, identityToken: ${identityToken == null ? "NULL" : "present"}');
+      if (identityToken == null) {
+        throw 'Apple returned no identity token. Check that the Sign in with '
+            'Apple capability is enabled on the com.ourmynd.app App ID.';
+      }
+
+      debugPrint('[apple] 3/3 POST /api/auth/apple…');
+      await ApiClient.instance.authWithAppleIdentityToken(identityToken);
+      debugPrint('[apple] 3/3 backend accepted the token');
+
+      RealtimeService.instance.connect();
+
+      if (mounted) {
+        Navigator.of(context).pushReplacementNamed(AppRoutes.shell);
+      }
+    } on SignInWithAppleAuthorizationException catch (e) {
+      // Backing out of the sheet is a choice, not a failure worth reporting.
+      if (e.code != AuthorizationErrorCode.canceled && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Apple sign-in failed: ${e.message}')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Login failed: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
   Future<void> _handleGoogleSignIn() async {
     setState(() => _loading = true);
     Haptics.medium();
@@ -111,11 +170,20 @@ class _LoginScreenState extends State<LoginScreen>
         // ever use - handing the phone to someone else signed them in as you,
         // and there was no way to switch. Pressing a button labelled "continue
         // with Google" should let you say which Google.
+        //
+        // Stage logging: this flow crosses Flutter -> GIDSignIn -> a web sheet
+        // -> back, and when it stalls the screen just sits at "loading" with no
+        // indication of which leg never returned. Each step announces itself so
+        // a hang names its own stage in the log.
+        debugPrint('[gsi] 1/4 chooseAccount — presenting sheet…');
         final account = await GoogleAuth.chooseAccount();
+        debugPrint('[gsi] 2/4 returned: ${account?.email ?? "cancelled"}');
         if (account == null) return; // they backed out of the chooser
 
+        debugPrint('[gsi] 3/4 fetching authentication/idToken…');
         final auth = await account.authentication;
         final idToken = auth.idToken;
+        debugPrint('[gsi] 3/4 idToken: ${idToken == null ? "NULL" : "ok"}');
         if (idToken == null) {
           // Google hands back an ID token only when it knows who is asking.
           // Nine times out of ten the answer is that this particular build was
@@ -135,7 +203,9 @@ class _LoginScreenState extends State<LoginScreen>
                       'Check that an Android OAuth client exists for this package '
                       'name and signing SHA-1.';
         }
+        debugPrint('[gsi] 4/4 POST /api/auth/google…');
         await ApiClient.instance.authWithGoogleIdToken(idToken);
+        debugPrint('[gsi] 4/4 backend accepted the token');
       } else if (_desktopClientId.isNotEmpty) {
         await desktop_auth.runDesktopGoogleAuth(clientId: _desktopClientId);
       } else {
@@ -230,9 +300,15 @@ class _LoginScreenState extends State<LoginScreen>
                     _GoogleButton(
                         loading: _loading,
                         onTap: _showAuth ? _handleGoogleSignIn : null),
-                    const SizedBox(height: 12),
-                    _AppleButton(
-                        loading: _loading, onTap: _showAuth ? () {} : null),
+                    // Apple only offers this on Apple platforms, so on Android
+                    // and desktop the button (and its spacer) go away rather
+                    // than sitting there dead.
+                    if (_appleSupported) ...[
+                      const SizedBox(height: 12),
+                      _AppleButton(
+                          loading: _loading,
+                          onTap: _showAuth ? _handleAppleSignIn : null),
+                    ],
                     const SizedBox(height: 48),
                     // The acceptance line was a sentence *about* two documents
                     // with no way to reach either of them, on the one screen

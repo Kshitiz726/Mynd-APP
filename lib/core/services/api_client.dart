@@ -85,6 +85,14 @@ class ApiClient {
     await _applyUser(j);
   }
 
+  /// Real Sign in with Apple: hands the backend the identity token Apple gave
+  /// the app. The server checks it against Apple's published keys and our
+  /// bundle id, then returns our own session JWT + user, same as Google.
+  Future<void> authWithAppleIdentityToken(String identityToken) async {
+    final j = await _post('/api/auth/apple', {'identityToken': identityToken});
+    _applyUser(j);
+  }
+
   /// Desktop (Windows/Linux) real Google OAuth: hands the backend the auth code
   /// from the loopback flow; the server exchanges it (with the desktop client
   /// secret) for an ID token, verifies it, and returns our session JWT + user.
