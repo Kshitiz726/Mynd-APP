@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import { createPublicKey } from 'node:crypto';
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import { OAuth2Client } from 'google-auth-library';
 import { config } from './config.js';
@@ -15,7 +16,7 @@ function colorFor(seed: string): string {
 }
 
 // Anonymous, Reddit-style display names (no "u/"): Adjective + Noun + number,
-// e.g. "MellowOtter47". Every user is anonymous — we never store/show the real
+// e.g. "MellowOtter47". Every user is anonymous - we never store/show the real
 // Google name. ~30×30×100 ≈ 90k combinations keeps collisions rare.
 const ADJECTIVES = [
   'Calm', 'Quiet', 'Brave', 'Gentle', 'Mellow', 'Cosmic', 'Velvet', 'Lucid', 'Amber', 'Hazel',
@@ -33,13 +34,20 @@ function randomUsername(): string {
   return `${a}${n}${Math.floor(Math.random() * 100)}`;
 }
 
-// Valid token audiences: the Web client id (web/Android) + the Desktop client id.
+// Valid token audiences: the Web client id (web/Android), the Desktop client id,
+// and the iOS client id. iOS needs its own entry because the Google iOS SDK
+// addresses the ID token to the iOS client, not to the serverClientId the app
+// passes - that one only buys a server auth code there.
 function googleAudiences(): string[] {
-  return [config.googleClientId, config.googleDesktopClientId].filter(Boolean) as string[];
+  return [
+    config.googleClientId,
+    config.googleDesktopClientId,
+    config.googleIosClientId,
+  ].filter(Boolean) as string[];
 }
 
 // Verify a Google ID token's signature + audience, return the user's identity
-// (email + the real Google display name). The name is stored but never shown —
+// (email + the real Google display name). The name is stored but never shown -
 // the public profile stays anonymous; see issueSessionForEmail.
 async function verifyGoogleProfile(idToken: string): Promise<{ email: string; name: string | null }> {
   const ticket = await googleClient.verifyIdToken({ idToken, audience: googleAudiences() });
@@ -49,12 +57,81 @@ async function verifyGoogleProfile(idToken: string): Promise<{ email: string; na
   return { email, name: payload?.name ?? null };
 }
 
+// --- Sign in with Apple ---------------------------------------------------
+//
+// Apple signs its identity tokens with rotating RSA keys published as a JWKS at
+// the URL below. Verification needs no secret of ours: fetch the key whose kid
+// matches the token header, check the signature, then check that the token was
+// issued by Apple and addressed to our bundle id.
+//
+// Node can build a verifier straight from a JWK, so this needs no jwks client
+// library on top of the jsonwebtoken we already depend on.
+const APPLE_KEYS_URL = 'https://appleid.apple.com/auth/keys';
+const APPLE_ISSUER = 'https://appleid.apple.com';
+
+type AppleJwk = { kid: string; kty: string; n: string; e: string; alg?: string };
+let appleKeyCache: { keys: AppleJwk[]; fetchedAt: number } | null = null;
+
+// Apple rotates these, so the cache is short and a cache miss on an unknown kid
+// forces a refetch rather than failing a legitimate sign-in.
+async function appleKeys(forceRefresh = false): Promise<AppleJwk[]> {
+  const fresh = appleKeyCache && Date.now() - appleKeyCache.fetchedAt < 60 * 60 * 1000;
+  if (fresh && !forceRefresh) return appleKeyCache!.keys;
+
+  const resp = await fetch(APPLE_KEYS_URL);
+  if (!resp.ok) throw new Error(`Apple JWKS fetch failed: ${resp.status}`);
+  const body = (await resp.json()) as { keys: AppleJwk[] };
+  appleKeyCache = { keys: body.keys ?? [], fetchedAt: Date.now() };
+  return appleKeyCache.keys;
+}
+
+async function applePublicKeyPem(kid: string): Promise<string> {
+  let jwk = (await appleKeys()).find((k) => k.kid === kid);
+  if (!jwk) jwk = (await appleKeys(true)).find((k) => k.kid === kid);
+  if (!jwk) throw new Error(`no Apple key for kid ${kid}`);
+  return createPublicKey({ key: jwk as never, format: 'jwk' })
+    .export({ type: 'spki', format: 'pem' })
+    .toString();
+}
+
+// Verify an Apple identity token and pull out the account's email.
+//
+// Apple only sends the email on the FIRST authorisation for an account; every
+// later sign-in omits the name entirely and, for "Hide My Email" users, the
+// address is a stable private relay one. Either way the `sub` claim is the
+// durable identity, so callers fall back to it when there is no email.
+async function verifyAppleProfile(
+  identityToken: string,
+): Promise<{ email: string | null; sub: string }> {
+  const decoded = jwt.decode(identityToken, { complete: true });
+  const kid = decoded?.header?.kid;
+  if (!kid) throw new Error('Apple token has no kid');
+
+  // Native iOS tokens are addressed to the bundle id; web/Android ones to the
+  // Services ID. Accept both, and nothing else.
+  // Typed as a non-empty tuple: jwt.verify rejects a plain string[], and the
+  // bundle id is always present, so the first element is guaranteed.
+  const audiences: [string, ...string[]] = [
+    config.appleBundleId,
+    ...(config.appleServiceId ? [config.appleServiceId] : []),
+  ];
+
+  const payload = jwt.verify(identityToken, await applePublicKeyPem(kid), {
+    algorithms: ['RS256'],
+    issuer: APPLE_ISSUER,
+    audience: audiences,
+  }) as jwt.JwtPayload;
+
+  if (!payload.sub) throw new Error('Apple token has no sub');
+  return { email: (payload.email as string) ?? null, sub: payload.sub };
+}
+
 // Upsert the user (keyed by email) with a stable anonymous username, mint our
 // 30-day session JWT, and send it. Shared by every Google sign-in path.
 //
 // Dedup is select-first (not just ON CONFLICT): an older `users` table that was
 // created before the `handle unique` constraint won't satisfy ON CONFLICT and
-// would silently insert a *new* row on every login — the "same Gmail makes a new
+// would silently insert a *new* row on every login - the "same Gmail makes a new
 // user each time" bug. Selecting the earliest row by handle guarantees one
 // stable identity per email regardless of the constraint's presence, and
 // tolerates any pre-existing duplicates (limit 1).
@@ -70,7 +147,7 @@ async function issueSessionForEmail(
   );
   if (u) {
     // Returning user: load the SAME account and refresh stored identity. This is
-    // what makes "continue with Google again" restore everything — same user id,
+    // what makes "continue with Google again" restore everything - same user id,
     // so all their posts, friends, chats, rooms and notifications come back.
     await db.none(
       `update users set last_seen_at = now(),
@@ -88,6 +165,8 @@ async function issueSessionForEmail(
       [email, randomUsername(), colorFor(seed), email, fullName],
     );
   }
+  u = publicUser(u);
+
   const token = jwt.sign(
     { sub: u.id, name: u.display_name, handle: u.handle, color: u.avatar_color },
     config.jwtSecret,
@@ -113,7 +192,7 @@ declare global {
 
 /**
  * Verify a JWT (Supabase Auth token or our own) and hydrate the user row.
- * The `sub` claim is the user id — Supabase puts the auth.uid() there.
+ * The `sub` claim is the user id - Supabase puts the auth.uid() there.
  */
 export async function verifyJwt(token?: string): Promise<AuthUser> {
   if (!token) throw new Error('missing token');
@@ -172,7 +251,7 @@ authRouter.post('/auth/google', async (req, res) => {
     return res.status(503).json({ error: 'GOOGLE_CLIENT_ID not configured on the server' });
   }
   if (!config.hasDb) {
-    return res.status(503).json({ error: 'DATABASE_URL not configured — run `npm run dev:full`' });
+    return res.status(503).json({ error: 'DATABASE_URL not configured - run `npm run dev:full`' });
   }
 
   let profile: { email: string; name: string | null };
@@ -192,6 +271,42 @@ authRouter.post('/auth/google', async (req, res) => {
 });
 
 /**
+ * REAL Sign in with Apple. The iOS client sends Apple's identity token; we
+ * verify its signature against Apple's published keys and check it was issued
+ * to our bundle id, then issue our own session exactly as the Google path does.
+ *
+ * Apple gives a real address only on the first authorisation, and a private
+ * relay address for "Hide My Email" users. On every later sign-in there is no
+ * email at all, so the account is keyed on the stable `sub` claim rendered as
+ * an apple.local address — that keeps one durable identity per Apple ID rather
+ * than minting a fresh user whenever Apple stays quiet. The display name is
+ * left null: profiles here are anonymous by design.
+ */
+authRouter.post('/auth/apple', async (req, res) => {
+  const { identityToken } = req.body ?? {};
+  if (!identityToken) return res.status(400).json({ error: 'missing identityToken' });
+  if (!config.hasDb) {
+    return res.status(503).json({ error: 'DATABASE_URL not configured - run `npm run dev:full`' });
+  }
+
+  let profile: { email: string | null; sub: string };
+  try {
+    profile = await verifyAppleProfile(identityToken);
+  } catch (e) {
+    console.error('Apple token verification failed:', e);
+    return res.status(401).json({ error: 'invalid Apple token' });
+  }
+
+  try {
+    const handle = profile.email ?? `${profile.sub}@apple.local`;
+    await issueSessionForEmail(res, handle, handle, null);
+  } catch (e) {
+    console.error('Apple auth error:', e);
+    res.status(500).json({ error: 'internal server error' });
+  }
+});
+
+/**
  * REAL Google sign-in for desktop (Windows/Linux). The app runs the loopback
  * OAuth flow and sends us the auth code; we exchange it with the desktop client
  * secret (kept server-side), verify the ID token, then issue our session.
@@ -202,11 +317,11 @@ authRouter.post('/auth/google/desktop', async (req, res) => {
   if (!config.googleDesktopClientId) {
     return res.status(503).json({ error: 'GOOGLE_DESKTOP_CLIENT_ID not configured on the server' });
   }
-  if (!config.hasDb) return res.status(503).json({ error: 'DATABASE_URL not configured — run `npm run dev:full`' });
+  if (!config.hasDb) return res.status(503).json({ error: 'DATABASE_URL not configured - run `npm run dev:full`' });
 
   let idToken: string;
   try {
-    // PKCE flow — the client secret is optional (modern Desktop clients are
+    // PKCE flow - the client secret is optional (modern Desktop clients are
     // PKCE-only and have none); include it only if one is configured.
     const form: Record<string, string> = {
       code,
@@ -268,9 +383,31 @@ authRouter.post('/auth/google-mock', async (req, res) => {
       config.jwtSecret,
       { expiresIn: '30d' }
     );
-    res.json({ token, user: u });
+    res.json({ token, user: publicUser(u) });
   } catch (e) {
     console.error('Google mock auth error:', e);
     res.status(500).json({ error: 'internal server error' });
   }
 });
+
+/**
+ * A user row as it may leave the server.
+ *
+ * `select *` and `returning *` both carry `avatar_image`, which is the picture
+ * itself and has no business inside a sign-in response. Strip it and hand back
+ * the URL that serves it instead.
+ *
+ * Shared by every auth path on purpose: the mock endpoint used to shape its own
+ * response, so a client talking to it saw a different user object than the real
+ * Google flow returns, which is exactly the kind of difference you only find
+ * when it is already confusing you.
+ */
+export function publicUser(u: any) {
+  const { avatar_image, ...rest } = u;
+  return {
+    ...rest,
+    avatar_url: avatar_image
+      ? `/api/users/${u.id}/avatar?v=${new Date(u.avatar_updated_at ?? 0).getTime()}`
+      : null,
+  };
+}

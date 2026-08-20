@@ -1,6 +1,6 @@
 /// The structured snapshot handed to the coaching pipeline before every
 /// response. Each field is already trimmed/summarized by the time it lands
-/// here — this is the *context*, not the raw database rows. See
+/// here - this is the *context*, not the raw database rows. See
 /// [CoachContextBuilder] for how it's assembled and
 /// [CoachPromptBuilder] for how it becomes prompt text.
 class CoachContext {
@@ -19,7 +19,7 @@ class CoachContext {
 
   final String userName;
 
-  /// "high" | "low" | "brain-dead" — mirrors [EnergyLevel].
+  /// "high" | "low" | "brain-dead" - mirrors [EnergyLevel].
   final String currentEnergyLevel;
 
   final List<MoodLogEntry> recentMoodLogs;
@@ -28,7 +28,7 @@ class CoachContext {
   final HabitProgress habitProgress;
   final FocusStatistics focusStatistics;
 
-  /// Rolling summary of everything said in prior sessions — never the raw
+  /// Rolling summary of everything said in prior sessions - never the raw
   /// transcript. Produced by [CoachMemoryService.summarizeConversation].
   final String previousConversationSummary;
 
@@ -36,7 +36,7 @@ class CoachContext {
 
   /// Lightweight, human-readable observations surfaced by the pattern
   /// heuristics ("overwhelm has come up a lot this week"). Plain strings on
-  /// purpose — they get dropped straight into the context prompt and the
+  /// purpose - they get dropped straight into the context prompt and the
   /// model should treat them as something *noticed*, not a directive.
   final List<String> detectedPatterns;
 }
@@ -86,7 +86,7 @@ class FocusStatistics {
   final int currentStreakDays;
 }
 
-/// How this specific person likes to be talked to — learned over time, not
+/// How this specific person likes to be talked to - learned over time, not
 /// configured in a settings screen. Updated by the nightly pattern job, not
 /// by the live conversation turn.
 class CoachUserPreferences {

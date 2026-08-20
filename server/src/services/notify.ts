@@ -42,7 +42,7 @@ export async function pushNotification(
   }
 }
 
-/** "A friend joined a focus room" — fanned out to the joiner's accepted friends. */
+/** "A friend joined a focus room" - fanned out to the joiner's accepted friends. */
 export async function notifyFriendsJoinedRoom(user: AuthUser, roomId: string) {
   if (!config.hasDb) return; // no social graph without a DB (dev mode)
   const friends = await db.any<{ id: string }>(

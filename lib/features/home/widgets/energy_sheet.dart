@@ -5,7 +5,7 @@ import 'dart:convert';
 
 import '../../../core/constants/app_spacing.dart';
 import '../../../core/services/groq_service.dart';
-import '../../../core/services/puter_service.dart';
+import '../../../core/services/speech_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../core/utils/om_icons.dart';
@@ -17,6 +17,7 @@ import '../../../providers/settings_provider.dart';
 import '../../../providers/task_provider.dart';
 import '../../../widgets/om_button.dart';
 import '../../../widgets/om_tappable.dart';
+import '../../../widgets/text_editing_scope.dart';
 
 /// Bottom sheet for logging current energy ("how's the vibe?"). Logging
 /// "brain-dead" can auto-enable low-stim mode.
@@ -106,9 +107,16 @@ class _EnergyRow extends StatelessWidget {
 }
 
 /// Quick "brain dump" sheet to add a task with an energy tag.
+/// Rounds up to the next :00/:15/:30/:45 so generated blocks start on a clean
+/// slot instead of an arbitrary 10:37.
+DateTime _nextQuarterHour(DateTime t) {
+  final base = DateTime(t.year, t.month, t.day, t.hour, t.minute);
+  final add = 15 - (base.minute % 15);
+  return base.add(Duration(minutes: add == 15 ? 0 : add));
+}
+
 Future<void> showQuickAddTask(BuildContext context) async {
   final tasks = context.read<TaskProvider>();
-  final controller = TextEditingController();
   var energy = EnergyLevel.high;
   var recording = false;
   var transcribing = false;
@@ -119,7 +127,8 @@ Future<void> showQuickAddTask(BuildContext context) async {
     showDragHandle: true,
     builder: (sheetContext) {
       final colors = sheetContext.omColors;
-      return Padding(
+      return TextEditingScope(
+        builder: (scopeContext, controller) => Padding(
         padding: EdgeInsets.only(
           left: 20,
           right: 20,
@@ -143,12 +152,14 @@ Future<void> showQuickAddTask(BuildContext context) async {
                 try {
                   final prompt = '''
 You are an ADHD task assistant. The user provided a brain dump: "$text".
-Break this down into concise, actionable tasks. For each task, provide a title, an energy level (high, low, dead), and optionally a list of micro-steps.
+Break this down into concise, actionable tasks. For each task, provide a title, an energy level (high, low, dead), an estimated duration in minutes, and optionally a list of micro-steps.
+Keep durations realistic and ADHD-friendly: 15-45 minutes each.
 Respond ONLY with a valid JSON array of objects. Do not wrap it in markdown. Format:
 [
   {
     "title": "Task title",
     "energy": "high",
+    "minutes": 30,
     "steps": ["Step 1", "Step 2"]
   }
 ]
@@ -161,24 +172,39 @@ Respond ONLY with a valid JSON array of objects. Do not wrap it in markdown. For
                   final cleaned = response.replaceAll('```json', '').replaceAll('```', '').trim();
                   final jsonArray = jsonDecode(cleaned) as List;
                   final newTasks = <Task>[];
+
+                  // Lay the steps out back-to-back from the next quarter hour.
+                  // Without a startTime a task is invisible to daySchedule, so
+                  // an unscheduled breakdown never reaches the timeline at all -
+                  // which reads as "the AI did nothing".
+                  var cursor = _nextQuarterHour(DateTime.now());
+
                   for (final item in jsonArray) {
                     final map = item as Map<String, dynamic>;
                     final eStr = map['energy']?.toString().toLowerCase() ?? '';
                     final en = eStr.contains('high') ? EnergyLevel.high :
                                eStr.contains('low') ? EnergyLevel.low : EnergyLevel.dead;
-                    
+
                     final stepsJson = map['steps'] as List?;
                     final steps = stepsJson?.map((s) => MicroStep(text: s.toString())).toList();
-                    
+
+                    final mins = (map['minutes'] as num?)?.clamp(5, 120).toInt() ?? 30;
+
                     newTasks.add(Task(
                       id: 'ai-${DateTime.now().microsecondsSinceEpoch}-${newTasks.length}',
                       title: map['title']?.toString() ?? 'Untitled',
                       time: 'today',
                       energy: en,
                       steps: steps,
+                      scheduled: true,
+                      startTime: cursor,
+                      duration: Duration(minutes: mins),
                     ));
+
+                    // A short breather between blocks, rounded to a clean slot.
+                    cursor = _nextQuarterHour(cursor.add(Duration(minutes: mins + 5)));
                   }
-                  
+
                   if (newTasks.isNotEmpty) {
                     tasks.addTasks(newTasks);
                     Haptics.success();
@@ -186,16 +212,22 @@ Respond ONLY with a valid JSON array of objects. Do not wrap it in markdown. For
                     tasks.addQuickTask(text, energy);
                   }
                 } catch (e) {
-                  // Fallback to basic quick task if AI fails
+                  // Still capture the thought - offloading it is the point - but
+                  // say what went wrong. Swallowing this made a broken API key
+                  // and a malformed response look identical to "AI is off".
+                  debugPrint('[brain-dump] breakdown failed: $e');
                   tasks.addQuickTask(text, energy);
+                  if (context.mounted) {
+                    Toast.show(context, "Saved it, but couldn't break it down - $e");
+                  }
                 }
               });
             }
 
-            // Voice brain dump: speak it, Puter transcribes, text drops into the
-            // field so the user can review/edit before adding.
+            // Voice brain dump: speak it, Groq Whisper transcribes, text drops
+            // into the field so the user can review/edit before adding.
             Future<void> toggleMic() async {
-              final puter = PuterService.instance;
+              final stt = SpeechService.instance;
               if (recording) {
                 setState(() {
                   recording = false;
@@ -203,7 +235,7 @@ Respond ONLY with a valid JSON array of objects. Do not wrap it in markdown. For
                 });
                 String text = '';
                 try {
-                  text = await puter.stopAndTranscribe();
+                  text = await stt.stopAndTranscribe();
                 } catch (_) {/* keep whatever's typed */}
                 if (text.trim().isNotEmpty) {
                   final existing = controller.text.trim();
@@ -213,16 +245,15 @@ Respond ONLY with a valid JSON array of objects. Do not wrap it in markdown. For
                 Haptics.light();
                 setState(() => transcribing = false);
               } else {
-                if (!puter.signedIn) {
-                  Toast.show(context, 'Connect Puter in Coach to use voice');
-                  return;
-                }
                 Haptics.medium();
                 setState(() => recording = true);
-                try {
-                  await puter.startListening();
-                } catch (_) {
+                final ok = await stt.startRecording();
+                if (!ok) {
                   setState(() => recording = false);
+                  if (context.mounted) {
+                    Toast.show(
+                        context, stt.lastError ?? 'Microphone unavailable');
+                  }
                 }
               }
             }
@@ -233,7 +264,7 @@ Respond ONLY with a valid JSON array of objects. Do not wrap it in markdown. For
               children: [
               Text('brain dump', style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 4),
-              Text("get it out of your head — we'll sort it later.",
+              Text("get it out of your head - we'll sort it later.",
                   style: Theme.of(context).textTheme.bodySmall),
               const SizedBox(height: AppSpacing.lg),
               TextField(
@@ -316,13 +347,13 @@ Respond ONLY with a valid JSON array of objects. Do not wrap it in markdown. For
             );
           },
         ),
+      ),
       );
     },
   );
-  controller.dispose();
 }
 
-/// Selectable energy pill used in the brain-dump sheet — replaces the default
+/// Selectable energy pill used in the brain-dump sheet - replaces the default
 /// Material [ChoiceChip] with the app's softer, tappable style.
 class _EnergyPick extends StatelessWidget {
   const _EnergyPick({required this.level, required this.selected, required this.onTap});

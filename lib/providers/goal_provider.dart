@@ -1,12 +1,14 @@
 import 'dart:convert';
 
+import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:flutter/foundation.dart';
+import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/services/groq_service.dart';
 import '../models/energy_level.dart';
 import '../models/goal.dart';
 import '../models/task.dart';
-import '../services/notification_service.dart';
 import 'task_provider.dart';
 
 /// Owns the user's goals and turns each one into a dated, day-by-day plan.
@@ -17,9 +19,47 @@ import 'task_provider.dart';
 /// goal-tagged tasks so they appear in the day's time-blocks (rendered
 /// distinctly), and rolled-up progress is tracked here.
 class GoalProvider extends ChangeNotifier {
-  GoalProvider(this._tasks);
+  GoalProvider(this._tasks) {
+    load();
+  }
 
   TaskProvider _tasks;
+
+  static const _kGoals = 'om_goals';
+
+  bool _loaded = false;
+
+  /// The day whose milestones are currently on the timeline. Auto-Schedule and
+  /// the week strip both move this, so planning next Tuesday puts *Tuesday's*
+  /// goal step on the day rather than today's.
+  DateTime _day = DateTime.now();
+  DateTime get day => _day;
+
+  Future<void> load() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      final raw = p.getString(_kGoals);
+      if (raw != null) {
+        _goals.addAll((jsonDecode(raw) as List)
+            .map((g) => Goal.fromJson((g as Map).cast<String, dynamic>())));
+      }
+    } catch (e) {
+      debugPrint('[goals] load failed: $e');
+    }
+    _loaded = true;
+    _injectFor(_day);
+    notifyListeners();
+  }
+
+  Future<void> _persist() async {
+    if (!_loaded) return;
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.setString(_kGoals, jsonEncode(_goals.map((g) => g.toJson()).toList()));
+    } catch (e) {
+      debugPrint('[goals] save failed: $e');
+    }
+  }
 
   /// Re-bound by the ProxyProvider so we always push tasks into the live
   /// [TaskProvider] instance.
@@ -45,7 +85,7 @@ class GoalProvider extends ChangeNotifier {
   /// Overall completion fraction (0..1) across every goal's daily steps.
   double get overallProgress => totalSteps == 0 ? 0 : doneSteps / totalSteps;
 
-  /// Where the plan *should* be by today, weighted by each goal's timeline —
+  /// Where the plan *should* be by today, weighted by each goal's timeline -
   /// lets the UI say "on track" vs "behind" relative to each deadline.
   double get expectedProgress {
     final now = DateTime.now();
@@ -66,13 +106,15 @@ class GoalProvider extends ChangeNotifier {
   bool get onTrack => overallProgress + 0.001 >= expectedProgress;
 
   /// Create a goal and break it into a daily plan. [currentEnergy] is the user's
-  /// logged vibe right now — the AI uses it to pitch the first day's effort
+  /// logged vibe right now - the AI uses it to pitch the first day's effort
   /// (gentle on dead days, ambitious on high-energy ones). Returns null on
   /// success or an error message the UI can surface.
   Future<String?> addGoal({
     required String title,
     required DateTime targetDate,
     EnergyLevel? currentEnergy,
+    TimeOfDay? dailyStart,
+    int dailyMinutes = 60,
   }) async {
     _busy = true;
     notifyListeners();
@@ -84,13 +126,15 @@ class GoalProvider extends ChangeNotifier {
         createdAt: DateTime.now(),
         targetDate: targetDate,
         milestones: milestones,
+        dailyStart: dailyStart,
+        dailyMinutes: dailyMinutes,
       );
       _goals.add(goal);
-      _scheduleDeadlineReminder(goal);
-      _injectToday();
+      _injectFor(_day);
+      _persist();
       return null;
     } catch (e) {
-      return 'Couldn’t break down the goal — please try again.';
+      return 'Couldn’t break down the goal - please try again.';
     } finally {
       _busy = false;
       notifyListeners();
@@ -99,11 +143,12 @@ class GoalProvider extends ChangeNotifier {
 
   void removeGoal(String id) {
     _goals.removeWhere((g) => g.id == id);
-    _injectToday();
+    _injectFor(_day);
+    _persist();
     notifyListeners();
   }
 
-  /// Tick a whole goal off (or back on) from the Home list — marks every
+  /// Tick a whole goal off (or back on) from the Home list - marks every
   /// milestone done/undone and keeps the day's timeline in sync.
   void toggleGoalComplete(String id) {
     final g = _goals.firstWhere((g) => g.id == id, orElse: () => _goals.first);
@@ -111,20 +156,10 @@ class GoalProvider extends ChangeNotifier {
     for (final m in g.milestones) {
       m.done = makeDone;
     }
-    _injectToday();
+    if (makeDone) _compactFinished();
+    _injectFor(_day);
+    _persist();
     notifyListeners();
-  }
-
-  /// Fire a reminder at the goal's deadline (09:00 on the target day) so the
-  /// user gets nudged when a goal is due. Uses the app's shared reminder service.
-  void _scheduleDeadlineReminder(Goal goal) {
-    final due = DateTime(goal.targetDate.year, goal.targetDate.month, goal.targetDate.day, 9, 0);
-    NotificationService().scheduleAlarm(
-      id: 'goal-due-${goal.id}'.hashCode,
-      title: 'Goal due today: ${goal.title}',
-      body: 'Today is your deadline — finish strong! 💪',
-      scheduledTime: due,
-    );
   }
 
   /// Keep a goal milestone's done state in sync when its timeline task is ticked.
@@ -133,6 +168,8 @@ class GoalProvider extends ChangeNotifier {
       for (final m in g.milestones) {
         if (m.id == milestoneId && m.done != done) {
           m.done = done;
+          _compactFinished();
+          _persist();
           notifyListeners();
           return;
         }
@@ -140,26 +177,73 @@ class GoalProvider extends ChangeNotifier {
     }
   }
 
+  /// Fold any goal whose last step just got ticked down to a record.
+  ///
+  /// Done exactly once, at the moment it completes, so the plan is available
+  /// right up until it stops being useful and never after.
+  void _compactFinished() {
+    for (var i = 0; i < _goals.length; i++) {
+      final g = _goals[i];
+      if (!g.isArchived && g.total > 0 && g.doneCount == g.total) {
+        _goals[i] = g.compact();
+      }
+    }
+  }
+
+  /// Finished goals, newest first. Home keeps these behind a disclosure rather
+  /// than in the main list.
+  List<Goal> get finished {
+    final out = _goals.where((g) => g.isComplete).toList();
+    out.sort((a, b) =>
+        (b.completedAt ?? b.targetDate).compareTo(a.completedAt ?? a.targetDate));
+    return out;
+  }
+
+  List<Goal> get active => _goals.where((g) => !g.isComplete).toList();
+
   /// Re-push today's milestones into the task list (call on app/home init).
-  void refreshTodayTasks() => _injectToday();
+  void refreshTodayTasks() => _injectFor(DateTime.now());
+
+  /// Put [day]'s goal steps on the timeline, and only [day]'s.
+  ///
+  /// Each goal was already broken into one dated step per day up to its
+  /// deadline, so planning a future day means surfacing that day's step in the
+  /// slot the user set aside for the goal - not dragging the whole remaining
+  /// plan forward into one afternoon.
+  void showDay(DateTime day) {
+    if (_sameDay(day, _day)) return;
+    _day = day;
+    _injectFor(day);
+    notifyListeners();
+  }
 
   // ─────────────────────────────────────────────────────────────────────────
 
-  void _injectToday() {
+  void _injectFor(DateTime day) {
+    _day = day;
     final now = DateTime.now();
     final out = <Task>[];
     for (final g in _goals) {
+      // A finished goal has no plan left to put on the day.
+      if (g.isComplete) continue;
       for (final m in g.milestones) {
-        if (_sameDay(m.date, now)) {
+        if (_sameDay(m.date, day)) {
+          // Land it in the slot the user set aside for this goal. Without a
+          // slot it stays unscheduled and auto-schedule places it wherever it
+          // fits, as before.
+          final slot = g.slotOn(day);
           out.add(Task(
             id: m.id,
             title: m.title,
-            time: 'goal',
+            time: slot != null ? DateFormat.jm().format(slot) : 'goal',
             energy: m.energy,
             done: m.done,
             goalId: g.id,
             goalTitle: g.title,
             steps: m.steps.map((s) => MicroStep(text: s.text, done: s.done)).toList(),
+            scheduled: slot != null,
+            startTime: slot,
+            duration: slot != null ? g.dailyDuration : null,
           ));
         } else if (m.date.isBefore(now) && !m.done) {
           out.add(Task(
@@ -189,11 +273,11 @@ class GoalProvider extends ChangeNotifier {
 
     final energyNote = switch (currentEnergy) {
       EnergyLevel.high =>
-        "The user's energy RIGHT NOW is HIGH — make day 1 (today) the most demanding, momentum-building step while they're firing on all cylinders.",
+        "The user's energy RIGHT NOW is HIGH - make day 1 (today) the most demanding, momentum-building step while they're firing on all cylinders.",
       EnergyLevel.low =>
-        "The user's energy RIGHT NOW is LOW — keep day 1 (today) light and very achievable (a 5–15 min warm-up), and ramp up on later days.",
+        "The user's energy RIGHT NOW is LOW - keep day 1 (today) light and very achievable (a 5-15 min warm-up), and ramp up on later days.",
       EnergyLevel.dead =>
-        "The user's energy RIGHT NOW is BRAIN-DEAD — make day 1 (today) a tiny, almost-effortless step (think 2–5 minutes) so they can still win today; push the real work to later days.",
+        "The user's energy RIGHT NOW is BRAIN-DEAD - make day 1 (today) a tiny, almost-effortless step (think 2-5 minutes) so they can still win today; push the real work to later days.",
       null => 'Pace the plan naturally.',
     };
 
@@ -201,7 +285,7 @@ class GoalProvider extends ChangeNotifier {
 The user has a goal: "$title".
 They want to achieve it within $days day(s), starting today.
 $energyNote
-Produce a realistic day-by-day plan with ONE focused mini-task per day (you may skip some days for rest if the goal is long — but cover the whole stretch). Order from day 1 (today) to day $days.
+Produce a realistic day-by-day plan with ONE focused mini-task per day (you may skip some days for rest if the goal is long - but cover the whole stretch). Order from day 1 (today) to day $days.
 For each planned day output an object with:
 - "day": 1-based day number from today (1..$days)
 - "title": a short, concrete action for that day
@@ -246,7 +330,7 @@ Respond ONLY with a valid JSON array, no markdown. Example:
         ));
       }
     } catch (e) {
-      // AI unavailable / bad response — fall back so the goal is never broken.
+      // AI unavailable / bad response - fall back so the goal is never broken.
       debugPrint('goal breakdown via AI failed, using local plan: $e');
     }
 

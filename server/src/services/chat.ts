@@ -72,7 +72,7 @@ function toView(m: any): MessageView {
 /**
  * Persist a message idempotently. A retried/duplicated socket frame carrying the
  * same (senderId, clientTempId) returns the already-stored row instead of
- * inserting a second one — this is what makes optimistic sends safe under
+ * inserting a second one - this is what makes optimistic sends safe under
  * reconnects and double taps.
  */
 export async function persistMessage(input: PersistInput): Promise<MessageView> {
@@ -112,7 +112,7 @@ export async function persistMessage(input: PersistInput): Promise<MessageView> 
 
 /** Every OTHER member of a conversation (used to fan a new message to their
  *  personal socket rooms so delivery is instant even when they haven't joined
- *  the convo room — e.g. sitting on the chat list). */
+ *  the convo room - e.g. sitting on the chat list). */
 export async function otherMemberIds(conversationId: string, senderId: string): Promise<string[]> {
   const rows = await db.any<{ user_id: string }>(
     `select user_id from conversation_members where conversation_id=$1 and user_id<>$2`,

@@ -1,12 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Modify this file to customize your launch splash screen -->
+<!-- The pre-Flutter window background. Plain white here meant a white flash
+     ahead of a near-black app in dark mode; @color/launch_bg resolves per
+     light/dark via values-night/colors.xml, so the OS hands over to the
+     launch screen on the colour it is already showing. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="@android:color/white" />
-
-    <!-- You can insert your own image assets here -->
-    <!-- <item>
-        <bitmap
-            android:gravity="center"
-            android:src="@mipmap/launch_image" />
-    </item> -->
+    <item android:drawable="@color/launch_bg" />
 </layer-list>

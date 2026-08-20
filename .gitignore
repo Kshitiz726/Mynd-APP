@@ -60,3 +60,12 @@ app.*.map.json
 # Local run scripts holding dart-define secrets (Groq/Google keys) — never commit
 *.local.ps1
 *.local.sh
+
+# Build outputs of website/tools/record.mjs, and the reference clip.
+website/*.mp4
+
+# Local setup briefs and signing keys — LIVE CREDENTIALS, never commit.
+OURMYND_SETUP.txt
+OURMYND_MAC_HANDOFF.txt
+AuthKey_*.p8
+*.p8

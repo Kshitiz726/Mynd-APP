@@ -7,6 +7,7 @@ import '../../core/utils/om_icons.dart';
 import '../../providers/alerts_provider.dart';
 import '../../widgets/om_card.dart';
 import '../../widgets/om_tappable.dart';
+import '../../widgets/om_back_button.dart';
 import '../../widgets/om_top_bar.dart';
 import '../notifications/notifications_screen.dart'; // for relativeTime
 
@@ -33,20 +34,12 @@ class ActivityHistoryScreen extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(
                   AppSpacing.screenH, AppSpacing.screenTop, AppSpacing.screenH, 0),
-              child: OmTopBar(
+              // The shared control, not a local copy of it - the hand-rolled
+              // one drifted (different size, different fill) from every other
+              // back button in the app.
+              child: const OmTopBar(
                 title: 'activity history',
-                leading: OmTappable(
-                  onTap: () => Navigator.of(context).pop(),
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: c.surfaceAlt,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(OmIcons.byName('chevL'), size: 18, color: c.text),
-                  ),
-                ),
+                leading: OmBackButton(),
               ),
             ),
             Expanded(

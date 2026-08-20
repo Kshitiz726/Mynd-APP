@@ -12,10 +12,11 @@ import '../../providers/nav_provider.dart';
 import '../../widgets/om_avatar.dart';
 import '../../widgets/om_card.dart';
 import '../../widgets/om_tappable.dart';
+import '../../widgets/om_back_button.dart';
 import '../../widgets/om_top_bar.dart';
 import '../community/chat_screen.dart';
 
-/// "alerts" — deliberately narrow: only the two things that need *your* reaction,
+/// "alerts" - deliberately narrow: only the two things that need *your* reaction,
 /// follow requests and comments on your posts. Everything else (reminders, room
 /// joins, sessions, messages) lives in the "you" tab's activity history.
 class NotificationsScreen extends StatefulWidget {
@@ -29,7 +30,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   @override
   void initState() {
     super.initState();
-    // Load on open, but DON'T auto-clear — unread alerts stay highlighted until
+    // Load on open, but DON'T auto-clear - unread alerts stay highlighted until
     // the user taps "mark all read" (so the badge + the button both mean something).
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<AlertsProvider>()
@@ -75,6 +76,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           OmTopBar(
             title: 'alerts',
             subtitle: _summary(requests.length, comments.length),
+            // Same chevron, same corner, as every other pushed screen. It draws
+            // nothing when alerts is shown as a tab rather than pushed.
+            leading: const OmBackButton(),
           ),
 
           if (alerts.alertsUnread > 0) ...[
@@ -144,7 +148,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   onTap: () {
                     Haptics.select();
                     context.read<AlertsProvider>().markAllRead();
-                    context.read<NavProvider>().select(AppTab.community);
+                    context.read<NavProvider>().select(AppTab.today /* community parked */);
                   },
                 ),
                 const SizedBox(height: 10),

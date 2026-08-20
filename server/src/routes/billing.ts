@@ -1,0 +1,256 @@
+import { Router, type Request, type Response } from 'express';
+import type Stripe from 'stripe';
+import { config } from '../config.js';
+import { requireAuth } from '../auth.js';
+import {
+  stripe,
+  planCatalog,
+  billingStore,
+  isPremium,
+  applyStripeSubscription,
+  type SubRecord,
+} from '../services/billing.js';
+
+export const billingRouter = Router();
+
+// Absolute base the hosted Stripe page redirects the *browser* back to. This is
+// not the host the app calls us on: the emulator's Chrome can't reach the
+// 10.0.2.2 host-loopback alias when a VPN/DNS blocker is active, so we pin
+// PUBLIC_BASE_URL=http://localhost:8080 in dev (with `adb reverse tcp:8080
+// tcp:8080`) and the real https origin in prod. Falls back to the request host.
+function baseUrl(req: Request): string {
+  return process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get('host')}`;
+}
+
+function statusPayload(rec: SubRecord) {
+  return {
+    premium: isPremium(rec),
+    tier: rec.tier,
+    status: rec.status,
+    interval: rec.interval,
+    currentPeriodEnd: rec.currentPeriodEnd,
+  };
+}
+
+// ── Catalogue ────────────────────────────────────────────────────────────────
+// The app renders whatever this returns, so pricing/plan structure lives in one
+// place (Stripe + env) rather than being hard-coded twice.
+billingRouter.get('/billing/plans', requireAuth, async (_req, res) => {
+  if (!stripe) return res.status(503).json({ error: 'billing not configured' });
+  const plans = await Promise.all(
+    planCatalog().map(async (p) => {
+      try {
+        const price = await stripe!.prices.retrieve(p.priceId);
+        return {
+          id: p.id,
+          tier: p.tier,
+          interval: p.interval,
+          amount: price.unit_amount, // minor units (pence)
+          currency: price.currency, // e.g. 'gbp'
+        };
+      } catch {
+        return { id: p.id, tier: p.tier, interval: p.interval, amount: null, currency: null };
+      }
+    }),
+  );
+  res.json({ publishableKey: config.stripe.publishableKey, plans });
+});
+
+// ── Where does this user stand ──────────────────────────────────────────────
+billingRouter.get('/billing/status', requireAuth, async (req, res) => {
+  const rec = await billingStore.get(req.user.id);
+  res.json(statusPayload(rec));
+});
+
+// ── Start a subscription ────────────────────────────────────────────────────
+// Creates (or reuses) the Stripe customer for this user and opens a hosted
+// Checkout Session for the chosen price. The app launches the returned url in
+// the system browser and, on return, calls /billing/confirm with the sessionId.
+billingRouter.post('/billing/checkout', requireAuth, async (req, res) => {
+  if (!stripe) return res.status(503).json({ error: 'billing not configured' });
+  // The app sends a catalogue id ('pro_year'); we resolve the real Stripe price
+  // id here so price ids never have to live in the client. A raw priceId is also
+  // accepted for flexibility.
+  const planId = String(req.body?.planId ?? '');
+  const priceIdRaw = String(req.body?.priceId ?? '');
+  const entry = planCatalog().find((p) => p.id === planId || p.priceId === priceIdRaw);
+  if (!entry) {
+    return res.status(400).json({ error: 'unknown plan' });
+  }
+  const priceId = entry.priceId;
+
+  try {
+    const rec = await billingStore.get(req.user.id);
+    let customerId = rec.stripeCustomerId;
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        metadata: { userId: req.user.id, handle: req.user.handle },
+        name: req.user.displayName,
+      });
+      customerId = customer.id;
+      await billingStore.upsert(req.user.id, { stripeCustomerId: customerId });
+    }
+
+    const base = baseUrl(req);
+    const session = await stripe.checkout.sessions.create({
+      mode: 'subscription',
+      customer: customerId,
+      line_items: [{ price: priceId, quantity: 1 }],
+      client_reference_id: req.user.id,
+      subscription_data: { metadata: { userId: req.user.id } },
+      metadata: { userId: req.user.id },
+      success_url: `${base}/api/billing/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${base}/api/billing/cancel`,
+      allow_promotion_codes: true,
+      // This Stripe account has Managed Payments on by default, which demands a
+      // product tax code we don't set. Opt the session out so a plain
+      // subscription checkout goes through. (Not yet in the SDK types.)
+      managed_payments: { enabled: false },
+    } as any);
+
+    res.json({ url: session.url, sessionId: session.id });
+  } catch (e: any) {
+    console.error('[billing] checkout failed:', e?.message ?? e);
+    res.status(502).json({ error: 'could not start checkout' });
+  }
+});
+
+// ── Manage an existing subscription (update / cancel) ───────────────────────
+// Opens Stripe's hosted Billing Portal for this customer, where they can switch
+// plan, update card, or cancel. Same pattern as checkout: we return a URL the
+// app launches in the browser, and reconcile entitlement on resume.
+billingRouter.post('/billing/portal', requireAuth, async (req, res) => {
+  if (!stripe) return res.status(503).json({ error: 'billing not configured' });
+  try {
+    const rec = await billingStore.get(req.user.id);
+    if (!rec.stripeCustomerId) {
+      return res.status(409).json({ error: 'no subscription to manage' });
+    }
+    const base = baseUrl(req);
+    const portal = await stripe.billingPortal.sessions.create({
+      customer: rec.stripeCustomerId,
+      return_url: `${base}/api/billing/success`,
+    });
+    res.json({ url: portal.url });
+  } catch (e: any) {
+    console.error('[billing] portal failed:', e?.message ?? e);
+    res.status(502).json({ error: 'could not open billing portal' });
+  }
+});
+
+// ── Reconcile on return ─────────────────────────────────────────────────────
+// The app calls this when it comes back to the foreground after checkout. We
+// pull the session straight from Stripe; if it is paid we fold its subscription
+// into our store so entitlement flips on without needing a webhook in dev.
+billingRouter.post('/billing/confirm', requireAuth, async (req, res) => {
+  if (!stripe) return res.status(503).json({ error: 'billing not configured' });
+  const sessionId = String(req.body?.sessionId ?? '');
+  if (!sessionId) return res.status(400).json({ error: 'missing sessionId' });
+
+  try {
+    const session = await stripe.checkout.sessions.retrieve(sessionId, {
+      expand: ['subscription'],
+    });
+    // Guard: the session must belong to the caller.
+    if (session.client_reference_id && session.client_reference_id !== req.user.id) {
+      return res.status(403).json({ error: 'session does not belong to you' });
+    }
+    if (session.payment_status === 'paid' && session.subscription) {
+      const sub =
+        typeof session.subscription === 'string'
+          ? await stripe.subscriptions.retrieve(session.subscription)
+          : (session.subscription as Stripe.Subscription);
+      const rec = await applyStripeSubscription(req.user.id, sub);
+      return res.json(statusPayload(rec));
+    }
+    // Not paid yet (user backed out, or async payment pending).
+    const rec = await billingStore.get(req.user.id);
+    res.json(statusPayload(rec));
+  } catch (e: any) {
+    console.error('[billing] confirm failed:', e?.message ?? e);
+    res.status(502).json({ error: 'could not confirm checkout' });
+  }
+});
+
+// ── Hosted return pages (shown in the browser, not the app) ─────────────────
+const returnPage = (title: string, body: string) => `<!doctype html><html><head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${title}</title><style>
+  body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#F4F1FB;color:#1c1330;
+    display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0;padding:24px}
+  .card{background:#fff;border-radius:22px;padding:36px 28px;max-width:340px;text-align:center;
+    box-shadow:0 18px 50px rgba(99,102,241,.18)}
+  h1{font-size:22px;margin:0 0 8px} p{color:#5b5470;font-size:14px;line-height:1.5;margin:0}
+  .dot{width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#8b7ff0,#6366F1);
+    margin:0 auto 18px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:28px}
+</style></head><body><div class="card">${body}</div></body></html>`;
+
+billingRouter.get('/billing/success', (_req, res) => {
+  res.type('html').send(
+    returnPage(
+      'Payment complete',
+      `<div class="dot">✓</div><h1>You're all set</h1>
+       <p>Your OurMynd subscription is active. Head back to the app - it'll unlock your plan in a moment.</p>`,
+    ),
+  );
+});
+
+billingRouter.get('/billing/cancel', (_req, res) => {
+  res.type('html').send(
+    returnPage(
+      'Checkout cancelled',
+      `<div class="dot" style="background:linear-gradient(135deg,#c0b9d6,#8b84a3)">–</div>
+       <h1>No charge made</h1><p>You closed checkout before finishing. Return to the app to try again anytime.</p>`,
+    ),
+  );
+});
+
+// ── Webhook (prod entitlement source of truth) ──────────────────────────────
+// Mounted separately in server.ts with a raw body so the signature verifies.
+// In dev without a webhook secret we skip verification and simply ignore events
+// (the confirm-poll above is authoritative there).
+export async function billingWebhookHandler(req: Request, res: Response) {
+  if (!stripe) return res.status(503).end();
+  let event: Stripe.Event;
+  if (config.stripe.webhookSecret) {
+    try {
+      event = stripe.webhooks.constructEvent(
+        req.body as Buffer,
+        req.headers['stripe-signature'] as string,
+        config.stripe.webhookSecret,
+      );
+    } catch (e: any) {
+      console.error('[billing] bad webhook signature:', e?.message ?? e);
+      return res.status(400).send(`Webhook Error: ${e?.message}`);
+    }
+  } else {
+    // No secret configured - accept unverified (dev only).
+    try {
+      event = JSON.parse((req.body as Buffer).toString('utf8')) as Stripe.Event;
+    } catch {
+      return res.status(400).end();
+    }
+  }
+
+  try {
+    switch (event.type) {
+      case 'customer.subscription.created':
+      case 'customer.subscription.updated':
+      case 'customer.subscription.deleted': {
+        const sub = event.data.object as Stripe.Subscription;
+        const userId =
+          (sub.metadata?.userId as string | undefined) ??
+          (await billingStore.userForCustomer(
+            typeof sub.customer === 'string' ? sub.customer : sub.customer.id,
+          ));
+        if (userId) await applyStripeSubscription(userId, sub);
+        break;
+      }
+      default:
+        break;
+    }
+  } catch (e: any) {
+    console.error('[billing] webhook handler error:', e?.message ?? e);
+  }
+  res.json({ received: true });
+}

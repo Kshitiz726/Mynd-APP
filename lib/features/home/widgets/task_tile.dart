@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/constants/app_spacing.dart';
@@ -24,6 +25,41 @@ class TaskTile extends StatelessWidget {
     final tasks = context.read<TaskProvider>();
     final energyColor = task.energy.color(context);
 
+    // Swipe right to throw it away.
+    //
+    // The backlog is where things go to be avoided, and a list you cannot prune
+    // stops being a list of what you might do and becomes a monument to what
+    // you did not. Deleting was previously buried in the long-press edit sheet,
+    // which nobody finds. One direction only: swiping left is how the timeline
+    // sends a block back here, and the two gestures meaning opposite things on
+    // the same row would be a trap.
+    return Dismissible(
+      key: ValueKey('backlog-${task.id}'),
+      direction: DismissDirection.startToEnd,
+      // A slow drag reveals the intent before it commits, and it takes a real
+      // swipe (not a twitch) to actually delete.
+      dismissThresholds: const {DismissDirection.startToEnd: 0.45},
+      background: _DeleteBackground(),
+      onDismissed: (_) {
+        Haptics.medium();
+        tasks.deleteTask(task.id);
+        // Nothing here is worth losing to a mis-swipe.
+        ScaffoldMessenger.of(context)
+          ..clearSnackBars()
+          ..showSnackBar(SnackBar(
+            content: Text('deleted "${task.title}"'),
+            duration: const Duration(seconds: 4),
+            action: SnackBarAction(
+              label: 'undo',
+              onPressed: () => tasks.addTasks([task]),
+            ),
+          ));
+      },
+      child: _tile(context, c, tasks, energyColor),
+    );
+  }
+
+  Widget _tile(BuildContext context, OmColors c, TaskProvider tasks, Color energyColor) {
     return Container(
       margin: const EdgeInsets.only(bottom: AppSpacing.sm),
       decoration: BoxDecoration(
@@ -51,7 +87,7 @@ class TaskTile extends StatelessWidget {
                   pressedScale: 0.985,
                   onTap: () {
                     if (!task.hasSteps) {
-                      Toast.show(context, 'no breakdown yet — dump it again with + to auto-split it.');
+                      Toast.show(context, 'no breakdown yet - dump it again with + to auto-split it.');
                       return;
                     }
                     tasks.toggleExpanded(task);
@@ -123,7 +159,10 @@ class TaskTile extends StatelessWidget {
                             onPressed: () {
                               Haptics.select();
                               tasks.schedule(task);
-                              Toast.show(context, 'added to your day');
+                              final label = tasks.viewingToday
+                                  ? 'your day'
+                                  : DateFormat.MMMEd().format(tasks.selectedDate);
+                              Toast.show(context, 'added to $label');
                             },
                           ),
                         const SizedBox(width: AppSpacing.md),
@@ -249,6 +288,38 @@ class _StepRow extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// What sits behind a backlog row while you drag it aside.
+///
+/// Grows into a full red panel rather than appearing at the threshold, so the
+/// gesture reads as "this is what happens if you keep going" the whole way.
+class _DeleteBackground extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final c = context.omColors;
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: c.error,
+        borderRadius: BorderRadius.circular(AppRadius.control),
+      ),
+      alignment: Alignment.centerLeft,
+      padding: const EdgeInsets.symmetric(horizontal: 22),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(OmIcons.byName('trash'), size: 19, color: Colors.white),
+          const SizedBox(width: 10),
+          const Text('delete',
+              style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14)),
+        ],
       ),
     );
   }

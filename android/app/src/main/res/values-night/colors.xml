@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Dark counterpart of values/colors.xml. Must match OmColors.dark.bg.
+     Without this the OS painted plain white before a near-black app. -->
+<resources>
+    <color name="launch_bg">#141419</color>
+</resources>

@@ -30,7 +30,7 @@ class _Hit {
   final VoidCallback onTap;
 }
 
-/// One category of results — a labelled group, Android-Settings-search style.
+/// One category of results - a labelled group, Android-Settings-search style.
 class _Group {
   _Group({required this.label, required this.icon, required this.color, required this.hits});
   final String label;
@@ -39,7 +39,7 @@ class _Group {
   final List<_Hit> hits;
 }
 
-/// Global, in-app search — one box that looks across the whole app: tasks &
+/// Global, in-app search - one box that looks across the whole app: tasks &
 /// backlog, goals & their daily steps, notes, reminders, people & chats,
 /// community posts and notifications. Results are grouped by category (like the
 /// search inside Android Settings) so a single query surfaces everything.
@@ -134,7 +134,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
         subtitle: cv.isGroup ? 'group chat' : 'direct message',
         icon: cv.isGroup ? 'users' : 'user',
         onTap: () => _go(() {
-          nav.select(AppTab.community);
+          nav.select(AppTab.today /* community parked */);
           chat.openChat(
             id: cv.id,
             title: cv.title,
@@ -150,7 +150,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
         title: g.name,
         subtitle: 'group · ${g.membersLabel}',
         icon: 'users',
-        onTap: () => _go(() => nav.select(AppTab.community)),
+        onTap: () => _go(() => nav.select(AppTab.today /* community parked */)),
       ));
     }
     if (chatHits.isNotEmpty) {
@@ -164,7 +164,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
         title: p.body,
         subtitle: 'post · ${p.authorName}',
         icon: 'message',
-        onTap: () => _go(() => nav.select(AppTab.community)),
+        onTap: () => _go(() => nav.select(AppTab.today /* community parked */)),
       ));
     }
     if (postHits.isNotEmpty) {
@@ -178,7 +178,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
         title: '${req.displayName} wants to follow you',
         subtitle: 'follow request',
         icon: 'userPlus',
-        onTap: () => _go(() => nav.select(AppTab.alerts)),
+        onTap: () => _go(() => nav.select(AppTab.today)),
       ));
     }
     for (final n in alerts.allNotifications.where((n) {
@@ -189,7 +189,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
         title: (n.payload['name'] ?? n.payload['body'] ?? n.kind).toString(),
         subtitle: 'notification',
         icon: 'bell',
-        onTap: () => _go(() => nav.select(AppTab.alerts)),
+        onTap: () => _go(() => nav.select(AppTab.today)),
       ));
     }
     if (notifHits.isNotEmpty) {
@@ -425,7 +425,7 @@ class _Hint extends StatelessWidget {
             Text('Search across everything',
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 6),
-            Text('tasks, goals, notes, reminders, chats & community — all in one place',
+            Text('tasks, goals, notes, reminders, chats & community - all in one place',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodySmall),
           ],

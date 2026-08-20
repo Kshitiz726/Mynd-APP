@@ -1,17 +1,21 @@
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:google_sign_in/google_sign_in.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
+import '../../core/constants/legal.dart';
 import '../../core/routes/app_routes.dart';
 import '../../core/services/api_client.dart';
+import '../../core/services/google_auth.dart';
 // Desktop-only real Google OAuth (loopback). Web/mobile pull in the stub.
 import '../../core/services/desktop_google_auth_stub.dart'
-    if (dart.library.io) '../../core/services/desktop_google_auth_io.dart' as desktop_auth;
+    if (dart.library.io) '../../core/services/desktop_google_auth_io.dart'
+    as desktop_auth;
 import '../../core/services/realtime_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/haptics.dart';
-import '../../widgets/om_mascot.dart';
+import '../../widgets/fluid_orb.dart';
 import '../../widgets/om_tappable.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -21,38 +25,61 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStateMixin {
+class _LoginScreenState extends State<LoginScreen>
+    with SingleTickerProviderStateMixin {
   bool _loading = false;
   bool _showAuth = false;
   late final AnimationController _intro;
 
-  static const _serverClientId = String.fromEnvironment('GOOGLE_SERVER_CLIENT_ID');
-  static const _desktopClientId = String.fromEnvironment('GOOGLE_DESKTOP_CLIENT_ID');
+  /// Recognisers are long-lived objects that have to be disposed, so they are
+  /// built once here rather than inline in build().
+  late final TapGestureRecognizer _terms = TapGestureRecognizer()
+    ..onTap = () => Legal.openTerms(context);
+  late final TapGestureRecognizer _privacy = TapGestureRecognizer()
+    ..onTap = () => Legal.openPrivacy(context);
 
-  late final GoogleSignIn _googleSignIn = (!kIsWeb && _serverClientId.isNotEmpty)
-      ? GoogleSignIn(scopes: const ['email', 'profile'], serverClientId: _serverClientId)
-      : GoogleSignIn(scopes: const ['email', 'profile']);
+  static const _desktopClientId =
+      String.fromEnvironment('GOOGLE_DESKTOP_CLIENT_ID');
 
-  bool get _googleNativeSupported =>
-      kIsWeb ||
-      defaultTargetPlatform == TargetPlatform.android ||
-      defaultTargetPlatform == TargetPlatform.iOS ||
-      defaultTargetPlatform == TargetPlatform.macOS;
+  bool get _googleNativeSupported => GoogleAuth.supported;
 
   @override
   void initState() {
     super.initState();
-    _intro = AnimationController(vsync: this, duration: const Duration(milliseconds: 1100))..forward();
-    
-    // Delayed animation to show the auth options (Splash -> Login transition)
-    Future.delayed(const Duration(milliseconds: 2500), () {
+    _intro = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 1100))
+      ..forward();
+
+    // Reveal the auth options once the logo has settled.
+    //
+    // This used to wait 2.5s, because this screen was doing double duty as the
+    // splash. It is not any more - SplashScreen has already held the logo for
+    // its own beat before this is even built - so the old delay stacked into
+    // nearly five seconds of staring at a logo before you could press
+    // anything. Just long enough now for the intro to land.
+    Future.delayed(const Duration(milliseconds: 650), () {
       if (mounted) setState(() => _showAuth = true);
     });
+
+    // Deliberately no silent auto-resume here.
+    //
+    // This screen used to call signInSilently() on build and, if the device had
+    // ever granted us a Google account, sign straight in and navigate away -
+    // without showing the login screen's buttons at all. On a fresh install
+    // that reads as "the app decided who I am": a second person on the same
+    // phone never saw "Continue with Google", they just landed inside somebody
+    // else's account. Reaching this screen means we have no session, and the
+    // right response to that is to ask, not to guess.
+    //
+    // A saved session still skips this screen entirely (see SessionStore in
+    // main()), so the common case is unchanged.
   }
 
   @override
   void dispose() {
     _intro.dispose();
+    _terms.dispose();
+    _privacy.dispose();
     super.dispose();
   }
 
@@ -61,11 +88,72 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     Haptics.medium();
     try {
       final n = math.Random().nextInt(9000) + 1000;
-      await ApiClient.instance.authWithGoogle(handle: 'test_$n', displayName: 'Test User $n');
+      await ApiClient.instance
+          .authWithGoogle(handle: 'test_$n', displayName: 'Test User $n');
       RealtimeService.instance.connect();
       if (mounted) Navigator.of(context).pushReplacementNamed(AppRoutes.shell);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Test login failed: $e')));
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Test login failed: $e')));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  /// Apple only implements this on its own platforms. Elsewhere the button is
+  /// not shown at all, so nobody is offered a sign-in that cannot happen.
+  bool get _appleSupported =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.iOS ||
+          defaultTargetPlatform == TargetPlatform.macOS);
+
+  Future<void> _handleAppleSignIn() async {
+    setState(() => _loading = true);
+    Haptics.medium();
+
+    try {
+      debugPrint('[apple] 1/3 requesting credential…');
+      final credential = await SignInWithApple.getAppleIDCredential(
+        scopes: const [
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
+      );
+
+      // Apple returns the name only on the very first authorisation, and never
+      // again. We deliberately do not keep it: profiles here are anonymous, and
+      // the server derives a stable display name of its own.
+      final identityToken = credential.identityToken;
+      debugPrint(
+          '[apple] 2/3 credential ok, identityToken: ${identityToken == null ? "NULL" : "present"}');
+      if (identityToken == null) {
+        throw 'Apple returned no identity token. Check that the Sign in with '
+            'Apple capability is enabled on the com.ourmynd.app App ID.';
+      }
+
+      debugPrint('[apple] 3/3 POST /api/auth/apple…');
+      await ApiClient.instance.authWithAppleIdentityToken(identityToken);
+      debugPrint('[apple] 3/3 backend accepted the token');
+
+      RealtimeService.instance.connect();
+
+      if (mounted) {
+        Navigator.of(context).pushReplacementNamed(AppRoutes.shell);
+      }
+    } on SignInWithAppleAuthorizationException catch (e) {
+      // Backing out of the sheet is a choice, not a failure worth reporting.
+      if (e.code != AuthorizationErrorCode.canceled && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Apple sign-in failed: ${e.message}')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Login failed: $e')),
+        );
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -77,20 +165,47 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
     try {
       if (_googleNativeSupported) {
-        final account = await _googleSignIn.signIn();
-        if (account == null) return; 
+        // Always ask which account. Trying silently first meant the first
+        // Google account to authorise this app became the only one it would
+        // ever use - handing the phone to someone else signed them in as you,
+        // and there was no way to switch. Pressing a button labelled "continue
+        // with Google" should let you say which Google.
+        //
+        // Stage logging: this flow crosses Flutter -> GIDSignIn -> a web sheet
+        // -> back, and when it stalls the screen just sits at "loading" with no
+        // indication of which leg never returned. Each step announces itself so
+        // a hang names its own stage in the log.
+        debugPrint('[gsi] 1/4 chooseAccount — presenting sheet…');
+        final account = await GoogleAuth.chooseAccount();
+        debugPrint('[gsi] 2/4 returned: ${account?.email ?? "cancelled"}');
+        if (account == null) return; // they backed out of the chooser
 
+        debugPrint('[gsi] 3/4 fetching authentication/idToken…');
         final auth = await account.authentication;
         final idToken = auth.idToken;
+        debugPrint('[gsi] 3/4 idToken: ${idToken == null ? "NULL" : "ok"}');
         if (idToken == null) {
+          // Google hands back an ID token only when it knows who is asking.
+          // Nine times out of ten the answer is that this particular build was
+          // compiled without the client id - it is a --dart-define, so a plain
+          // `flutter run` or `flutter build apk` silently produces an app that
+          // can sign in with Google and never get a token. Say which of the two
+          // it is rather than sending them to the Cloud console for a problem
+          // that is in the build command.
           throw kIsWeb
               ? 'No ID token from Google. Check the Web Client ID in web/index.html '
                   'and that your origin is an authorised JavaScript origin.'
-              : 'No ID token from Google. Pass your Web Client ID via '
-                  '--dart-define=GOOGLE_SERVER_CLIENT_ID=… and register an Android '
-                  'OAuth client (package name + SHA-1).';
+              : GoogleAuth.serverClientId.isEmpty
+                  ? 'This build has no Google client id compiled in. Run it with '
+                      '--dart-define=GOOGLE_SERVER_CLIENT_ID=… (see '
+                      'run-android.local.sh) rather than a bare flutter run.'
+                  : 'Google returned no ID token even though a client id is set. '
+                      'Check that an Android OAuth client exists for this package '
+                      'name and signing SHA-1.';
         }
+        debugPrint('[gsi] 4/4 POST /api/auth/google…');
         await ApiClient.instance.authWithGoogleIdToken(idToken);
+        debugPrint('[gsi] 4/4 backend accepted the token');
       } else if (_desktopClientId.isNotEmpty) {
         await desktop_auth.runDesktopGoogleAuth(clientId: _desktopClientId);
       } else {
@@ -124,9 +239,16 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       body: Stack(
         children: [
           // ── Ambient mood lighting ──────────────────────────────────────────
-          _Glow(color: c.primary, alignment: const Alignment(-0.9, -0.85), size: 360),
-          _Glow(color: c.accent, alignment: const Alignment(1.1, 0.75), size: 420),
-          _Glow(color: c.flow, alignment: const Alignment(0.9, -1.0), size: 280),
+          _Glow(
+              color: c.primary,
+              alignment: const Alignment(-0.9, -0.85),
+              size: 360),
+          _Glow(
+              color: c.accent,
+              alignment: const Alignment(1.1, 0.75),
+              size: 420),
+          _Glow(
+              color: c.flow, alignment: const Alignment(0.9, -1.0), size: 280),
 
           // Splash Logo
           AnimatedAlign(
@@ -142,25 +264,13 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                     curve: const Interval(0.0, 0.6, curve: Curves.elasticOut),
                   ),
                   child: FadeTransition(
-                    opacity: CurvedAnimation(parent: _intro, curve: const Interval(0.0, 0.35)),
-                    child: const OmMascot(size: 96),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                // MYND wordmark based on brand color
-                FadeTransition(
-                  opacity: CurvedAnimation(parent: _intro, curve: const Interval(0.2, 0.7)),
-                  child: ShaderMask(
-                    shaderCallback: (r) => c.brandGradient.createShader(r),
-                    child: Text(
-                      'MYND',
-                      style: t.headlineLarge?.copyWith(
-                        fontSize: 44,
-                        fontWeight: FontWeight.w900,
-                        color: Colors.white,
-                        letterSpacing: 6,
-                      ),
-                    ),
+                    opacity: CurvedAnimation(
+                        parent: _intro, curve: const Interval(0.0, 0.35)),
+                    // The same living orb the splash, home and coach use, so the
+                    // first face you meet is the one you keep. Gently alive here
+                    // rather than held still - this is a welcome, not a resting
+                    // home screen.
+                    child: const FluidOrb(size: 132),
                   ),
                 ),
               ],
@@ -174,7 +284,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
             child: Align(
               alignment: Alignment.bottomCenter,
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 48),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 28, vertical: 48),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -182,19 +293,63 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                     Text(
                       'Log in or sign up',
                       textAlign: TextAlign.center,
-                      style: t.headlineMedium?.copyWith(fontWeight: FontWeight.w800, fontSize: 26),
+                      style: t.headlineMedium
+                          ?.copyWith(fontWeight: FontWeight.w800, fontSize: 26),
                     ),
                     const SizedBox(height: 36),
-
-                    _GoogleButton(loading: _loading, onTap: _showAuth ? _handleGoogleSignIn : null),
-                    const SizedBox(height: 12),
-                    _AppleButton(loading: _loading, onTap: _showAuth ? () {} : null),
-
+                    _GoogleButton(
+                        loading: _loading,
+                        onTap: _showAuth ? _handleGoogleSignIn : null),
+                    // Apple only offers this on Apple platforms, so on Android
+                    // and desktop the button (and its spacer) go away rather
+                    // than sitting there dead.
+                    if (_appleSupported) ...[
+                      const SizedBox(height: 12),
+                      _AppleButton(
+                          loading: _loading,
+                          onTap: _showAuth ? _handleAppleSignIn : null),
+                    ],
                     const SizedBox(height: 48),
-                    Text(
-                      'By continuing you agree to our Terms & Privacy Policy.',
+                    // The acceptance line was a sentence *about* two documents
+                    // with no way to reach either of them, on the one screen
+                    // where agreeing to them is the thing being asked. Both
+                    // halves are now the links they always claimed to be.
+                    Text.rich(
+                      TextSpan(
+                        children: [
+                          const TextSpan(
+                              text: 'By continuing you agree to our '),
+                          TextSpan(
+                            text: 'Terms',
+                            style: TextStyle(
+                              color: c.primary,
+                              fontWeight: FontWeight.w700,
+                              decoration: TextDecoration.underline,
+                              decorationColor:
+                                  c.primary.withValues(alpha: 0.4),
+                            ),
+                            recognizer: _terms,
+                          ),
+                          const TextSpan(text: ' & '),
+                          TextSpan(
+                            text: 'Privacy Policy',
+                            style: TextStyle(
+                              color: c.primary,
+                              fontWeight: FontWeight.w700,
+                              decoration: TextDecoration.underline,
+                              decorationColor:
+                                  c.primary.withValues(alpha: 0.4),
+                            ),
+                            recognizer: _privacy,
+                          ),
+                          const TextSpan(text: '.'),
+                        ],
+                      ),
                       textAlign: TextAlign.center,
-                      style: t.labelSmall?.copyWith(color: c.text2, letterSpacing: 0.1, fontWeight: FontWeight.w500),
+                      style: t.labelSmall?.copyWith(
+                          color: c.text2,
+                          letterSpacing: 0.1,
+                          fontWeight: FontWeight.w500),
                     ),
                   ],
                 ),
@@ -209,7 +364,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
 /// A soft radial glow blob used for the ambient background lighting.
 class _Glow extends StatelessWidget {
-  const _Glow({required this.color, required this.alignment, required this.size});
+  const _Glow(
+      {required this.color, required this.alignment, required this.size});
   final Color color;
   final Alignment alignment;
   final double size;
@@ -225,7 +381,10 @@ class _Glow extends StatelessWidget {
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             gradient: RadialGradient(
-              colors: [color.withValues(alpha: context.isDark ? 0.22 : 0.18), color.withValues(alpha: 0.0)],
+              colors: [
+                color.withValues(alpha: context.isDark ? 0.22 : 0.18),
+                color.withValues(alpha: 0.0)
+              ],
             ),
           ),
         ),
@@ -267,14 +426,21 @@ class _GoogleButton extends StatelessWidget {
               SizedBox(
                 width: 22,
                 height: 22,
-                child: CircularProgressIndicator(strokeWidth: 2.4, color: c.primary),
+                child: CircularProgressIndicator(
+                    strokeWidth: 2.4, color: c.primary),
               )
             else ...[
-              const SizedBox(width: 22, height: 22, child: CustomPaint(painter: _GoogleGPainter())),
+              const SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CustomPaint(painter: _GoogleGPainter())),
               const SizedBox(width: 14),
               Text(
                 'Continue with Google',
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700, fontSize: 16),
+                style: Theme.of(context)
+                    .textTheme
+                    .labelLarge
+                    ?.copyWith(fontWeight: FontWeight.w700, fontSize: 16),
               ),
             ],
           ],
@@ -328,8 +494,6 @@ class _AppleButton extends StatelessWidget {
   }
 }
 
-
-
 /// The four-colour Google "G", drawn from arcs + the blue crossbar.
 class _GoogleGPainter extends CustomPainter {
   const _GoogleGPainter();
@@ -354,14 +518,17 @@ class _GoogleGPainter extends CustomPainter {
       ..strokeCap = StrokeCap.butt;
 
     // Clockwise from just below 3 o'clock (a small gap at the crossbar exit):
-    canvas.drawArc(rect, _d(8), _d(82), false, p..color = _green); // bottom-right
-    canvas.drawArc(rect, _d(90), _d(90), false, p..color = _yellow); // bottom-left
+    canvas.drawArc(
+        rect, _d(8), _d(82), false, p..color = _green); // bottom-right
+    canvas.drawArc(
+        rect, _d(90), _d(90), false, p..color = _yellow); // bottom-left
     canvas.drawArc(rect, _d(180), _d(90), false, p..color = _red); // top-left
     canvas.drawArc(rect, _d(270), _d(82), false, p..color = _blue); // top-right
 
     // Blue crossbar from centre to the right edge.
     final bar = RRect.fromRectAndRadius(
-      Rect.fromLTRB(center.dx - w * 0.1, center.dy - w / 2, center.dx + radius + w / 2, center.dy + w / 2),
+      Rect.fromLTRB(center.dx - w * 0.1, center.dy - w / 2,
+          center.dx + radius + w / 2, center.dy + w / 2),
       Radius.circular(w * 0.1),
     );
     canvas.drawRRect(bar, Paint()..color = _blue);

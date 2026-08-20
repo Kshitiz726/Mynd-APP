@@ -9,7 +9,7 @@ import '../../widgets/om_avatar.dart';
 import '../../widgets/om_tappable.dart';
 import 'user_profile_sheet.dart';
 
-/// Reveals everyone in a group room — their avatar + username. Tapping a member
+/// Reveals everyone in a group room - their avatar + username. Tapping a member
 /// (other than yourself) opens their profile sheet so you can follow them.
 class GroupMembersSheet extends StatefulWidget {
   const GroupMembersSheet({super.key, required this.conversationId, required this.title});

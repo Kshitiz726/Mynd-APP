@@ -13,7 +13,7 @@ import '../../widgets/om_avatar.dart';
 import '../../widgets/om_tappable.dart';
 import 'chat_screen.dart';
 
-/// "New message" — pick a friend (someone whose follow request you accepted, in
+/// "New message" - pick a friend (someone whose follow request you accepted, in
 /// either direction) and open a 1:1 DM with them. Searchable by name.
 class NewDmSheet extends StatefulWidget {
   const NewDmSheet({super.key});
@@ -54,7 +54,7 @@ class _NewDmSheetState extends State<NewDmSheet> {
       // Only confirmed friends (accepted) can be DM'd.
       _friends = all.where((f) => f.accepted).toList();
     } catch (_) {
-      // server offline — leave empty, the UI shows the empty state
+      // server offline - leave empty, the UI shows the empty state
     }
     if (mounted) setState(() => _loading = false);
   }
@@ -95,7 +95,7 @@ class _NewDmSheetState extends State<NewDmSheet> {
     } catch (_) {
       if (mounted) {
         setState(() => _openingId = null);
-        Toast.show(context, "Couldn't open chat — is the server running?");
+        Toast.show(context, "Couldn't open chat - is the server running?");
       }
     }
   }
@@ -175,7 +175,7 @@ class _NewDmSheetState extends State<NewDmSheet> {
                           child: Center(
                             child: Text(
                               _friends.isEmpty
-                                  ? 'no friends yet — accept a follow request to add one'
+                                  ? 'no friends yet - accept a follow request to add one'
                                   : 'no one matches "$_query"',
                               textAlign: TextAlign.center,
                               style: Theme.of(context).textTheme.bodySmall,

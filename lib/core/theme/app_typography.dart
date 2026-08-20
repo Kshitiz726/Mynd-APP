@@ -4,7 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 /// OurMynd typography.
 ///
 /// - **Display / headings:** Fredoka (rounded, friendly).
-/// - **Body / UI:** Lexend (tuned for reading proficiency — a deliberate
+/// - **Body / UI:** Lexend (tuned for reading proficiency - a deliberate
 ///   ADHD/dyslexia-friendly choice).
 /// - **Accessibility:** when the "hyperlegible" preference is on, the entire
 ///   tree is rebuilt with Atkinson Hyperlegible via [hyperlegibleOf].
@@ -33,7 +33,7 @@ abstract final class AppTypography {
       bodySmall: body(fontSize: 13, fontWeight: FontWeight.w400, color: text2, height: 1.5),
       labelLarge: display(fontSize: 16, fontWeight: FontWeight.w600, color: text, letterSpacing: 0.1),
       labelMedium: body(fontSize: 14, fontWeight: FontWeight.w600, color: text),
-      // Eyebrow / overline — uppercase, wide tracking for a refined section tag.
+      // Eyebrow / overline - uppercase, wide tracking for a refined section tag.
       labelSmall: body(fontSize: 11, fontWeight: FontWeight.w700, color: text2, letterSpacing: 0.8),
     );
   }

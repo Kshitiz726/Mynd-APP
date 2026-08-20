@@ -15,16 +15,18 @@ import '../../../providers/task_provider.dart';
 import '../../../widgets/om_avatar.dart';
 import '../../../widgets/om_card.dart';
 import '../../../widgets/om_mascot.dart';
-import '../../../widgets/om_states.dart';
 import '../../../widgets/om_tappable.dart';
 import '../../../widgets/shimmer_swipe.dart';
 import '../search/global_search_screen.dart';
+import '../../../providers/streak_provider.dart';
+import 'streak_calendar.dart';
 import 'goal_sheet.dart';
+import 'home_illustrations.dart';
 import 'brain_dump_sheet.dart';
 import 'edit_task_sheet.dart';
 
 /// Top chrome for the Today dashboard: the user's avatar, a global app-search
-/// field, and a "berries" momentum pill — mirroring the reference's
+/// field, and a "berries" momentum pill - mirroring the reference's
 /// avatar · search · points header.
 class HomeTopBar extends StatelessWidget {
   const HomeTopBar({super.key});
@@ -32,11 +34,12 @@ class HomeTopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.omColors;
-    final tasks = context.watch<TaskProvider>();
-    final goalsDone =
-        context.watch<GoalProvider>().goals.fold<int>(0, (s, g) => s + g.doneCount);
-    // A light, derived momentum score so the pill reflects real progress.
-    final berries = tasks.doneCount * 10 + goalsDone * 20;
+    // This pill used to show a "berries" momentum score - doneCount * 10 +
+    // goalsDone * 20 - under a flame icon, which is the universal symbol for a
+    // streak. It reset every midnight and survived nothing, so the flame was
+    // advertising a history the app was not keeping. It is now the streak it
+    // always looked like.
+    final streak = context.watch<StreakProvider>();
 
     final name = ApiConfig.instance.displayName ?? 'friend';
     final userId = ApiConfig.instance.userId ?? name;
@@ -82,23 +85,37 @@ class HomeTopBar extends StatelessWidget {
             ),
           ),
           const SizedBox(width: AppSpacing.sm),
-          Container(
-            height: 44,
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            decoration: BoxDecoration(
-              color: c.primaryTint,
-              borderRadius: BorderRadius.circular(AppRadius.pill),
-            ),
-            child: Row(
-              children: [
-                Icon(OmIcons.byName('flame'), size: 18, color: c.accent),
-                const SizedBox(width: 6),
-                Text('$berries',
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: c.primary,
-                          fontWeight: FontWeight.w800,
-                        )),
-              ],
+          // The streak, and a way into the history behind it. A number with a
+          // flame on it that you cannot tap is asking to be taken on faith.
+          OmTappable(
+            onTap: () => showStreakCalendar(context),
+            feedback: OmTapFeedback.light,
+            pressedScale: 0.94,
+            child: Container(
+              height: 44,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              decoration: BoxDecoration(
+                color: c.primaryTint,
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+              ),
+              child: Row(
+                children: [
+                  Icon(OmIcons.byName('flame'),
+                      size: 18,
+                      // Today not yet earned reads as unlit rather than as a
+                      // broken streak - it is still going, it is just waiting
+                      // on you.
+                      color: streak.todayComplete
+                          ? c.accent
+                          : c.accent.withValues(alpha: 0.45)),
+                  const SizedBox(width: 6),
+                  Text('${streak.currentStreak}',
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                            color: c.primary,
+                            fontWeight: FontWeight.w800,
+                          )),
+                ],
+              ),
             ),
           ),
         ],
@@ -184,7 +201,7 @@ class HomeHero extends StatelessWidget {
   }
 }
 
-/// The featured progress card — the user's primary active goal rendered like the
+/// The featured progress card - the user's primary active goal rendered like the
 /// reference's "Get rid of your back pain · Session 4 · 100" tile, with milestone
 /// progress dots. Falls back to a "set a goal" CTA when there are none.
 class FeaturedGoalCard extends StatelessWidget {
@@ -315,7 +332,7 @@ class FeaturedGoalCard extends StatelessWidget {
   }
 }
 
-/// Tracks overall goal achievement — how much of every goal's daily-step plan
+/// Tracks overall goal achievement - how much of every goal's daily-step plan
 /// has been completed on the way to each deadline, plus whether the user is
 /// keeping pace. Sits above the featured goal so the big picture comes first.
 class GoalAchievementCard extends StatelessWidget {
@@ -446,8 +463,8 @@ class _ProgressDots extends StatelessWidget {
   }
 }
 
-/// "do this now" — a single focus: the one task happening now (or next up).
-/// Deliberately one card so there's no decision paralysis — the next thing,
+/// "do this now" - a single focus: the one task happening now (or next up).
+/// Deliberately one card so there's no decision paralysis - the next thing,
 /// nothing else. Falls back to the top backlog item when nothing is scheduled.
 class QuickActions extends StatefulWidget {
   const QuickActions({super.key});
@@ -489,7 +506,7 @@ class _QuickActionsState extends State<QuickActions> {
           duration: const Duration(milliseconds: 300),
           child: _displayTask != null
               ? _ActionCard(key: ValueKey(_displayTask!.id), task: _displayTask!)
-              : const OmEmptyState(key: ValueKey('empty'), message: 'take a breather — you’re all caught up!'),
+              : const AllCaughtUpArt(key: ValueKey('empty')),
         ),
       ),
     );
@@ -508,7 +525,7 @@ class _ActionCard extends StatelessWidget {
     final timeStr = task.startTime != null ? DateFormat.jm().format(task.startTime!) : 'anytime';
 
     return ShimmerSwipe(
-      child: OmCard.hero(
+      child: OmCard.glass(
         tint: color,
         padding: const EdgeInsets.all(12),
         onLongPress: () => showEditTaskSheet(context, task),
@@ -558,7 +575,7 @@ class _ActionCard extends StatelessWidget {
   }
 }
 
-/// The active-goals list — each goal as a row with a completion checkbox circle,
+/// The active-goals list - each goal as a row with a completion checkbox circle,
 /// its deadline and step progress. Shows a clean empty state when there are no
 /// goals yet. This is the simple, at-a-glance goals module on Home.
 class GoalsList extends StatelessWidget {
@@ -569,15 +586,74 @@ class GoalsList extends StatelessWidget {
     final gp = context.watch<GoalProvider>();
     if (gp.goals.isEmpty) return const _GoalsEmptyState();
 
-    final active = gp.goals.where((g) => !g.isComplete).toList();
-    final done = gp.goals.where((g) => g.isComplete).toList();
+    final active = gp.active;
+    final done = gp.finished;
 
     return Column(
       children: [
         for (final g in active) _GoalRow(goal: g),
-        for (final g in done) _GoalRow(goal: g),
+        // Finished goals fold away. A goal you have completed is a record, not
+        // a task, and leaving it in the list means the thing you achieved
+        // spends the rest of its life adding to the pile you are looking at.
+        if (done.isNotEmpty) _FinishedGoals(goals: done),
         const SizedBox(height: AppSpacing.sm),
         const _AddGoalButton(),
+      ],
+    );
+  }
+}
+
+/// A one-line disclosure for goals that are done.
+class _FinishedGoals extends StatefulWidget {
+  const _FinishedGoals({required this.goals});
+
+  final List<Goal> goals;
+
+  @override
+  State<_FinishedGoals> createState() => _FinishedGoalsState();
+}
+
+class _FinishedGoalsState extends State<_FinishedGoals> {
+  bool _open = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.omColors;
+    final n = widget.goals.length;
+    return Column(
+      children: [
+        OmTappable(
+          onTap: () {
+            Haptics.light();
+            setState(() => _open = !_open);
+          },
+          feedback: OmTapFeedback.none,
+          pressedScale: 0.98,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            child: Row(
+              children: [
+                Icon(OmIcons.solid('check'), size: 15, color: c.success),
+                const SizedBox(width: 8),
+                Text(
+                  '$n finished',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: c.text2,
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+                const Spacer(),
+                AnimatedRotation(
+                  duration: const Duration(milliseconds: 200),
+                  turns: _open ? 0.25 : 0,
+                  child: Icon(OmIcons.byName('chevR'), size: 15, color: c.text2),
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (_open)
+          for (final g in widget.goals) _GoalRow(goal: g),
       ],
     );
   }
@@ -706,22 +782,22 @@ class _GoalsEmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.omColors;
-    return OmCard(
+    // Neutral frost, not a brand-tinted pane.
+    //
+    // Brain Dump can carry the purple tint because what sits on it is a white
+    // icon on a solid gradient tile. This card's illustration is drawn in
+    // primary and flow, so tinting the pane the same hue put purple artwork on
+    // a purple slab: the target rings disappeared into it and the body copy
+    // lost most of its contrast. The colour in this card should come from the
+    // drawing and the CTA, not from the surface they sit on.
+    return OmCard.glass(
       padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 18),
       onTap: () => showAddGoalSheet(context),
       child: Column(
         children: [
-          Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: LinearGradient(
-                colors: [c.primaryTint, c.primary.withValues(alpha: 0.12)],
-              ),
-            ),
-            child: Icon(OmIcons.byName('target'), color: c.primary, size: 30),
-          ),
+          // Spans the box rather than sitting in it as a 64px circle, which
+          // read as a placeholder waiting for the real thing to load.
+          const NoGoalsArt(),
           const SizedBox(height: 14),
           Text('No active goals',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -729,7 +805,7 @@ class _GoalsEmptyState extends StatelessWidget {
                     fontWeight: FontWeight.w700,
                   )),
           const SizedBox(height: 4),
-          Text("Set a goal — we'll break it into daily steps.",
+          Text("Set a goal - we'll break it into daily steps.",
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodySmall),
           const SizedBox(height: 16),
@@ -758,7 +834,7 @@ class BrainDumpCard extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.only(top: AppSpacing.md),
-      child: OmCard.hero(
+      child: OmCard.glass(
         tint: c.primary,
         onTap: () => showBrainDumpSheet(context),
         child: Row(

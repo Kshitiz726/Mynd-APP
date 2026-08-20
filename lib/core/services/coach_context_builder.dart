@@ -26,6 +26,7 @@ class CoachContextBuilder {
     required FocusProvider focus,
     required SettingsProvider settings,
     required String userName,
+    String userMemory = '',
   }) {
     final memory = CoachMemoryService.instance;
 
@@ -37,7 +38,13 @@ class CoachContextBuilder {
       todayTasks: _buildTaskSummaries(tasks),
       habitProgress: _buildHabitProgress(habits),
       focusStatistics: _buildFocusStats(focus),
-      previousConversationSummary: memory.memorySummary,
+      // The user's own memory leads: it is the durable picture of who they
+      // are, where the session memo is only what was said last time.
+      previousConversationSummary: [
+        if (userMemory.isNotEmpty) userMemory,
+        if (memory.memorySummary.isNotEmpty)
+          'From your last sessions together:\n${memory.memorySummary}',
+      ].join('\n\n'),
       userPreferences: CoachUserPreferences(
         prefersBrevity: settings.lowStim,
         preferredName: userName.isNotEmpty ? userName : null,
@@ -69,12 +76,21 @@ class CoachContextBuilder {
   }
 
   List<TaskSummary> _buildTaskSummaries(TaskProvider tasks) {
-    return tasks.all.take(8).map((t) {
+    // The coach only ever knows about *today*. Tasks the user has parked on a
+    // future day (e.g. tapping "24 July" and auto-scheduling there) must not
+    // leak into the conversation - talking to Mynd on the 22nd should surface
+    // the 22nd's plan and mood, nothing that lives days ahead. Because these
+    // are read live from the provider against DateTime.now(), the picture also
+    // "cleans" itself every midnight for free: yesterday's blocks simply stop
+    // matching today, and only the rolling summary carries context forward.
+    final today = tasks.todaySchedule.where((t) => !t.isAnchor);
+    final backlog = tasks.backlog; // undated, "keeps not happening" - fair game
+    return [...today, ...backlog].take(8).map((t) {
       return TaskSummary(
         title: t.title,
         energyLevel: t.energy.label,
         isDone: t.done,
-        dueAt: null, // wire to due date when model supports it
+        dueAt: t.startTime, // today's blocks carry their time; backlog is null
       );
     }).toList();
   }
@@ -89,7 +105,7 @@ class CoachContextBuilder {
       for (final habit in board.items) {
         total++;
         if (habit.done) done++;
-        // Streak tracking — seeded data uses 0; wire to persistence later.
+        // Streak tracking - seeded data uses 0; wire to persistence later.
         if (0 > longestDays) {
           longestDays = 0;
           longestName = habit.name;
@@ -132,11 +148,14 @@ class CoachContextBuilder {
   }) {
     final patterns = <String>[];
 
-    // Overwhelm: many undone tasks + low energy
-    final undone = tasks.all.where((t) => !t.done).length;
+    // Overwhelm: many undone tasks + low energy. Scoped to today's plan plus the
+    // undated backlog - the load the user is actually carrying *now*, not blocks
+    // they deliberately pushed to a later day.
+    final undone = tasks.todaySchedule.where((t) => !t.isAnchor && !t.done).length +
+        tasks.backlog.length;
     if (undone >= 5 && energy != EnergyLevel.high) {
       patterns.add(
-        'The user has $undone unfinished tasks and is not at high energy — '
+        'The user has $undone unfinished tasks and is not at high energy - '
         'cognitive load is likely high. Help reduce the pile, not add to it.',
       );
     }
@@ -167,7 +186,7 @@ class CoachContextBuilder {
     if (memo.contains('overwhelm') || memo.contains('stuck')) {
       patterns.add(
         'In previous sessions, overwhelm and feeling stuck have come up. '
-        'Be aware this may surface again — acknowledge before solving.',
+        'Be aware this may surface again - acknowledge before solving.',
       );
     }
 

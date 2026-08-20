@@ -7,7 +7,7 @@ import '../core/theme/app_colors.dart';
 import '../models/energy_level.dart';
 import '../providers/energy_provider.dart';
 
-/// The OurMynd mascot — a soft gradient blob with dynamic eyes and mouth 
+/// The OurMynd mascot - a soft gradient blob with dynamic eyes and mouth 
 /// reflecting the user's current energy level, now with smooth animations!
 class OmMascot extends StatelessWidget {
   const OmMascot({super.key, this.size = 40});

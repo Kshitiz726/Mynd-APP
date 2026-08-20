@@ -2,7 +2,7 @@
 /// `participant_state` enum.
 enum ParticipantState { active, inactive, muted, needHelp }
 
-/// Mic indicator — the real audio track lives in LiveKit; this is just the
+/// Mic indicator - the real audio track lives in LiveKit; this is just the
 /// badge the grid renders.
 enum MicState { muted, speaking, ptt }
 

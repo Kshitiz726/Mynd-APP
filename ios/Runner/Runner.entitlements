@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  Lets a reminder through a Focus mode and onto the lock screen, which is
+	  the iOS equivalent of the Android channel's high importance plus public
+	  lockscreen visibility. Without it, DarwinNotificationDetails asking for
+	  InterruptionLevel.timeSensitive is quietly downgraded and reminders wait
+	  until the user next picks the phone up - the same "it never arrived"
+	  complaint the Android side had.
+
+	  This entitlement needs no Apple review. (Critical alerts, which also
+	  override the silent switch, do - they are not used here.)
+	-->
+	<key>com.apple.developer.usernotifications.time-sensitive</key>
+	<true/>
+
+	<!--
+	  Sign in with Apple. Without this entitlement the authorisation request
+	  fails immediately with error 1000 (unknown), which reads like a code bug
+	  rather than a missing capability. "Default" is the plain first-party flow;
+	  the other values are for sharing an account with a web service, which this
+	  app does not do.
+
+	  Unlike the time-sensitive one above, this DOES need the capability enabled
+	  on the com.ourmynd.app App ID, and it is stripped from ad-hoc simulator
+	  builds until a DEVELOPMENT_TEAM is set.
+	-->
+	<key>com.apple.developer.applesignin</key>
+	<array>
+		<string>Default</string>
+	</array>
+</dict>
+</plist>

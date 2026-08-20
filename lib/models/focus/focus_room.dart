@@ -11,6 +11,7 @@ class FocusRoom {
     required this.livekitRoom,
     this.visibility = 'public',
     this.hostId,
+    this.code,
   });
 
   final String id;
@@ -23,6 +24,10 @@ class FocusRoom {
   final String visibility;   // 'public' | 'private'
   final String? hostId;
 
+  /// The short join code, e.g. 4K9P. The only way into a private room, and a
+  /// sayable way into a public one.
+  final String? code;
+
   bool get isPublic => visibility == 'public';
   String get label => '$liveCount people focusing';
 
@@ -30,7 +35,7 @@ class FocusRoom {
   FocusRoom withCount(int count) => FocusRoom(
         id: id, title: title, iconName: iconName, iconColor: iconColor,
         liveCount: count, defaultAmbience: defaultAmbience, livekitRoom: livekitRoom,
-        visibility: visibility, hostId: hostId,
+        visibility: visibility, hostId: hostId, code: code,
       );
 
   factory FocusRoom.fromJson(Map<String, dynamic> j) => FocusRoom(
@@ -43,5 +48,6 @@ class FocusRoom {
         livekitRoom: j['livekit_room'] as String? ?? '',
         visibility: j['visibility'] as String? ?? 'public',
         hostId: j['host_id'] as String?,
+        code: j['code'] as String?,
       );
 }

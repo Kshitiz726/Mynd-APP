@@ -19,7 +19,7 @@ class VoiceService {
     await disconnect();
     final room = Room(roomOptions: const RoomOptions(adaptiveStream: true));
     await room.connect(url, token);
-    // Publish mic, but start muted — push-to-talk / explicit unmute enables it.
+    // Publish mic, but start muted - push-to-talk / explicit unmute enables it.
     await room.localParticipant?.setMicrophoneEnabled(false);
     _room = room;
   }

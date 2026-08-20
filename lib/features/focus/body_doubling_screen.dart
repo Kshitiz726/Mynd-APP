@@ -9,8 +9,10 @@ import '../../core/services/realtime_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/haptics.dart';
 import '../../core/utils/om_icons.dart';
+import '../../widgets/om_back_button.dart';
 import '../../core/utils/toast.dart';
 import '../../models/focus/body_double.dart';
+import '../community/user_profile_sheet.dart';
 import '../../models/focus_mode.dart';
 import '../../providers/focus_provider.dart';
 import '../../providers/focus_room_provider.dart';
@@ -19,8 +21,8 @@ import '../../widgets/om_button.dart';
 import '../../widgets/om_tappable.dart';
 
 /// Body doubling matchmaking. Two ways in:
-///   • Auto-match — queue up; pair with the next solo user (socket `bd_matched`).
-///   • Invite a friend — create the room now and notify a specific friend.
+///   • Auto-match - queue up; pair with the next solo user (socket `bd_matched`).
+///   • Invite a friend - create the room now and notify a specific friend.
 /// On pairing we show the partner's generated avatar + name, then drop both into
 /// a shared focus room.
 class BodyDoublingScreen extends StatefulWidget {
@@ -49,7 +51,8 @@ class _BodyDoublingScreenState extends State<BodyDoublingScreen> {
 
   List<BdFriend>? _friends;
   bool _loadingFriends = false;
-  String? _invitedName;
+  /// Who we invited, kept whole so the session shows their face too.
+  BdPartner? _invited;
 
   @override
   void initState() {
@@ -65,7 +68,7 @@ class _BodyDoublingScreenState extends State<BodyDoublingScreen> {
       Haptics.success();
     });
     // Kick off matchmaking immediately when launched from "start" with body
-    // doubling on — no extra tap needed.
+    // doubling on - no extra tap needed.
     if (widget.autoStart) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _startMatch();
@@ -95,6 +98,17 @@ class _BodyDoublingScreenState extends State<BodyDoublingScreen> {
     setState(() => _phase = _Phase.searching);
     Haptics.medium();
     try {
+      // Being told you were paired arrives over the socket and nowhere else, so
+      // queueing without one means waiting forever while the other person sits
+      // in a room you never hear about. Better to fail here, where we can say
+      // so, than to look like it is working.
+      if (!await _rt.ensureConnected()) {
+        if (!mounted) return;
+        setState(() => _phase = _Phase.idle);
+        Toast.show(context, 'no connection to the focus server - try again');
+        return;
+      }
+
       final m = await ApiClient.instance.bodyDoublingMatch();
       if (!mounted) return;
       if (m.matched) {
@@ -127,10 +141,10 @@ class _BodyDoublingScreenState extends State<BodyDoublingScreen> {
     
     if (widget.mode != null) {
       context.read<FocusProvider>().start(
-        widget.mode!, 
-        true, 
+        widget.mode!,
+        true,
         preMatchedRoomId: id,
-        preMatchedPartnerName: _partner?.name ?? _invitedName,
+        preMatchedPartner: _partner ?? _invited,
       );
       Navigator.of(context).maybePop();
     } else {
@@ -159,9 +173,10 @@ class _BodyDoublingScreenState extends State<BodyDoublingScreen> {
       if (!mounted) return;
       setState(() {
         _roomId = roomId;
-        _invitedName = f.name;
+        _invited = BdPartner(
+            id: f.id, name: f.name, initial: f.initial, color: f.color);
       });
-      Toast.show(context, 'Invited ${f.name} — they\'ll get a notification');
+      Toast.show(context, 'Invited ${f.name} - they\'ll get a notification');
     } catch (_) {
       if (mounted) Toast.show(context, "Couldn't send invite");
     }
@@ -176,33 +191,20 @@ class _BodyDoublingScreenState extends State<BodyDoublingScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         title: const Text('Focus together'),
-        leading: IconButton(
-          icon: Icon(OmIcons.byName('chevL'), color: c.text),
-          onPressed: () => Navigator.of(context).maybePop(),
-        ),
+        automaticallyImplyLeading: false,
+        leading: const OmBackButton(),
+        leadingWidth: 58,
       ),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenH),
           child: Column(
             children: [
-              const SizedBox(height: AppSpacing.sm),
-              _ModeToggle(
-                mode: _mode,
-                onChanged: _phase == _Phase.idle
-                    ? (m) {
-                        setState(() => _mode = m);
-                        if (m == _Mode.invite) _loadFriends();
-                      }
-                    : null,
-              ),
-              const SizedBox(height: AppSpacing.xl),
+              const SizedBox(height: AppSpacing.lg),
+              // "Invite a friend" is parked for now - only stranger auto-match is
+              // offered, so there's no mode toggle.
               Expanded(
-                child: _phase == _Phase.matched
-                    ? _matchedView(c)
-                    : _mode == _Mode.auto
-                        ? _autoView(c)
-                        : _inviteView(c),
+                child: _phase == _Phase.matched ? _matchedView(c) : _autoView(c),
               ),
             ],
           ),
@@ -252,13 +254,13 @@ class _BodyDoublingScreenState extends State<BodyDoublingScreen> {
 
   // ── Invite a friend ──
   Widget _inviteView(OmColors c) {
-    if (_invitedName != null) {
+    if (_invited != null) {
       return Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(OmIcons.byName('check'), size: 56, color: c.success),
           const SizedBox(height: AppSpacing.lg),
-          Text('Invited $_invitedName',
+          Text('Invited ${_invited!.name}',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
           const SizedBox(height: 6),
           Text('They’ll get a notification to join. You can head in now.',
@@ -274,7 +276,7 @@ class _BodyDoublingScreenState extends State<BodyDoublingScreen> {
     final friends = _friends ?? [];
     if (friends.isEmpty) {
       return Center(
-        child: Text('No friends yet — follow people in Community first.',
+        child: Text('No friends yet - follow people in Community first.',
             textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: c.text2)),
       );
     }
@@ -324,8 +326,20 @@ class _BodyDoublingScreenState extends State<BodyDoublingScreen> {
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
                 color: c.primary, fontWeight: FontWeight.w800, letterSpacing: 1.5)),
         const SizedBox(height: AppSpacing.xl),
+        // Tapping the person opens who they are. You are about to sit with
+        // them for an hour, so "who is this" should not be a dead end.
         if (p != null)
-          OmAvatar(userId: p.id, fallbackInitial: p.initial, fallbackColor: _hex(p.color, c.primary), size: 96),
+          OmTappable(
+            onTap: () => UserProfileSheet.show(context, p.id, fallbackName: p.name),
+            feedback: OmTapFeedback.light,
+            pressedScale: 0.96,
+            child: OmAvatar(
+              userId: p.id,
+              fallbackInitial: p.initial,
+              fallbackColor: _hex(p.color, c.primary),
+              size: 96,
+            ),
+          ),
         const SizedBox(height: AppSpacing.md),
         Text(p?.name ?? 'Your partner',
             style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
@@ -383,7 +397,7 @@ class _ModeToggle extends StatelessWidget {
   }
 }
 
-/// Concentric pulsing rings around a search glyph — the "looking…" affordance.
+/// Concentric pulsing rings around a search glyph - the "looking…" affordance.
 class _PulsingFinder extends StatefulWidget {
   const _PulsingFinder({required this.color});
   final Color color;

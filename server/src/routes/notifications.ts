@@ -16,7 +16,7 @@ r.get('/notifications', requireAuth, async (req, res) => {
   res.json({ notifications: rows, unread });
 });
 
-// ── Mark all (or a subset) read — clears the bell badge ──
+// ── Mark all (or a subset) read - clears the bell badge ──
 r.post('/notifications/read', requireAuth, async (req, res) => {
   const { ids } = req.body as { ids?: string[] };
   if (ids?.length) {

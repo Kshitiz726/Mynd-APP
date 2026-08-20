@@ -4,28 +4,39 @@ import 'package:provider/provider.dart';
 import '../../core/constants/app_spacing.dart';
 import '../../core/routes/app_routes.dart';
 import '../../core/services/api_client.dart';
-import '../../core/services/api_config.dart';
+import '../../core/services/google_auth.dart';
 import '../../core/services/coach_memory_service.dart';
 import '../../core/services/realtime_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/haptics.dart';
-import '../../core/utils/om_icons.dart';
+
 import '../../core/utils/toast.dart';
 import '../../providers/nav_provider.dart';
+import '../../providers/premium_provider.dart';
 import '../../providers/settings_provider.dart';
-import '../../widgets/om_button.dart';
-import '../../widgets/om_card.dart';
-import '../../widgets/om_states.dart';
 import '../../widgets/om_switch.dart';
-import '../../widgets/om_back_button.dart';
-import '../../widgets/om_top_bar.dart';
 import '../../widgets/om_tappable.dart';
+import '../memory/memory_screen.dart';
 import 'about_screen.dart';
-import 'activity_history_screen.dart';
+import 'profile_identity.dart';
 
-/// "you" — profile, vault links, and the sensory/accessibility toggles that
-/// drive the app's global behavior. The toggles are wired straight to
-/// [SettingsProvider], so flipping them changes the whole app live.
+/// Settings.
+///
+/// Rebuilt on the reference: a portrait and a name at the top, a plan card, and
+/// after that nothing but quiet grouped rows with chevrons.
+///
+/// The previous version had five sections, eighteen rows, and every icon in a
+/// different colour, which turned a settings page into a fairground. Most of it
+/// was not settings either: "write a review", "redeem a code", "auto low-stim
+/// on brain-dead". Those are gone.
+///
+/// What stayed had to earn it. The sensory toggles are not decoration in an
+/// ADHD app, they are the accessibility layer, so low-stim, dark mode,
+/// hyperlegible type, haptics and reduced motion all remain. Memory is here
+/// because this screen is its only entrance; deleting the row would delete the
+/// feature. Notes went the other way: it was
+/// a second, worse place to write things down next to the coach and the
+/// backlog, so it is gone rather than kept out of politeness.
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
@@ -38,12 +49,16 @@ class ProfileScreen extends StatelessWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Sign out?'),
-        content: const Text("You'll need to continue with Google again to come back in."),
+        content: const Text(
+            "You'll need to continue with Google again to come back in."),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text('Sign out', style: TextStyle(color: ctx.omColors.error)),
+            child:
+                Text('Sign out', style: TextStyle(color: ctx.omColors.error)),
           ),
         ],
       ),
@@ -51,6 +66,8 @@ class ProfileScreen extends StatelessWidget {
     if (ok != true || !context.mounted) return;
 
     await ApiClient.instance.signOut();
+    // Drop the Google grant as well, or the next launch signs straight back in.
+    await GoogleAuth.forget();
     RealtimeService.instance.dispose();
     await CoachMemoryService.instance.clearAll();
 
@@ -62,27 +79,21 @@ class ProfileScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<SettingsProvider>();
+    final premium = context.watch<PremiumProvider>().isPremium;
     final c = context.omColors;
-    final name = ApiConfig.instance.displayName ?? 'your account';
-    final handle = ApiConfig.instance.handle;
 
-    // Always sits inside its own Scaffold so it has a proper background whether
-    // shown as the "you" tab or pushed as a standalone route (previously the
-    // route had no surface and rendered black).
     return Scaffold(
       backgroundColor: c.bg,
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(
-              AppSpacing.screenH, AppSpacing.screenTop, AppSpacing.screenH, AppSpacing.screenBottom),
+          padding: const EdgeInsets.fromLTRB(AppSpacing.screenH, 4,
+              AppSpacing.screenH, AppSpacing.screenBottom),
           children: [
-            OmTopBar(
-              title: 'you',
-              subtitle: handle == null ? name : '$name · $handle',
-              leading: const OmBackButton(),
-              actions: [
-                OmTopBarAction(
-                  icon: OmIcons.byName('close'),
+            // ── Header: back, title, nothing else ──
+            Row(
+              children: [
+                _CircleButton(
+                  icon: Icons.chevron_left_rounded,
                   onTap: () {
                     if (Navigator.of(context).canPop()) {
                       Navigator.of(context).pop();
@@ -91,162 +102,127 @@ class ProfileScreen extends StatelessWidget {
                     }
                   },
                 ),
+                Expanded(
+                  child: Text(
+                    'Settings',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleLarge
+                        ?.copyWith(fontSize: 19),
+                  ),
+                ),
+                // Balances the back button so the title sits truly centred.
+                const SizedBox(width: 40),
               ],
             ),
+            const SizedBox(height: AppSpacing.lg),
 
-            // Current Plan Card (Replaces Sharing is caring)
-            OmTappable(
+            // ── Who you are ──
+            // Both the picture and the name are yours to change here; see
+            // ProfileIdentity.
+            ProfileIdentity(
+              trailing: premium
+                  ? _MemberTag(tier: context.watch<PremiumProvider>().tier)
+                  : null,
+            ),
+            const SizedBox(height: AppSpacing.xl),
+
+            // ── The plan ──
+            _PlanCard(
+              premium: premium,
+              tier: context.watch<PremiumProvider>().tier,
               onTap: () => Navigator.of(context).pushNamed(AppRoutes.paywall),
-              child: Container(
-                margin: const EdgeInsets.only(bottom: AppSpacing.lg),
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF161616),
-                  gradient: const RadialGradient(
-                    center: Alignment(0.5, -0.5),
-                    radius: 1.5,
-                    colors: [
-                      Color(0xFF3B1E4A), // Subtle purple/pink glow
-                      Color(0xFF161616),
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(20),
+            ),
+            const SizedBox(height: AppSpacing.xl),
+
+            const _GroupLabel('Account'),
+            _Group(children: [
+              _Row(
+                icon: Icons.person_outline_rounded,
+                label: 'Account',
+                onTap: () => Navigator.of(context).pushNamed(AppRoutes.paywall),
+              ),
+              _Row(
+                icon: Icons.notifications_none_rounded,
+                label: 'Reminders',
+                onTap: () =>
+                    Navigator.of(context).pushNamed(AppRoutes.reminders),
+              ),
+              _Row(
+                icon: Icons.psychology_outlined,
+                label: 'Memory',
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(builder: (_) => const MemoryScreen()),
                 ),
-                child: Stack(
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Free Plan', style: Theme.of(context).textTheme.headlineMedium?.copyWith(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 32)),
-                        const SizedBox(height: 24),
-                        Text('Complimentary', style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Colors.white.withValues(alpha: 0.85), fontWeight: FontWeight.w600, fontSize: 16)),
-                        const SizedBox(height: 4),
-                        Text('Just the basics', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.white.withValues(alpha: 0.6), fontSize: 14)),
-                      ],
-                    ),
-                    Positioned(
-                      top: 0,
-                      right: 0,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.check, size: 14, color: Colors.black),
-                            const SizedBox(width: 4),
-                            const Text('Active', style: TextStyle(color: Colors.black, fontSize: 12, fontWeight: FontWeight.w700)),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
+                last: true,
+              ),
+            ]),
+            const SizedBox(height: AppSpacing.lg),
+
+            // ── The accessibility layer. Not decoration in an app for ADHD. ──
+            const _GroupLabel('How it feels'),
+            _Group(children: [
+              _ToggleRow(
+                icon: Icons.blur_on_rounded,
+                label: 'Low stimulation',
+                value: settings.lowStim,
+                onChanged: (_) => settings.toggleLowStim(),
+              ),
+              // Dark mode is a Premium perk. Free users see it locked: the
+              // switch never moves, and tapping the row explains why and opens
+              // the paywall. Premium users get the real toggle.
+              _ToggleRow(
+                icon: Icons.dark_mode_outlined,
+                label: 'Dark mode',
+                value: premium && settings.darkMode,
+                locked: !premium,
+                onChanged: premium ? (_) => settings.toggleDarkMode() : null,
+                onLockedTap: () {
+                  Haptics.light();
+                  Toast.show(context, 'Dark mode is a Premium feature');
+                  Navigator.of(context).pushNamed(AppRoutes.paywall);
+                },
+              ),
+              _ToggleRow(
+                icon: Icons.text_fields_rounded,
+                label: 'Hyperlegible font',
+                value: settings.hyperlegible,
+                onChanged: (_) => settings.toggleHyperlegible(),
+              ),
+              _ToggleRow(
+                icon: Icons.vibration_rounded,
+                label: 'Haptics',
+                value: settings.haptics,
+                onChanged: (_) => settings.toggleHaptics(),
+              ),
+              _ToggleRow(
+                icon: Icons.motion_photos_off_outlined,
+                label: 'Reduce motion',
+                value: settings.reduceMotion,
+                onChanged: (_) => settings.toggleReduceMotion(),
+                last: true,
+              ),
+            ]),
+            const SizedBox(height: AppSpacing.lg),
+
+            const _GroupLabel('Settings'),
+            _Group(children: [
+              _Row(
+                icon: Icons.help_outline_rounded,
+                label: 'Help & Support',
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(builder: (_) => const AboutScreen()),
                 ),
               ),
-            ),
-
-            _SettingsGroup(
-              title: 'account',
-              children: [
-                _SettingsItem(
-                  icon: 'user', iconColor: c.primary, label: 'Manage account',
-                  onTap: () {},
-                ),
-                _SettingsItem(
-                  icon: 'credit-card', iconColor: const Color(0xFF10B981), label: 'Manage subscription',
-                  onTap: () => Navigator.of(context).pushNamed(AppRoutes.paywall),
-                ),
-                _SettingsItem(
-                  icon: 'gift', iconColor: const Color(0xFFF59E0B), label: 'Redeem a code',
-                  onTap: () {},
-                ),
-                _SettingsItem(
-                  icon: 'bell', iconColor: const Color(0xFFEC4899), label: 'Notifications',
-                  onTap: () {},
-                ),
-                _SettingsItem(
-                  icon: 'bell', iconColor: const Color(0xFF3B82F6), label: 'Reminders', trailing: '2 active',
-                  onTap: () => Navigator.of(context).pushNamed(AppRoutes.reminders),
-                ),
-              ],
-            ),
-
-            _SettingsGroup(
-              title: 'my vault',
-              children: [
-                _SettingsItem(
-                  icon: 'clock', iconColor: const Color(0xFF8B5CF6), label: 'Activity history',
-                  onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ActivityHistoryScreen())),
-                ),
-                _SettingsItem(
-                  icon: 'edit', iconColor: const Color(0xFFF43F5E), label: 'Notebook & files', trailing: '12 notes',
-                  onTap: () => Navigator.of(context).pushNamed(AppRoutes.notes),
-                ),
-              ],
-            ),
-
-            _SettingsGroup(
-              title: 'sensory & accessibility',
-              children: [
-                _SettingsToggle(
-                  icon: 'eye', iconColor: const Color(0xFF6366F1), label: 'Low stimulation mode',
-                  value: settings.lowStim, onChanged: settings.toggleLowStim,
-                ),
-                _SettingsToggle(
-                  icon: 'zap', iconColor: const Color(0xFFF59E0B), label: 'Auto low-stim on brain-dead',
-                  value: settings.autoLowStim, onChanged: settings.toggleAutoLowStim,
-                ),
-                _SettingsToggle(
-                  icon: 'moon', iconColor: const Color(0xFF1E293B), label: 'Dark mode',
-                  value: settings.darkMode, onChanged: settings.toggleDarkMode,
-                ),
-                _SettingsToggle(
-                  icon: 'type', iconColor: const Color(0xFF14B8A6), label: 'Hyperlegible font',
-                  value: settings.hyperlegible, onChanged: settings.toggleHyperlegible,
-                ),
-                _SettingsToggle(
-                  icon: 'smartphone', iconColor: const Color(0xFF8B5CF6), label: 'Haptics',
-                  value: settings.haptics, onChanged: settings.toggleHaptics,
-                ),
-                _SettingsToggle(
-                  icon: 'wind', iconColor: const Color(0xFF06B6D4), label: 'Reduce animation',
-                  value: settings.reduceMotion, onChanged: settings.toggleReduceMotion,
-                ),
-              ],
-            ),
-
-            _SettingsGroup(
-              title: 'support',
-              children: [
-                _SettingsItem(
-                  icon: 'mail', iconColor: c.text2, label: 'Contact us',
-                  onTap: () {},
-                ),
-                _SettingsItem(
-                  icon: 'star', iconColor: const Color(0xFFF59E0B), label: 'Write a review',
-                  onTap: () {},
-                ),
-                _SettingsItem(
-                  icon: 'info', iconColor: c.text2, label: 'About OurMynd',
-                  onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AboutScreen())),
-                ),
-              ],
-            ),
-
-            _SettingsGroup(
-              children: [
-                _SettingsItem(
-                  icon: 'logout', iconColor: c.error, label: 'Sign out',
-                  labelColor: c.error,
-                  hideChevron: true,
-                  onTap: () => _confirmSignOut(context),
-                ),
-              ],
-            ),
-            const SizedBox(height: 30),
+              _Row(
+                icon: Icons.logout_rounded,
+                label: 'Logout',
+                danger: true,
+                onTap: () => _confirmSignOut(context),
+                last: true,
+              ),
+            ]),
           ],
         ),
       ),
@@ -254,82 +230,180 @@ class ProfileScreen extends StatelessWidget {
   }
 }
 
-class _SettingsGroup extends StatelessWidget {
-  const _SettingsGroup({this.title, required this.children});
-  final String? title;
-  final List<Widget> children;
+/// The plain circular control in the header corner.
+class _CircleButton extends StatelessWidget {
+  const _CircleButton({required this.icon, required this.onTap});
 
-  @override
-  Widget build(BuildContext context) {
-    final c = context.omColors;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (title != null) ...[
-          Padding(
-            padding: const EdgeInsets.only(left: 16, bottom: 8, top: 16),
-            child: Text(title!.toUpperCase(), style: Theme.of(context).textTheme.labelSmall?.copyWith(color: c.text2)),
-          ),
-        ],
-        Container(
-          margin: const EdgeInsets.only(bottom: 16),
-          decoration: BoxDecoration(
-            color: c.surface,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: c.border.withValues(alpha: 0.5)),
-          ),
-          child: Column(
-            children: [
-              for (int i = 0; i < children.length; i++) ...[
-                children[i],
-                if (i < children.length - 1)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 56),
-                    child: Divider(height: 1, thickness: 1, color: c.border.withValues(alpha: 0.5)),
-                  ),
-              ],
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _SettingsItem extends StatelessWidget {
-  const _SettingsItem({required this.icon, required this.iconColor, required this.label, this.trailing, this.labelColor, this.hideChevron = false, required this.onTap});
-
-  final String icon;
-  final Color iconColor;
-  final String label;
-  final String? trailing;
-  final Color? labelColor;
-  final bool hideChevron;
+  final IconData icon;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final c = context.omColors;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+    return OmTappable(
+      onTap: () {
+        Haptics.light();
+        onTap();
+      },
+      feedback: OmTapFeedback.none,
+      pressedScale: 0.88,
+      child: Container(
+        width: 40,
+        height: 40,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(color: c.surface, shape: BoxShape.circle),
+        child: Icon(icon, size: 24, color: c.text),
+      ),
+    );
+  }
+}
+
+/// The plan banner. Colourful in every state, and it tells the truth about
+/// which plan you are on: a warm invitation gradient when you are free, the
+/// tier's own gradient (teal for Plus, violet-gold for Pro) once you subscribe.
+/// A small gradient pill under the user's name once they subscribe - the
+/// "member" badge. Colours match the tier's own gradient on the paywall.
+class _MemberTag extends StatelessWidget {
+  const _MemberTag({required this.tier});
+
+  final String tier; // plus | pro
+
+  @override
+  Widget build(BuildContext context) {
+    final isPro = tier == 'pro';
+    final colors = isPro
+        ? const [Color(0xFF6D3BF0), Color(0xFFF0B24A)]
+        : const [Color(0xFF1FA2A6), Color(0xFF3E7BF0)];
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(colors: colors),
+        borderRadius: BorderRadius.circular(999),
+        boxShadow: [
+          BoxShadow(
+            color: colors.first.withValues(alpha: 0.35),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.workspace_premium_rounded,
+              color: Colors.white, size: 14),
+          const SizedBox(width: 5),
+          Text(
+            isPro ? 'PRO MEMBER' : 'PLUS MEMBER',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PlanCard extends StatelessWidget {
+  const _PlanCard({
+    required this.premium,
+    required this.tier,
+    required this.onTap,
+  });
+
+  final bool premium;
+  final String tier; // free | plus | pro
+  final VoidCallback onTap;
+
+  /// The gradient for the current state. Free is intentionally not grey - a flat
+  /// white card here read as "off"; the point is to look like something worth
+  /// tapping.
+  List<Color> _gradient() {
+    if (!premium) return const [Color(0xFF7C6FF0), Color(0xFFF0A479)];
+    if (tier == 'pro') return const [Color(0xFF6D3BF0), Color(0xFFF0B24A)];
+    return const [Color(0xFF1FA2A6), Color(0xFF3E7BF0)]; // plus
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = _gradient();
+    final title = !premium
+        ? 'Free plan'
+        : tier == 'pro'
+            ? 'OurMynd Pro'
+            : 'OurMynd Plus';
+    final subtitle = !premium
+        ? 'See what Premium adds'
+        : 'Enjoy your premium features';
+    final icon = !premium
+        ? Icons.auto_awesome_outlined
+        : Icons.workspace_premium_rounded;
+
+    return OmTappable(
+      onTap: () {
+        Haptics.medium();
+        onTap();
+      },
+      feedback: OmTapFeedback.none,
+      pressedScale: 0.98,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: colors,
+          ),
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: colors.first.withValues(alpha: 0.34),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
         child: Row(
           children: [
             Container(
-              width: 32, height: 32,
-              decoration: BoxDecoration(color: iconColor, borderRadius: BorderRadius.circular(8)),
-              child: Icon(OmIcons.byName(icon), size: 16, color: Colors.white),
+              width: 40,
+              height: 40,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.22),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: Colors.white, size: 21),
             ),
             const SizedBox(width: 14),
-            Expanded(child: Text(label, style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: labelColor ?? c.text, fontWeight: FontWeight.w500))),
-            if (trailing != null) ...[
-              Text(trailing!, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: c.text2)),
-              const SizedBox(width: 8),
-            ],
-            if (!hideChevron)
-              Icon(OmIcons.byName('chevR'), size: 16, color: c.text2.withValues(alpha: 0.5)),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15.5),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.9),
+                      fontSize: 12.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded,
+                color: Colors.white.withValues(alpha: 0.9), size: 20),
           ],
         ),
       ),
@@ -337,30 +411,190 @@ class _SettingsItem extends StatelessWidget {
   }
 }
 
-class _SettingsToggle extends StatelessWidget {
-  const _SettingsToggle({required this.icon, required this.iconColor, required this.label, required this.value, required this.onChanged});
+class _GroupLabel extends StatelessWidget {
+  const _GroupLabel(this.text);
 
-  final String icon;
-  final Color iconColor;
-  final String label;
-  final bool value;
-  final ValueChanged<bool> onChanged;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, bottom: 10),
+      child: Text(
+        text,
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: context.omColors.text2,
+              fontWeight: FontWeight.w600,
+            ),
+      ),
+    );
+  }
+}
+
+/// A rounded card holding a run of rows, hairline-separated.
+class _Group extends StatelessWidget {
+  const _Group({required this.children});
+
+  final List<Widget> children;
 
   @override
   Widget build(BuildContext context) {
     final c = context.omColors;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+    return Container(
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: c.border.withValues(alpha: 0.6)),
+      ),
+      child: Column(children: children),
+    );
+  }
+}
+
+class _Row extends StatelessWidget {
+  const _Row({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.last = false,
+    this.danger = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool last;
+  final bool danger;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.omColors;
+    final tint = danger ? c.error : c.text;
+    return OmTappable(
+      onTap: () {
+        Haptics.light();
+        onTap();
+      },
+      feedback: OmTapFeedback.none,
+      pressedScale: 0.99,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+        decoration: BoxDecoration(
+          border: last
+              ? null
+              : Border(
+                  bottom: BorderSide(color: c.border.withValues(alpha: 0.5))),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 20, color: tint),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(label,
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodyLarge
+                      ?.copyWith(color: tint)),
+            ),
+            Icon(Icons.chevron_right_rounded, size: 20, color: c.text2),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ToggleRow extends StatelessWidget {
+  const _ToggleRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.onChanged,
+    this.last = false,
+    this.locked = false,
+    this.onLockedTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool value;
+  final ValueChanged<bool>? onChanged;
+  final bool last;
+
+  /// A premium-gated row: the switch is replaced by a "Premium" pill and the
+  /// whole row taps through to [onLockedTap] instead of toggling.
+  final bool locked;
+  final VoidCallback? onLockedTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.omColors;
+    final row = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+      decoration: BoxDecoration(
+        border: last
+            ? null
+            : Border(
+                bottom: BorderSide(color: c.border.withValues(alpha: 0.5))),
+      ),
       child: Row(
         children: [
-          Container(
-            width: 32, height: 32,
-            decoration: BoxDecoration(color: iconColor, borderRadius: BorderRadius.circular(8)),
-            child: Icon(OmIcons.byName(icon), size: 16, color: Colors.white),
-          ),
+          Icon(icon, size: 20, color: locked ? c.text2 : c.text),
           const SizedBox(width: 14),
-          Expanded(child: Text(label, style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: c.text, fontWeight: FontWeight.w500))),
-          OmSwitch(value: value, onChanged: onChanged),
+          Expanded(
+            child: Text(
+              label,
+              style: Theme.of(context)
+                  .textTheme
+                  .bodyLarge
+                  ?.copyWith(color: locked ? c.text2 : null),
+            ),
+          ),
+          if (locked)
+            const _PremiumPill()
+          else
+            OmSwitch(value: value, onChanged: onChanged ?? (_) {}),
+        ],
+      ),
+    );
+
+    if (!locked) return row;
+    return OmTappable(
+      onTap: onLockedTap ?? () {},
+      feedback: OmTapFeedback.none,
+      pressedScale: 0.99,
+      child: row,
+    );
+  }
+}
+
+/// The small violet "Premium" chip shown where a locked feature's control would
+/// be. A lock glyph plus the word, so the gate reads at a glance.
+class _PremiumPill extends StatelessWidget {
+  const _PremiumPill();
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.omColors;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: c.primaryTint,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.lock_rounded, size: 12, color: c.primary),
+          const SizedBox(width: 4),
+          Text(
+            'Premium',
+            style: TextStyle(
+              color: c.primary,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
         ],
       ),
     );

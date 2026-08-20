@@ -17,7 +17,7 @@ import 'api_client.dart';
 /// 4. Hand the code (+ PKCE verifier + redirect) to our backend, which does the
 ///    token exchange with the desktop client secret and returns our session.
 ///
-/// The client secret never lives in the app — only the desktop *client id* is
+/// The client secret never lives in the app - only the desktop *client id* is
 /// baked in; the exchange happens server-side.
 Future<void> runDesktopGoogleAuth({required String clientId}) async {
   final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);

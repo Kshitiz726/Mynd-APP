@@ -1,0 +1,63 @@
+# Render Blueprint for the OurMynd backend.
+#
+# Deploy: render.com -> New -> Blueprint -> pick this repo + the home-ui-polish
+# branch. Render reads this file, builds server/Dockerfile, and prompts you for
+# the secret env vars below (the ones marked `sync: false`). Copy those values
+# from your own server/.env so they never pass through anyone else.
+#
+# Free plan: 512MB, spins down after ~15 min idle and cold-starts (~50s) on the
+# next request. Fine for TestFlight testing; upgrade later if the wake delay
+# bothers testers.
+services:
+  - type: web
+    name: ourmynd-server
+    runtime: docker
+    dockerfilePath: ./server/Dockerfile
+    dockerContext: ./server
+    plan: free
+    region: frankfurt        # closest free region to a UK/EU + India user
+    healthCheckPath: /health
+    autoDeploy: true         # redeploys on every push to the branch
+    envVars:
+      - key: PORT
+        value: 8080
+      - key: NODE_ENV
+        value: production
+      # ── secrets: set these in the Render dashboard, not in this file ──
+      - key: DATABASE_URL          # Supabase Session-pooler URI, NO ?sslmode
+        sync: false
+      - key: JWT_SECRET            # the server's own token-signing secret
+        generateValue: true        # Render mints a secure random one, never exposed
+      - key: GOOGLE_CLIENT_ID      # web OAuth client id (.apps.googleusercontent.com)
+        sync: false
+      # iOS OAuth client id. Not a secret - it ships inside the IPA's Info.plist -
+      # so it lives here as a plain value rather than a dashboard entry you could
+      # forget to set. Without it every iPhone sign-in fails audience checks.
+      - key: GOOGLE_IOS_CLIENT_ID
+        value: 571086253646-9b5qfcvkffu4efrvrgncfemck9mk5uil.apps.googleusercontent.com
+      # Sign in with Apple. The identity token an iPhone sends is addressed to
+      # the app's bundle id, so that IS the audience we verify against - not a
+      # secret, and not a credential. Plain sign-in needs nothing else: no .p8,
+      # no client secret, only Apple's public JWKS, which the server fetches.
+      # Deliberately NOT set here: APPLE_TEAM_ID / APPLE_KEY_ID /
+      # APPLE_PRIVATE_KEY_PATH. Those are for token *revocation*, which is not
+      # wired yet, and the key path points at a file on a developer's Mac that
+      # does not exist on Render.
+      - key: APPLE_BUNDLE_ID
+        value: com.ourmynd.app
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_PUBLISHABLE_KEY
+        sync: false
+      - key: STRIPE_PRICE_PLUS_MONTHLY
+        sync: false
+      - key: STRIPE_PRICE_PLUS_YEARLY
+        sync: false
+      - key: STRIPE_PRICE_PRO_MONTHLY
+        sync: false
+      - key: STRIPE_PRICE_PRO_YEARLY
+        sync: false
+      # PUBLIC_BASE_URL: set AFTER the first deploy, to the real onrender.com URL
+      # (Stripe redirects come back here). Add it in the dashboard then redeploy.
+      - key: PUBLIC_BASE_URL
+        sync: false

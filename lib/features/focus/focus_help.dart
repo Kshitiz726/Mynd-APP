@@ -1,4 +1,5 @@
 import 'package:flutter/widgets.dart';
+import '../../core/routes/app_routes.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/utils/haptics.dart';
@@ -9,8 +10,8 @@ import '../../providers/nav_provider.dart';
 import '../../providers/task_provider.dart';
 
 /// Routes a "Need help" tap from Focus straight to Mynd (the AI coach), priming
-/// it with the user's live context — what they're working on, how long they've
-/// been at it, and how many alerts are tugging at their attention — and asking
+/// it with the user's live context - what they're working on, how long they've
+/// been at it, and how many alerts are tugging at their attention - and asking
 /// for a gentle, consoling, motivating nudge with one tiny next step.
 ///
 /// The coach already folds energy/tasks/focus state into its prompt; this adds
@@ -43,6 +44,6 @@ void askMyndForHelp(BuildContext context) {
       'Please be gentle and consoling, hype me up a little, and give me one tiny next step I can do right now.');
 
   Haptics.medium();
-  nav.select(AppTab.coach);
+  Navigator.of(context).pushNamed(AppRoutes.coach);
   coach.send(buf.toString());
 }

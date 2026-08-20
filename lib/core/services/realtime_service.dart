@@ -21,8 +21,31 @@ class RealtimeService {
 
   bool get connected => _socket?.connected ?? false;
 
+  /// The token the live socket authenticated with, so a socket belonging to a
+  /// previous session can be told apart from a usable one.
+  String? _socketToken;
+
   void connect() {
-    if (_socket != null) return;
+    final token = ApiConfig.instance.authToken;
+
+    // A socket built for a different token is not a connection, it is a dead
+    // one that happens to exist.
+    //
+    // This returned early whenever `_socket != null`, which quietly broke
+    // everything realtime after any sign-in that was not the first. The socket
+    // gets built at launch with whatever token is around (often none, or one
+    // the server has since stopped accepting), and the connect() call right
+    // after signing in then did nothing at all. The socket kept retrying with
+    // the old credentials, `ensureConnected` timed out, and body doubling
+    // matched two people who could never be told about each other, because
+    // `bd_matched` is pushed down exactly this socket.
+    if (_socket != null && _socketToken == token) return;
+    if (_socket != null) {
+      debugPrint('[rt] token changed, rebuilding the socket');
+      dispose();
+    }
+
+    _socketToken = token;
     final s = io.io(
       ApiConfig.instance.baseUrl,
       io.OptionBuilder()
@@ -33,6 +56,8 @@ class RealtimeService {
           .build(),
     );
     _socket = s;
+    // Whatever subscribed while there was no socket to subscribe to.
+    _attachPending();
 
     s.onConnect((_) {
       debugPrint('[rt] connected id=${s.id}');
@@ -65,7 +90,7 @@ class RealtimeService {
   }
 
   /// Resolves true once the socket is live. Bounded so a caller never hangs
-  /// forever on a socket that can't connect — it returns the current state
+  /// forever on a socket that can't connect - it returns the current state
   /// after [timeout] and lets the caller surface a failure instead.
   Future<bool> ensureConnected({Duration timeout = const Duration(seconds: 8)}) async {
     connect();
@@ -87,6 +112,9 @@ class RealtimeService {
   void dispose() {
     _socket?.dispose();
     _socket = null;
+    // Cleared with the socket, or the next connect() would compare against the
+    // credentials of a socket that no longer exists and skip rebuilding.
+    _socketToken = null;
   }
 
   // ── Emit (client → server) ──
@@ -97,7 +125,7 @@ class RealtimeService {
   Future<Map<String, dynamic>> emitAck(String event, Map<String, dynamic> payload) async {
     final ok = await ensureConnected();
     if (!ok || _socket == null) {
-      debugPrint('[rt] emitAck "$event" skipped — not connected');
+      debugPrint('[rt] emitAck "$event" skipped - not connected');
       return {'ok': false, 'error': 'not connected'};
     }
     final c = Completer<Map<String, dynamic>>();
@@ -171,9 +199,34 @@ class RealtimeService {
       emit('typing', {'conversationId': conversationId, 'isTyping': isTyping});
 
   // ── Listen (server → client) ──
+
+  /// Subscriptions made before the socket existed.
+  ///
+  /// `_socket?.on(...)` silently does nothing when the socket is null, and
+  /// null is the normal state during the first frames after launch - which is
+  /// exactly when the widget tree wires up its listeners. Anything that
+  /// subscribed from an initState was therefore deaf for the rest of the
+  /// session, with no error to explain it. Handlers are kept here and attached
+  /// again whenever a socket appears.
+  final _pending = <MapEntry<String, void Function(Map<String, dynamic>)>>[];
+
   void on(String event, void Function(Map<String, dynamic>) handler) {
+    _pending.add(MapEntry(event, handler));
+    _attach(event, handler);
+  }
+
+  void _attach(String event, void Function(Map<String, dynamic>) handler) {
     _socket?.on(event, (data) => handler((data as Map).cast<String, dynamic>()));
   }
 
-  void off(String event) => _socket?.off(event);
+  void _attachPending() {
+    for (final e in _pending) {
+      _attach(e.key, e.value);
+    }
+  }
+
+  void off(String event) {
+    _pending.removeWhere((e) => e.key == event);
+    _socket?.off(event);
+  }
 }

@@ -12,7 +12,7 @@ enum HabitKind {
 /// A single habit tile (e.g. "hydrate", "deep work").
 ///
 /// Deliberately *gentle*: there are no streaks to break, in line with the
-/// prototype's "habit tracker — gentle, no streaks to break." philosophy.
+/// prototype's "habit tracker - gentle, no streaks to break." philosophy.
 class Habit {
   Habit({
     required this.id,

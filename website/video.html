@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>OurMynd - film</title>
+<!--
+  The film stage.
+  ---------------------------------------------------------------------------
+  1080x1920, built to be recorded rather than browsed, in the shape of a store
+  promo: one big claim in the top third, one phone tilted in perspective below
+  it, a hard cut every few seconds, and a logo card at the end.
+
+  It owns no screens. Every phone is cloned out of index.html through a hidden
+  iframe and the running order comes from window.OM_SCENES on that document, so
+  the film can never show something the product does not.
+
+  The captions ARE written here, and deliberately: the site explains, a promo
+  asserts. Two short lines a shot, no more.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Lexend:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<style>
+  /* Copied from index.html's head: the sprite icons are sized by this rule, and
+     without it every glyph renders at the SVG default of 300x150. */
+  .i { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .i.fill { fill: currentColor; stroke: none; }
+
+  html, body { margin: 0; width: 1080px; height: 1920px; overflow: hidden; background: #08070d; }
+
+  /* Deep, near-black, with the brand sitting just underneath it. */
+  .bg { position: fixed; inset: 0; z-index: 0; background: #08070d; }
+  .bg i { position: absolute; border-radius: 50%; filter: blur(150px); display: block; }
+  .bg .a { width: 1100px; height: 1100px; top: -420px; left: -260px; background: #6B70C9; opacity: .30; }
+  .bg .b { width: 900px;  height: 900px;  bottom: -300px; right: -260px; background: #F0A479; opacity: .13; }
+  .bg .c { width: 700px;  height: 700px;  top: 40%; right: -240px; background: #5C8AD0; opacity: .16; }
+  .vig { position: fixed; inset: 0; z-index: 1; pointer-events: none;
+         background: radial-gradient(120% 70% at 50% 42%, transparent 40%, rgba(0,0,0,.72)); }
+
+  /* ---- Caption ----------------------------------------------------------- */
+  #cap {
+    position: fixed; z-index: 5; left: 96px; right: 96px; top: 150px;
+    font-family: "Fredoka", sans-serif; font-weight: 700;
+    font-size: 96px; line-height: 1.04; letter-spacing: -2.6px;
+  }
+  #cap .l { display: block; overflow: hidden; }
+  #cap .l > span { display: block; color: #F4C9A4; }
+  #cap .c { display: inline-block; white-space: pre; }
+  /* Typed, not stamped. Each character has its own index and the delay is
+     arithmetic from it, which is the same thing the app's own transcript does -
+     the film should not claim a smoothness the product does not have. */
+  #cap .c { opacity: 0; }
+  #cap .l { white-space: nowrap; }
+  #cap.in .l:nth-child(1) .c { animation: charIn .16s ease-out both; animation-delay: calc(var(--i) * .028s); }
+  #cap.in .l:nth-child(2) .c { animation: charIn .16s ease-out both; animation-delay: calc(var(--o) * .028s + var(--i) * .028s + .12s); }
+  @keyframes charIn { from { opacity: 0; filter: blur(6px); transform: translateY(6px); } to { opacity: 1; filter: none; transform: none; } }
+  /* The caret sits at the end of whichever line is still being typed. */
+  #cap .car {
+    display: inline-block; width: 5px; height: .82em; margin-left: 6px;
+    background: #F4C9A4; vertical-align: -2px; opacity: 0;
+  }
+  #cap.in .car { animation: caretOn .01s linear var(--car-on, 0s) both, blink .62s steps(1) var(--car-on, 0s) 3, caretOff .01s linear var(--car-off, 2s) forwards; }
+  @keyframes caretOn { to { opacity: 1; } }
+  @keyframes caretOff { to { opacity: 0; } }
+  @keyframes blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
+  #cap.out .l span { animation: lineOut .3s ease-in forwards; }
+  #cap.out .l:nth-child(2) span { animation-delay: .04s; }
+  @keyframes lineOut { to { transform: translateY(-40%); opacity: 0; } }
+
+  /* ---- Phone ------------------------------------------------------------- */
+  /* Read off the reference frame by frame. Its grammar is: the device is never
+     square to camera, every shot is one long continuous move rather than a
+     hold, and the scale changes hard between shots - a macro that fills the
+     frame, then a medium, then an insert so close you only see a corner. That
+     variety is what stops seventeen cuts of the same object feeling like a
+     slideshow. */
+  #stage { position: fixed; inset: 0; z-index: 3; perspective: 1500px; perspective-origin: 50% 42%; }
+  .shot { position: absolute; inset: 0; opacity: 0; }
+  .shot.on { opacity: 1; }
+  .rig {
+    position: absolute; left: 50%; top: 560px; width: 600px; height: 1250px;
+    margin-left: -300px; transform-style: preserve-3d;
+  }
+  .rig .phone {
+    transform: scale(2); transform-origin: top center;
+    box-shadow: 0 90px 150px -50px rgba(0,0,0,.95), 0 0 0 1px rgba(255,255,255,.07) inset;
+  }
+  .shot.on .rig { animation: var(--move) var(--dur) cubic-bezier(.28,.02,.24,1) both; }
+
+  /* The opening pull-out: starts on the glass, ends on the device. */
+  @keyframes macroPull {
+    from { transform: translate3d(-210px, -330px, 900px) rotateX(13deg) rotateY(-58deg) rotateZ(-15deg) scale(1.5); }
+    to   { transform: translate3d(10px, -60px, 30px)      rotateX(5deg)  rotateY(-27deg) rotateZ(-6deg)  scale(1.0); }
+  }
+  /* Three-quarter, turning slowly away. */
+  @keyframes slowTurn {
+    from { transform: translate3d(30px, -20px, 0)   rotateX(4deg) rotateY(-15deg) rotateZ(-3deg) scale(.98); }
+    to   { transform: translate3d(-20px, -80px, 90px) rotateX(6deg) rotateY(-33deg) rotateZ(-7deg) scale(1.06); }
+  }
+  /* Coming across from the other side, so the light changes shoulder. */
+  @keyframes sideDrift {
+    from { transform: translate3d(150px, -30px, -60px) rotateX(5deg) rotateY(28deg) rotateZ(8deg) scale(.96); }
+    to   { transform: translate3d(-40px, -70px, 60px)  rotateX(2deg) rotateY(13deg) rotateZ(3deg) scale(1.04); }
+  }
+  /* Rising from under the frame line. */
+  @keyframes riseTilt {
+    from { transform: translate3d(0, 300px, -180px) rotateX(19deg) rotateY(-8deg) rotateZ(1deg) scale(1.0); }
+    to   { transform: translate3d(0, -50px, 70px)   rotateX(3deg)  rotateY(-20deg) rotateZ(-4deg) scale(1.06); }
+  }
+  /* A push in, ending closer than it started. */
+  @keyframes pushIn {
+    from { transform: translate3d(-90px, 20px, -260px) rotateX(7deg) rotateY(-18deg) rotateZ(-3deg) scale(.92); }
+    to   { transform: translate3d(40px, -150px, 330px)  rotateX(2deg) rotateY(-33deg) rotateZ(-9deg) scale(1.14); }
+  }
+  /* The insert: too close to read the screen, which is the point - it is a
+     texture shot, and the reference uses one to break its own rhythm. */
+  @keyframes macroDetail {
+    from { transform: translate3d(-240px, -430px, 880px) rotateX(10deg) rotateY(-42deg) rotateZ(-11deg) scale(1.5); }
+    to   { transform: translate3d(-120px, -540px, 960px) rotateX(13deg) rotateY(-49deg) rotateZ(-15deg) scale(1.6); }
+  }
+  /* Almost side-on, the frame catching light down its length. */
+  @keyframes edgeOn {
+    from { transform: translate3d(120px, -40px, 120px) rotateX(3deg) rotateY(-46deg) rotateZ(-9deg) scale(1.1); }
+    to   { transform: translate3d(-10px, -90px, 30px)  rotateX(6deg) rotateY(-24deg) rotateZ(-4deg) scale(1.0); }
+  }
+
+  /* The light the device sits in, which the ambience shots recolour. */
+  .rig::after {
+    content: ""; position: absolute; left: 50%; top: 40%; width: 1300px; height: 1300px;
+    margin-left: -650px; border-radius: 50%; transform: translateZ(-320px);
+    background: radial-gradient(circle, rgba(141,132,230,.34), transparent 60%);
+    filter: blur(60px);
+  }
+  /* When the session changes scene the room changes with it. */
+  .shot.on .rig.ambient::after { animation: roomShift 1.1s ease 1.4s both; }
+  @keyframes roomShift {
+    to { background: radial-gradient(circle, rgba(80,130,190,.40), transparent 60%); }
+  }
+
+  /* ---- Outro ------------------------------------------------------------- */
+  #outro {
+    position: fixed; inset: 0; z-index: 8; display: grid; place-content: center;
+    justify-items: center; gap: 44px; background: #08070d; opacity: 0;
+  }
+  #outro.on { opacity: 1; }
+  /* The mark turns while the shader inside it keeps flowing - a rotating
+     object, not a spinning picture. */
+  .mark { width: 300px; height: 300px; position: relative; }
+  #outro.on .mark { animation: markIn 1.1s cubic-bezier(.16,1,.3,1) both; }
+  #outro.on .mark .orb { animation: spin 14s linear infinite; }
+  @keyframes markIn { from { opacity: 0; transform: scale(.72) rotate(-24deg); } to { opacity: 1; transform: none; } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .mark .orb { --orb: 300px; box-shadow: 0 40px 120px -30px rgba(107,112,201,.9); }
+  .mark .halo {
+    position: absolute; inset: -70px; border-radius: 50%; pointer-events: none;
+    background: radial-gradient(circle, rgba(141,132,230,.34), transparent 62%); filter: blur(24px);
+  }
+  #outro .word {
+    font-family: "Fredoka", sans-serif; font-weight: 600; font-size: 96px; color: #fff; letter-spacing: -2px;
+  }
+  #outro .sub { font-family: "Lexend", sans-serif; font-size: 34px; color: rgba(255,255,255,.62); margin-top: -22px; }
+  #outro .cta {
+    margin-top: 18px; font-family: "Fredoka", sans-serif; font-weight: 600; font-size: 44px; color: #fff;
+    padding: 30px 68px; border-radius: 999px;
+    background: linear-gradient(135deg, #8E84E6, #6469C6);
+    box-shadow: 0 30px 70px -20px rgba(107,112,201,.85);
+  }
+  #outro.on .word { animation: upIn .7s cubic-bezier(.16,1,.3,1) .30s both; }
+  #outro.on .sub  { animation: upIn .7s cubic-bezier(.16,1,.3,1) .40s both; }
+  #outro.on .cta  { animation: upIn .7s cubic-bezier(.16,1,.3,1) .58s both; }
+  @keyframes upIn { from { opacity: 0; transform: translateY(34px); } to { opacity: 1; transform: none; } }
+
+  /* ---- Promo timing ------------------------------------------------------ */
+  /* Every screen's behaviour has to complete inside one 3120ms shot. These
+     override the delays the site set for a slower film; the animations
+     themselves are untouched. */
+  #stage .say .w        { animation-delay: calc(var(--i) * .070s) !important; }
+  #stage .type .w       { animation-delay: calc(var(--d, 0s) + var(--i, 0) * .062s) !important; }
+  #stage .found .fr     { --d: 1.35s; }
+  #stage .sheet .pill-btn.press { --d: 1.0s; }
+  #stage .blk.stg, #stage .addrow.stg { animation-delay: calc(.55s + var(--i, 0) * .17s) !important; }
+  #stage .bl-item.stg   { animation-delay: calc(1.0s + var(--i, 0) * .16s) !important; }
+  #stage .filters .sw-off, #stage .filters .sw-on { --d: .85s; }
+  #stage .scenes .sw-off, #stage .scenes .sw-on   { --d: .7s; }
+  #stage .toggle.auto   { animation-delay: calc(.5s + var(--i, 0) * .26s) !important; }
+  #stage .toggle.auto::after { animation-delay: calc(.5s + var(--i, 0) * .26s) !important; }
+  #stage .bdouble .toggle.auto, #stage .bdouble .toggle.auto::after { animation-delay: 1.0s !important; }
+  #stage .bdouble .sec-h.stg, #stage .bdouble .filters .stg { animation-delay: calc(1.35s + var(--i, 0) * .12s) !important; }
+  #stage .bdouble .filters .sw-off, #stage .bdouble .filters .sw-on { --d: 1.9s; }
+  #stage .btn-orange.press { --d: 2.2s; }
+  #stage .mins.wheel .row  { --d: 1.5s; }
+  #stage .lbl-swap .before, #stage .lbl-swap .after { --d: 1.5s; }
+  #stage .presets .pick-off, #stage .presets .pick-on { --d: 1.5s; }
+  #stage .fcard.new.press  { --d: .45s; }
+  #stage .fcard.saved.stg  { animation-delay: 1.0s !important; }
+  #stage .swapper .before, #stage .swapper .after { --d: 1.9s; }
+  #stage .bub           { animation-delay: calc(var(--d, 0s) + var(--i, 0) * .42s) !important; }
+  #stage .bub.ghost     { animation-duration: 1.15s !important; }
+  #stage .moodchat-late, #stage [data-wt="moodchat"] .bub:not(.ghost) { --d: 1.35s; }
+  #stage [data-wt="coach"] .bub:not(.ghost) { --d: 1.5s; }
+  #stage .mem-card .type .w { animation-delay: calc(var(--i, 0) * .055s) !important; }
+  #stage .mem-edit-bar .sv  { --d: 2.0s; }
+  #stage .notif         { --d: .5s; }
+  #stage .scenebar .sel-a, #stage .scenebar .sel-b { --d: 1.4s; }
+  #stage .parked.stg    { animation-delay: calc(.3s + var(--i, 0) * .18s) !important; }
+
+  #src { position: fixed; width: 1px; height: 1px; opacity: 0; pointer-events: none; border: 0; }
+</style>
+</head>
+<body>
+
+<div class="bg"><i class="a"></i><i class="b"></i><i class="c"></i></div>
+<div class="vig"></div>
+
+<div id="stage"></div>
+<div id="cap"><span class="l"><span></span></span><span class="l"><span></span><i class="car"></i></span></div>
+
+<div id="outro">
+  <div class="mark"><span class="halo"></span><span class="orb"><canvas></canvas></span></div>
+  <div class="word">OurMynd</div>
+  <div class="sub">your head is loud. your day doesn't have to be.</div>
+  <div class="cta">Get early access</div>
+</div>
+
+<iframe id="src" src="index.html"></iframe>
+
+<script src="orb.js"></script>
+<script>
+/* The cut list. Each entry is a screen key from index.html plus the two lines
+   that go over it. Kept to two short lines because a promo asserts; the site is
+   where the explaining happens. */
+const SHOTS = [
+  ['home',     'Your head is loud.', "Your day isn't."],
+  ['speak',    'Open it.',           'Just talk.'],
+  ['found',    'One sentence.',      'Three real tasks.'],
+  ['sched',    'Your day,',          'already scheduled.'],
+  ['backlog',  'Nothing you said',   'gets lost.'],
+  ['dump',     'Type the mess.',     'Same result.'],
+  ['mood',     'How are you,',       'actually?'],
+  ['moodchat', 'It plans around',    'your answer.'],
+  ['setup',    'Focus knows',        "what's next."],
+  ['presets',  'Your length.',       'Your scene.'],
+  ['together', 'Work beside',        'someone.'],
+  ['live',     'One task.',          'Nothing else.'],
+  ['rain',     'A thought?',         'Park it.'],
+  ['memory',   'It remembers.',      'You can edit it.'],
+  ['rem',      'Reminders set',      'themselves.'],
+  ['notif',    'It taps you',        'right on time.'],
+  ['coach',    "It's read",          'all of it.'],
+];
+
+// One bar of the soundtrack. tools/record.mjs measured the track at 153.8bpm,
+// which reads as 76.9 half-time, so a bar is 3120ms and every cut lands on the
+// downbeat rather than near it.
+const SHOT_MS = 3120;
+const OUTRO_MS = 5200;
+/* Ordered, not cycled. The reference opens on a macro pull-out, drops to a
+   medium, and drops an insert in to break the rhythm before it sets. */
+const MOVES = [
+  'macroPull', 'slowTurn', 'pushIn', 'sideDrift', 'macroDetail', 'riseTilt',
+  'slowTurn', 'edgeOn', 'pushIn', 'sideDrift', 'macroPull', 'slowTurn',
+  'riseTilt', 'macroDetail', 'pushIn', 'sideDrift', 'edgeOn',
+];
+
+const src = document.getElementById('src');
+const stage = document.getElementById('stage');
+const cap = document.getElementById('cap');
+const outro = document.getElementById('outro');
+const lines = cap.querySelectorAll('.l span');
+
+/* One element per character so each can be delayed independently. A space is
+   still an element - drop it and the words close up as they arrive. */
+function type(host, text, offset) {
+  host.textContent = '';
+  host.style.setProperty('--o', offset);
+  [...text].forEach((ch, i) => {
+    const el = document.createElement('span');
+    el.className = 'c';
+    el.style.setProperty('--i', i);
+    el.textContent = ch === ' ' ? '\u00a0' : ch;
+    host.appendChild(el);
+  });
+}
+
+src.addEventListener('load', () => {
+  const d = src.contentDocument;
+
+  SHOTS.forEach(([key], i) => {
+    const phone = d.querySelector('.phone[data-wt="' + key + '"]');
+    const shot = document.createElement('div');
+    shot.className = 'shot';
+    const rig = document.createElement('div');
+    rig.className = 'rig';
+    rig.style.setProperty('--move', MOVES[i % MOVES.length]);
+    // The running-session shot recolours the room as its scene changes.
+    if (key === 'live') rig.classList.add('ambient');
+    if (phone) {
+      const clone = phone.cloneNode(true);
+      rig.appendChild(clone);
+      if (window.OrbInit) clone.querySelectorAll('.orb canvas').forEach(window.OrbInit);
+    }
+    shot.appendChild(rig);
+    stage.appendChild(shot);
+  });
+
+  const sprite = d.querySelector('svg[aria-hidden="true"]');
+  if (sprite) document.body.insertBefore(sprite.cloneNode(true), document.body.firstChild);
+
+  if (window.OrbInit) outro.querySelectorAll('.orb canvas').forEach(window.OrbInit);
+
+  const total = SHOTS.length * SHOT_MS + OUTRO_MS;
+
+  function go(i) {
+    if (i >= SHOTS.length) {
+      [...stage.children].forEach((s) => s.classList.remove('on'));
+      cap.classList.remove('in', 'out');
+      cap.style.display = 'none';
+      outro.classList.add('on');
+      setTimeout(() => { document.documentElement.dataset.filmDone = '1'; }, OUTRO_MS);
+      return;
+    }
+
+    const [, a, b] = SHOTS[i];
+    // .live is what the screens' own animations hang off - the site's players
+    // set it too. Without it every phone in the film would be a still.
+    [...stage.children].forEach((s, n) => {
+      s.classList.toggle('on', n === i);
+      s.classList.toggle('live', n === i);
+    });
+
+    // Retrigger the caption by reflowing between cuts, then schedule its exit.
+    cap.classList.remove('in', 'out');
+    void cap.offsetWidth;
+    type(lines[0], a, 0);
+    type(lines[1], b, a.length);
+    // The caret rides the second line, then leaves when the typing does.
+    const done = (a.length + b.length) * 28 + 120;
+    cap.style.setProperty('--car-on', (a.length * 28) + 'ms');
+    cap.style.setProperty('--car-off', done + 'ms');
+    cap.classList.add('in');
+    setTimeout(() => cap.classList.add('out'), SHOT_MS - 300);
+
+    setTimeout(() => go(i + 1), SHOT_MS);
+  }
+
+  document.documentElement.style.setProperty('--dur', SHOT_MS + 'ms');
+  window.OM_START = () => setTimeout(() => go(0), 500);
+  document.documentElement.dataset.filmReady = String(total);
+});
+</script>
+</body>
+</html>

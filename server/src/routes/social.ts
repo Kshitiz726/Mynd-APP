@@ -136,7 +136,7 @@ r.get('/friends', requireAuth, async (req, res) => {
   res.json({ friends: rows });
 });
 
-// Incoming pending requests only — drives the Alerts "follow requests" section.
+// Incoming pending requests only - drives the Alerts "follow requests" section.
 r.get('/friends/requests', requireAuth, async (req, res) => {
   const rows = await db.any(
     `select u.id, u.display_name, u.initial, u.avatar_color, f.created_at
@@ -154,14 +154,18 @@ r.get('/friends/requests', requireAuth, async (req, res) => {
 
 r.get('/users/:id', requireAuth, async (req, res) => {
   const u = await db.oneOrNone(
-    `select id, display_name, initial, avatar_color, current_energy, last_seen_at
+    `select id, display_name, initial, avatar_color, current_energy, last_seen_at,
+            avatar_updated_at, (avatar_image is not null) as has_avatar
      from users where id=$1`,
     [req.params.id],
   );
   if (!u) return res.status(404).json({ error: 'not found' });
+  u.avatar_url = u.has_avatar
+    ? `/api/users/${u.id}/avatar?v=${new Date(u.avatar_updated_at ?? 0).getTime()}`
+    : null;
   const isMe = u.id === req.user.id;
   const fs = isMe ? null : await friendshipState(req.user.id, u.id);
-  // NOTE: `handle` is the user's Google email — it is deliberately NOT selected
+  // NOTE: `handle` is the user's Google email - it is deliberately NOT selected
   // or returned here so it never surfaces in the in-chat profile sheet. The
   // anonymous display_name is the only public identity.
   res.json({
@@ -177,7 +181,7 @@ r.get('/users/:id', requireAuth, async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Suggested groups: exactly N (default 5) the user has NOT joined, most popular
-// first — the "Groups for you" rail.
+// first - the "Groups for you" rail.
 r.get('/groups/suggested', requireAuth, async (req, res) => {
   const limit = Math.min(Number(req.query.limit ?? 5) || 5, 20);
   const rows = await db.any(
@@ -190,7 +194,7 @@ r.get('/groups/suggested', requireAuth, async (req, res) => {
   res.json({ groups: rows.map((g) => ({ ...g, joined: false })) });
 });
 
-// Joined groups — "Your groups". Includes the conversation id so tapping opens
+// Joined groups - "Your groups". Includes the conversation id so tapping opens
 // the chat directly with no extra round-trip.
 r.get('/groups/mine', requireAuth, async (req, res) => {
   const rows = await db.any(

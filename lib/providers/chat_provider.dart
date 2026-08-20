@@ -84,7 +84,7 @@ class ChatProvider extends ChangeNotifier {
           if (m.id == g.id) m.copyWith(conversationId: cid) else m,
       ];
       notifyListeners();
-      // Keep the rail at 5 — pull a fresh suggestion in the background.
+      // Keep the rail at 5 - pull a fresh suggestion in the background.
       _api.fetchSuggestedGroups(limit: 5).then((s) {
         suggestedGroups = s.where((x) => myGroups.every((m) => m.id != x.id)).toList();
         notifyListeners();
@@ -233,7 +233,7 @@ class ChatProvider extends ChangeNotifier {
     final ack = await _rt.sendMessage(conversationId, tempId, body: body, replyToId: replyToId);
     debugPrint('[chat] send ack ok=${ack['ok']} err=${ack['error']}');
     if (ack['ok'] == true && ack['message'] is Map) {
-      // Reconcile straight from the ack — "sent" no longer depends on the
+      // Reconcile straight from the ack - "sent" no longer depends on the
       // broadcast round-trip arriving (message_new still dedups if it does).
       _reconcile(tempId, ChatMsg.fromJson((ack['message'] as Map).cast()));
     } else if (ack['ok'] != true) {
@@ -358,7 +358,7 @@ class ChatProvider extends ChangeNotifier {
     };
     final idx = conversations.indexWhere((c) => c.id == cid);
     if (idx < 0) {
-      // A conversation we don't know about yet (e.g. a brand-new DM) — pull a
+      // A conversation we don't know about yet (e.g. a brand-new DM) - pull a
       // fresh list so it shows up.
       loadConversations();
       return;

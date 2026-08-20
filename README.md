@@ -1,4 +1,8 @@
-# OurMynd
+<p align="center">
+  <img src="assets/branding/mynd_logo.png" alt="MYND" width="420">
+</p>
+
+<h1 align="center">OurMynd</h1>
 
 An **ADHD-focused productivity, wellness & community app** built with Flutter, backed
 by a realtime Node + TypeScript server. OurMynd organizes the day around your *energy*
@@ -11,8 +15,10 @@ focus rooms so you never have to work alone.
 ---
 
 <p align="center">
-  <img src="assets/logo.png" alt="OurMynd Logo" width="128">
+  <img src="assets/branding/app_icon.png" alt="OurMynd app icon" width="140">
 </p>
+
+<p align="center"><i>The app icon, as it appears on your home screen.</i></p>
 
 ## 🎥 Demo
 
@@ -27,8 +33,8 @@ focus rooms so you never have to work alone.
 - [Features](#features)
 - [Tech stack](#tech-stack)
 - [Repository layout](#repository-layout)
-- [Quick start — Flutter app](#quick-start--flutter-app)
-- [Quick start — backend server](#quick-start--backend-server)
+- [Quick start - Flutter app](#quick-start--flutter-app)
+- [Quick start - backend server](#quick-start--backend-server)
 - [Architecture & key decisions](#architecture--key-decisions)
 - [Build status](#build-status)
 - [Configuration & secrets](#configuration--secrets)
@@ -37,20 +43,20 @@ focus rooms so you never have to work alone.
 
 ## Features
 
-- **Energy-first planning** — tasks are grouped by `EnergyLevel`, not priority, so you
+- **Energy-first planning** - tasks are grouped by `EnergyLevel`, not priority, so you
   pick work that matches how you actually feel right now.
-- **Low-stimulation mode** — a global toggle that desaturates the UI, flattens shadows,
+- **Low-stimulation mode** - a global toggle that desaturates the UI, flattens shadows,
   hides nudges, and tightens the backlog to reduce overwhelm.
-- **Focus modes & rooms** — solo focus timers plus realtime **Focus Rooms** with
+- **Focus modes & rooms** - solo focus timers plus realtime **Focus Rooms** with
   presence, a server-authoritative timer, ambience (café/rain/library), and optional
   body-doubling **voice** channels over LiveKit.
-- **Community feed** — posts, tags, reactions (relate/support/proud), comments, and
+- **Community feed** - posts, tags, reactions (relate/support/proud), comments, and
   realtime chat with media.
-- **Coach (AI)** — an in-app coaching assistant running on Puter.js via a native
+- **Coach (AI)** - an in-app coaching assistant running on Puter.js via a native
   WebView bridge, with chat + voice/talk mode and cross-session memory.
-- **Wellness & utilities** — habits with snap-scroll tracking, notes, alarms,
+- **Wellness & utilities** - habits with snap-scroll tracking, notes, alarms,
   reminders, and a live-tunable accessibility profile.
-- **Accessibility built in** — hyperlegible font (Atkinson Hyperlegible), reduce-motion,
+- **Accessibility built in** - hyperlegible font (Atkinson Hyperlegible), reduce-motion,
   dark mode, and haptics, all wired live through settings.
 
 ## Tech stack
@@ -58,7 +64,7 @@ focus rooms so you never have to work alone.
 | Layer | Technology |
 |---|---|
 | Client | Flutter (Dart ≥ 3.6), Provider for state |
-| Typography | Google Fonts — Fredoka (display), Lexend (body), Atkinson Hyperlegible |
+| Typography | Google Fonts - Fredoka (display), Lexend (body), Atkinson Hyperlegible |
 | Realtime client | `socket_io_client`, `livekit_client`, `audioplayers` |
 | Auth | `google_sign_in` (mobile/web) + loopback PKCE flow (desktop) |
 | Coach | `flutter_inappwebview` hosting Puter.js |
@@ -91,7 +97,7 @@ ourmynd/
 └── pubspec.yaml
 ```
 
-## Quick start — Flutter app
+## Quick start - Flutter app
 
 ```bash
 flutter pub get
@@ -111,9 +117,9 @@ they're cached afterward.
 > Running two instances side-by-side (e.g. to test Focus Rooms)? See
 > [RUN_TWO_INSTANCES.md](RUN_TWO_INSTANCES.md).
 
-## Quick start — backend server
+## Quick start - backend server
 
-The server boots with **zero cloud credentials** — presence, focus-room timers, the
+The server boots with **zero cloud credentials** - presence, focus-room timers, the
 participant grid, and chat fanout all run on an in-memory shim:
 
 ```bash
@@ -123,7 +129,7 @@ npm run dev                 # db=in-memory redis=in-memory livekit=off
 curl localhost:8080/health  # {"ok":true,...}
 ```
 
-Each subsystem upgrades to cloud the moment its env var appears — set `DATABASE_URL`
+Each subsystem upgrades to cloud the moment its env var appears - set `DATABASE_URL`
 (Supabase) for REST persistence, `REDIS_URL` (Upstash) for multi-node scale, and the
 `LK_*` keys (LiveKit) for voice. Full details, the event dictionary, and deploy
 instructions are in [server/README.md](server/README.md).
@@ -131,16 +137,16 @@ instructions are in [server/README.md](server/README.md).
 ## Architecture & key decisions
 
 - **Energy-first task model** (`EnergyLevel`) is the core organizing concept, not
-  priority — matching the original prototype.
+  priority - matching the original prototype.
 - **Low-stimulation mode** is a global concern: `SettingsProvider.lowStim` drives a
   single `LowStimFilter` (desaturation) at the shell, flattens card shadows, hides
   nudges, and tightens the backlog cap.
 - **Semantic theming** travels via a `ThemeExtension` (`context.omColors`), so nothing
   hard-codes hex values; light/dark/hyperlegible are all live-switchable.
-- **Backend split of truth** — durable data lives in Postgres; live data (who's in a
+- **Backend split of truth** - durable data lives in Postgres; live data (who's in a
   room *now*, current mute, seconds left on a timer) lives in Redis. A focus session
   writes to Postgres on start/pause/end only, never on `timer_tick`.
-- **Stateless server** — all shared state is in Redis/Postgres, so the API scales
+- **Stateless server** - all shared state is in Redis/Postgres, so the API scales
   horizontally behind the Socket.IO Redis adapter.
 
 ## Build status

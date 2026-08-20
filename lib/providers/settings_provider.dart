@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/utils/haptics.dart';
 
@@ -39,7 +40,7 @@ class SettingsProvider extends ChangeNotifier {
   ThemeMode get themeMode => _darkMode ? ThemeMode.dark : ThemeMode.light;
 
   /// How many backlog tasks to show at once. Tighter in low-stim mode to
-  /// reduce overwhelm — mirrors `cap = lowStim ? 2 : 3` in the prototype.
+  /// reduce overwhelm - mirrors `cap = lowStim ? 2 : 3` in the prototype.
   int get backlogCap => _lowStim ? 2 : 3;
 
   /// Effective animation duration, collapsed to zero under reduce-motion.
@@ -95,8 +96,25 @@ class SettingsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setRingtone(String tone) {
+  /// Where the chosen tone is stored. NotificationService reads the same key
+  /// directly, because scheduling also happens from the OS boot receiver, where
+  /// there is no provider to ask.
+  static const _kRingtone = 'om_selected_ringtone';
+
+  /// Restore the tone. Held only in memory before, so every launch silently
+  /// reset the picker to 'Default' and the choice never survived a restart.
+  Future<void> loadRingtone() async {
+    final p = await SharedPreferences.getInstance();
+    final saved = p.getString(_kRingtone);
+    if (saved == null || saved == _selectedRingtone) return;
+    _selectedRingtone = saved;
+    notifyListeners();
+  }
+
+  Future<void> setRingtone(String tone) async {
     _selectedRingtone = tone;
     notifyListeners();
+    final p = await SharedPreferences.getInstance();
+    await p.setString(_kRingtone, tone);
   }
 }

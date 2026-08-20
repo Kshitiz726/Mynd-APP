@@ -5,17 +5,22 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/services/puter_service.dart';
+import '../../core/services/speech_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/haptics.dart';
-import '../../core/utils/om_icons.dart';
 import '../../providers/coach_provider.dart';
 import '../../widgets/om_avatar.dart';
-import '../../widgets/om_tappable.dart';
+import '../../widgets/om_back_button.dart';
 
-/// Hands-free "talk to Mynd" mode. Tap the orb to speak; it transcribes
-/// (Puter speech2txt) → answers (Puter chat) → speaks back (Puter txt2speech).
-/// The orb breathes and reacts to each phase; transitions are punctuated with
-/// haptics. Text replies still live in the normal coach chat thread.
+/// Hands-free "talk to Mynd", the way ChatGPT voice works.
+///
+/// Tap once to start; it listens, and when you pause it transcribes on-device
+/// (recorded in the Puter bridge → Groq Whisper), answers through the same Puter
+/// chat the typed coach uses, speaks the reply back (Puter neural `txt2speech`),
+/// and then listens again on its own. No button between turns. Tap the orb any
+/// time to stop. The orb breathes, ripples, and swells with your voice; each
+/// phase is punctuated with haptics; the text of every turn also lands in the
+/// normal coach thread.
 class CoachVoiceScreen extends StatefulWidget {
   const CoachVoiceScreen({super.key});
 
@@ -23,153 +28,223 @@ class CoachVoiceScreen extends StatefulWidget {
   State<CoachVoiceScreen> createState() => _CoachVoiceScreenState();
 }
 
-class _CoachVoiceScreenState extends State<CoachVoiceScreen> with TickerProviderStateMixin {
+/// Where the turn is: waiting, hearing you out, thinking, or talking back.
+enum _Phase { idle, listening, thinking, speaking }
+
+class _CoachVoiceScreenState extends State<CoachVoiceScreen>
+    with TickerProviderStateMixin {
+  final _stt = SpeechService.instance;
   final _puter = PuterService.instance;
+
   late final AnimationController _breathe;
   late final AnimationController _ripple;
-  StreamSubscription<PuterVoiceState>? _sub;
 
-  PuterVoiceState _state = PuterVoiceState.idle;
+  /// True while the conversation is running (across many turns). Tapping the orb
+  /// toggles it; leaving the screen ends it.
+  bool _active = false;
+
+  _Phase _phase = _Phase.idle;
   String _userText = '';
   String _replyText = '';
-  String? _status; // transient in-screen message (replaces SnackBar)
-  bool _busy = false;
-  bool _cancelled = false;
-  
+  String? _status;
+  double _level = 0;
+
+  // Voice-activity detection.
+  bool _sawSpeech = false;
+  bool _turnEnding = false;
+  DateTime _lastLoud = DateTime.now();
+  DateTime _turnStart = DateTime.now();
+  int _emptyStreak = 0;
+
   int _highlightIndex = -1;
   Timer? _highlightTimer;
+
+  // A pause this long after speech ends the turn; this long of pure silence
+  // with nothing said gives up; and no turn runs longer than the cap.
+  static const _speechThresh = 0.06;
+  static const _silenceHold = Duration(milliseconds: 1200);
+  static const _noSpeechTimeout = Duration(seconds: 9);
+  static const _maxTurn = Duration(seconds: 30);
 
   @override
   void initState() {
     super.initState();
-    _breathe = AnimationController(vsync: this, duration: const Duration(milliseconds: 2400))
+    _breathe = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 2400))
       ..repeat(reverse: true);
-    _ripple = AnimationController(vsync: this, duration: const Duration(milliseconds: 1600))
+    _ripple = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 1600))
       ..repeat();
-    _sub = _puter.voiceState.listen((s) {
-      if (!mounted) return;
-      if (s != _state) _hapticFor(s);
-      setState(() => _state = s);
+    // Start listening straight away, so opening the screen is the only tap.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _active = true;
+        _listen();
+      }
     });
-  }
-
-  void _hapticFor(PuterVoiceState s) {
-    switch (s) {
-      case PuterVoiceState.listening:
-        Haptics.medium();
-      case PuterVoiceState.speaking:
-        Haptics.light();
-      case PuterVoiceState.idle:
-        Haptics.light();
-      default:
-        break;
-    }
   }
 
   @override
   void dispose() {
-    _sub?.cancel();
+    _active = false;
     _highlightTimer?.cancel();
     _breathe.dispose();
     _ripple.dispose();
+    _stt.cancel();
     _puter.stopSpeaking();
     _puter.resetVoice();
     super.dispose();
   }
 
-  void _onOrbDown() {
-    if (_state == PuterVoiceState.idle && !_busy) {
-      _startTurn();
+  void _onTap() {
+    if (_active) {
+      _stopConversation();
     } else {
-      _cancel(); // tap during other states cancels
+      _active = true;
+      _emptyStreak = 0;
+      _listen();
     }
   }
 
-  void _onOrbUp() {
-    if (_state == PuterVoiceState.listening) {
-      _finishTurn();
-    }
-  }
-
-  void _cancel() {
-    _cancelled = true;
+  void _stopConversation() {
+    _active = false;
+    _turnEnding = true;
     _highlightTimer?.cancel();
+    _stt.cancel();
     _puter.stopSpeaking();
-    _puter.resetVoice();
     if (mounted) {
       setState(() {
-        _busy = false;
-        _status = 'Cancelled — tap to talk';
+        _phase = _Phase.idle;
+        _status = 'Tap to talk';
+        _level = 0;
       });
     }
   }
 
-  void _resetBusy() {
-    if (mounted) {
-      setState(() => _busy = false);
-    } else {
-      _busy = false;
-    }
-  }
-
-  Future<void> _startTurn() async {
-    _cancelled = false;
-    _highlightTimer?.cancel();
+  Future<void> _listen() async {
+    if (!_active || !mounted) return;
+    _turnEnding = false;
+    _sawSpeech = false;
+    _lastLoud = DateTime.now();
+    _turnStart = DateTime.now();
     setState(() {
+      _phase = _Phase.listening;
       _userText = '';
       _replyText = '';
       _status = null;
-      _highlightIndex = -1;
+      _level = 0;
     });
-    await _puter.startListening();
+    final ok = await _stt.startRecording(onLevel: _onLevel);
+    if (!ok && mounted) {
+      _active = false;
+      setState(() {
+        _phase = _Phase.idle;
+        _status = _stt.lastError ?? 'Microphone unavailable.';
+      });
+    }
   }
 
-  Future<void> _finishTurn() async {
-    _busy = true;
-    String text = '';
-    try {
-      text = await _puter.stopAndTranscribe();
-    } catch (_) {/* falls through to empty-text handling */}
-    if (!mounted || _cancelled) return _resetBusy();
+  void _onLevel(double l) {
+    if (!mounted || _phase != _Phase.listening) return;
+    setState(() => _level = _level * 0.6 + l * 0.4);
+    final now = DateTime.now();
+    if (l > _speechThresh) {
+      _sawSpeech = true;
+      _lastLoud = now;
+    }
+    final sinceLoud = now.difference(_lastLoud);
+    final sinceStart = now.difference(_turnStart);
+    if (_sawSpeech && sinceLoud > _silenceHold) {
+      _endTurn();
+    } else if (!_sawSpeech && sinceStart > _noSpeechTimeout) {
+      _endTurn(noSpeech: true);
+    } else if (sinceStart > _maxTurn) {
+      _endTurn();
+    }
+  }
 
-    if (text.trim().isEmpty) {
-      _puter.resetVoice();
-      setState(() => _status = "Didn't catch that — tap to try again");
-      return _resetBusy();
+  Future<void> _endTurn({bool noSpeech = false}) async {
+    if (_turnEnding) return;
+    _turnEnding = true;
+
+    if (noSpeech) {
+      await _stt.cancel();
+      _active = false;
+      if (mounted) {
+        setState(() {
+          _phase = _Phase.idle;
+          _status = "I didn't hear anything. Tap the orb and speak.";
+        });
+      }
+      return;
     }
 
     setState(() {
-      _userText = text;
+      _phase = _Phase.thinking;
+      _status = 'transcribing…';
+      _level = 0;
+    });
+    final text = await _stt.stopAndTranscribe();
+    if (!mounted || !_active) return;
+    await _handle(text);
+  }
+
+  Future<void> _handle(String text) async {
+    final clean = text.trim();
+    if (clean.isEmpty) {
+      _emptyStreak++;
+      if (_emptyStreak >= 2) {
+        _active = false;
+        if (mounted) {
+          setState(() {
+            _phase = _Phase.idle;
+            _status = "I couldn't make that out. Tap to try again.";
+          });
+        }
+        return;
+      }
+      _listen(); // give it one more go without making them tap
+      return;
+    }
+    _emptyStreak = 0;
+
+    setState(() {
+      _userText = clean;
+      _phase = _Phase.thinking;
       _status = null;
     });
-    _puter.emitThinking();
+    Haptics.light();
+
+    String reply = '';
     try {
-      final reply = await context
+      reply = await context
           .read<CoachProvider>()
-          .sendAndAwaitReply(text)
+          .sendAndAwaitReply(clean)
           .timeout(const Duration(seconds: 45), onTimeout: () => '');
-      if (!mounted || _cancelled) return _resetBusy();
-      if (reply.trim().isEmpty) {
-        _puter.resetVoice();
-        setState(() => _status = 'Mynd had trouble replying — tap to retry');
-        return _resetBusy();
-      }
-      setState(() => _replyText = reply);
-      _startHighlighting(reply);
-      await _puter.speak(reply);
-    } catch (_) {
-      _puter.resetVoice();
-      if (mounted) setState(() => _status = 'Something went wrong — tap to retry');
-    } finally {
-      _resetBusy();
+    } catch (_) {/* fall through to resume */}
+    if (!mounted || !_active) return;
+
+    if (reply.trim().isEmpty) {
+      _listen();
+      return;
     }
+    setState(() {
+      _replyText = reply;
+      _phase = _Phase.speaking;
+    });
+    _startHighlighting(reply);
+    await _puter.speak(reply);
+    _highlightTimer?.cancel();
+    if (!mounted || !_active) return;
+    _listen(); // hands-free: straight back to listening
   }
 
   void _startHighlighting(String text) {
     final words = text.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length;
     _highlightIndex = 0;
     _highlightTimer?.cancel();
-    _highlightTimer = Timer.periodic(const Duration(milliseconds: 300), (timer) {
+    _highlightTimer =
+        Timer.periodic(const Duration(milliseconds: 300), (timer) {
       if (!mounted) {
         timer.cancel();
         return;
@@ -184,23 +259,22 @@ class _CoachVoiceScreenState extends State<CoachVoiceScreen> with TickerProvider
     });
   }
 
-  String get _statusLabel => switch (_state) {
-        PuterVoiceState.idle => 'Hold to talk',
-        PuterVoiceState.listening => 'Listening…',
-        PuterVoiceState.transcribing => 'Got it…',
-        PuterVoiceState.thinking => 'Thinking…',
-        PuterVoiceState.speaking => 'Speaking…',
+  String get _statusLabel => switch (_phase) {
+        _Phase.idle => 'Tap to talk',
+        _Phase.listening => 'Listening…',
+        _Phase.thinking => 'Thinking…',
+        _Phase.speaking => 'Speaking…',
       };
 
   @override
   Widget build(BuildContext context) {
     final c = context.omColors;
     final isDark = context.isDark;
-    final orbColor = switch (_state) {
-      PuterVoiceState.listening => c.primary,
-      PuterVoiceState.thinking || PuterVoiceState.transcribing => c.accent,
-      PuterVoiceState.speaking => c.flow,
-      PuterVoiceState.idle => c.primary,
+    final orbColor = switch (_phase) {
+      _Phase.listening => c.primary,
+      _Phase.thinking => c.accent,
+      _Phase.speaking => c.flow,
+      _Phase.idle => c.primary,
     };
 
     return Scaffold(
@@ -213,16 +287,13 @@ class _CoachVoiceScreenState extends State<CoachVoiceScreen> with TickerProvider
               padding: const EdgeInsets.fromLTRB(8, 6, 16, 0),
               child: Row(
                 children: [
-                  OmTappable(
-                    onTap: () => Navigator.of(context).pop(),
-                    child: Padding(
-                      padding: const EdgeInsets.all(8),
-                      child: Icon(OmIcons.byName('chevL'), color: c.text),
-                    ),
-                  ),
+                  OmBackButton(onTap: () => Navigator.of(context).maybePop()),
                   const Spacer(),
                   Text('Talk with Mynd',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(color: c.text2)),
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleMedium
+                          ?.copyWith(color: c.text2)),
                   const Spacer(),
                   OmAvatar(
                     userId: 'me',
@@ -244,12 +315,17 @@ class _CoachVoiceScreenState extends State<CoachVoiceScreen> with TickerProvider
                     if (_userText.isNotEmpty)
                       Text('“$_userText”',
                           textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: c.text2)),
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodyMedium
+                              ?.copyWith(color: c.text2)),
                     if (_replyText.isNotEmpty) ...[
                       const SizedBox(height: 18),
                       Flexible(
                         child: SingleChildScrollView(
-                          child: _HighlightedText(text: _replyText, highlightIndex: _highlightIndex),
+                          child: _HighlightedText(
+                              text: _replyText,
+                              highlightIndex: _highlightIndex),
                         ),
                       ),
                     ],
@@ -259,24 +335,25 @@ class _CoachVoiceScreenState extends State<CoachVoiceScreen> with TickerProvider
             ),
 
             // The orb
-            Listener(
-              onPointerDown: (_) => _onOrbDown(),
-              onPointerUp: (_) => _onOrbUp(),
-              onPointerCancel: (_) => _onOrbUp(),
+            GestureDetector(
+              onTap: _onTap,
+              behavior: HitTestBehavior.opaque,
               child: AnimatedBuilder(
                 animation: Listenable.merge([_breathe, _ripple]),
                 builder: (context, _) {
-                  final active = _state != PuterVoiceState.idle;
+                  final active = _phase != _Phase.idle;
                   final breathe = 0.5 + 0.5 * _breathe.value;
-                  final baseScale = 1.0 + (active ? 0.06 : 0.03) * math.sin(breathe * math.pi);
+                  final baseScale = 1.0 +
+                      (active ? 0.06 : 0.03) * math.sin(breathe * math.pi) +
+                      (_phase == _Phase.listening ? _level * 0.16 : 0.0);
                   return SizedBox(
                     width: 240,
                     height: 240,
                     child: Stack(
                       alignment: Alignment.center,
                       children: [
-                        // Expanding ripples while listening/speaking
-                        if (_state == PuterVoiceState.listening || _state == PuterVoiceState.speaking)
+                        if (_phase == _Phase.listening ||
+                            _phase == _Phase.speaking)
                           ...List.generate(2, (i) {
                             final t = (_ripple.value + i / 2) % 1.0;
                             return Container(
@@ -284,11 +361,12 @@ class _CoachVoiceScreenState extends State<CoachVoiceScreen> with TickerProvider
                               height: 150 + t * 110,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                border: Border.all(color: orbColor.withValues(alpha: (1 - t) * 0.35)),
+                                border: Border.all(
+                                    color: orbColor.withValues(
+                                        alpha: (1 - t) * 0.35)),
                               ),
                             );
                           }),
-                        // Core orb
                         Transform.scale(
                           scale: baseScale,
                           child: Container(
@@ -299,7 +377,10 @@ class _CoachVoiceScreenState extends State<CoachVoiceScreen> with TickerProvider
                               gradient: LinearGradient(
                                 begin: Alignment.topLeft,
                                 end: Alignment.bottomRight,
-                                colors: [orbColor, Color.lerp(orbColor, c.accent, 0.5)!],
+                                colors: [
+                                  orbColor,
+                                  Color.lerp(orbColor, c.accent, 0.5)!
+                                ],
                               ),
                               boxShadow: [
                                 BoxShadow(
@@ -310,12 +391,12 @@ class _CoachVoiceScreenState extends State<CoachVoiceScreen> with TickerProvider
                               ],
                             ),
                             child: Icon(
-                              _state == PuterVoiceState.speaking
-                                  ? Icons.graphic_eq_rounded
-                                  : (_state == PuterVoiceState.thinking ||
-                                          _state == PuterVoiceState.transcribing)
-                                      ? Icons.more_horiz_rounded
-                                      : Icons.mic_rounded,
+                              switch (_phase) {
+                                _Phase.speaking => Icons.graphic_eq_rounded,
+                                _Phase.thinking => Icons.more_horiz_rounded,
+                                _Phase.listening => Icons.mic_rounded,
+                                _Phase.idle => Icons.mic_none_rounded,
+                              },
                               color: Colors.white,
                               size: 48,
                             ),
@@ -334,7 +415,12 @@ class _CoachVoiceScreenState extends State<CoachVoiceScreen> with TickerProvider
                     .textTheme
                     .titleMedium
                     ?.copyWith(color: c.text, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 28),
+            const SizedBox(height: 6),
+            Text(_active ? 'tap the orb to stop' : 'tap the orb to start',
+                textAlign: TextAlign.center,
+                style:
+                    Theme.of(context).textTheme.bodySmall?.copyWith(color: c.text2)),
+            const SizedBox(height: 24),
           ],
         ),
       ),
@@ -360,7 +446,8 @@ class _HighlightedText extends StatelessWidget {
         TextSpan(
           text: words[i],
           style: TextStyle(
-            color: highlightIndex >= i ? c.text : c.text2.withValues(alpha: 0.4),
+            color:
+                highlightIndex >= i ? c.text : c.text2.withValues(alpha: 0.4),
           ),
         ),
       );
@@ -372,7 +459,10 @@ class _HighlightedText extends StatelessWidget {
     return RichText(
       textAlign: TextAlign.center,
       text: TextSpan(
-        style: Theme.of(context).textTheme.titleMedium?.copyWith(color: c.text, height: 1.4),
+        style: Theme.of(context)
+            .textTheme
+            .titleMedium
+            ?.copyWith(color: c.text, height: 1.4),
         children: spans,
       ),
     );

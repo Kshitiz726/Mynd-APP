@@ -5,7 +5,7 @@ import '../core/utils/haptics.dart';
 import '../core/utils/om_icons.dart';
 import 'om_tappable.dart';
 
-/// The single, standardized back affordance used across the app — a soft,
+/// The single, standardized back affordance used across the app - a soft,
 /// circular, iOS-style chevron that always sits in the top-left.
 ///
 /// Drop it into an [AppBar.leading], a [Row], or a [Stack] (top-left). When
@@ -21,7 +21,7 @@ class OmBackButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.omColors;
     // When used as a shared header element (no custom onTap) on a screen that
-    // isn't a pushed route, there's nothing to go back to — render nothing so
+    // isn't a pushed route, there's nothing to go back to - render nothing so
     // the same header works as a tab and as a pushed screen.
     if (onTap == null && !Navigator.of(context).canPop()) {
       return const SizedBox.shrink();

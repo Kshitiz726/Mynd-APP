@@ -35,10 +35,15 @@ workflows:
           pod install
       - name: Build unsigned iOS app
         script: |
+          set -euo pipefail
+          python3 - > dart_defines.json <<'PY'
+          import json, os
+          clean = lambda n: os.environ.get(n, "").strip()
+          print(json.dumps({k: clean(k) for k in
+                            ("OURMYND_API", "GOOGLE_SERVER_CLIENT_ID", "GROQ_API_KEY")}))
+          PY
           flutter build ios --release --no-codesign \
-            --dart-define=OURMYND_API="$OURMYND_API" \
-            --dart-define=GOOGLE_SERVER_CLIENT_ID="$GOOGLE_SERVER_CLIENT_ID" \
-            --dart-define=GROQ_API_KEY="$GROQ_API_KEY"
+            --dart-define-from-file=dart_defines.json
       - name: Package .app as artifact
         script: |
           cd build/ios/iphoneos
@@ -73,12 +78,29 @@ workflows:
         script: |
           cd ios
           pod install
+      # OURMYND_DEMO boots straight into the shell. A cloud Simulator can reach
+      # neither the dev backend nor an iOS OAuth client, so without this the
+      # login screen is a dead end and the build is unexplorable.
       - name: Build for iOS Simulator
         script: |
+          set -euo pipefail
+          # Report length only — confirms each secret arrived without printing it.
+          for v in OURMYND_API GOOGLE_SERVER_CLIENT_ID GROQ_API_KEY; do
+            val="${!v:-}"
+            echo "$v: ${#val} chars"
+          done
+          # Values reach the compiler via JSON rather than the command line: a
+          # stray space or newline in a variable can otherwise split its token,
+          # and flutter reads the loose fragment as the positional <target file>.
+          python3 - > dart_defines.json <<'PY'
+          import json, os
+          clean = lambda n: os.environ.get(n, "").strip()
+          print(json.dumps({k: clean(k) for k in
+                            ("OURMYND_API", "GOOGLE_SERVER_CLIENT_ID", "GROQ_API_KEY")}))
+          PY
           flutter build ios --simulator --debug \
-            --dart-define=OURMYND_API="$OURMYND_API" \
-            --dart-define=GOOGLE_SERVER_CLIENT_ID="$GOOGLE_SERVER_CLIENT_ID" \
-            --dart-define=GROQ_API_KEY="$GROQ_API_KEY"
+            --dart-define=OURMYND_DEMO=true \
+            --dart-define-from-file=dart_defines.json
       - name: Package .app for Appetize
         script: |
           cd build/ios/iphonesimulator

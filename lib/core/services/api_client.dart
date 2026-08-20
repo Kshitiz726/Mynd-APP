@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'dart:typed_data' show Uint8List;
 import 'package:http/http.dart' as http;
 
+import 'account_scope.dart';
 import 'api_config.dart';
 import 'session_store.dart';
 import '../../models/community/post.dart';
@@ -41,8 +43,34 @@ class ApiClient {
     return _decode(res);
   }
 
+  /// Called once when the server rejects our session, so the app can send the
+  /// user back to the login screen. Set in main().
+  static void Function()? onSessionExpired;
+
+  /// Guards against a burst of 401s (every provider refreshing at once) tearing
+  /// the session down repeatedly and firing the callback for each one.
+  bool _expiring = false;
+
   Map<String, dynamic> _decode(http.Response res) {
     if (res.statusCode >= 400) {
+      // A 401 means this token is no longer anything the server accepts:
+      // expired, signed out elsewhere, or - the case that actually bit us -
+      // minted by a DIFFERENT backend. Pointing the app at the hosted server
+      // left every device holding a token signed with the old local secret, so
+      // every request failed while the app still believed it was signed in.
+      // Nothing sent the user back to login, so it just looked like the
+      // features were broken: matchmaking, feed and chat all failing with
+      // vague "couldn't do that" toasts and no way to recover short of
+      // reinstalling.
+      if (res.statusCode == 401 && !_expiring) {
+        _expiring = true;
+        // Fire and forget: callers are mid-request and should still get their
+        // exception, they just should not also be left signed in.
+        signOut().whenComplete(() {
+          _expiring = false;
+          onSessionExpired?.call();
+        });
+      }
       throw ApiException('${res.statusCode}: ${res.body}', res.statusCode);
     }
     if (res.body.isEmpty) return {};
@@ -54,7 +82,15 @@ class ApiClient {
   /// and exchanges for our own session JWT + the (created-or-existing) user.
   Future<void> authWithGoogleIdToken(String idToken) async {
     final j = await _post('/api/auth/google', {'idToken': idToken});
-    _applyUser(j);
+    await _applyUser(j);
+  }
+
+  /// Real Sign in with Apple: hands the backend the identity token Apple gave
+  /// the app. The server checks it against Apple's published keys and our
+  /// bundle id, then returns our own session JWT + user, same as Google.
+  Future<void> authWithAppleIdentityToken(String identityToken) async {
+    final j = await _post('/api/auth/apple', {'identityToken': identityToken});
+    await _applyUser(j);
   }
 
   /// Desktop (Windows/Linux) real Google OAuth: hands the backend the auth code
@@ -70,24 +106,38 @@ class ApiClient {
       'codeVerifier': codeVerifier,
       'redirectUri': redirectUri,
     });
-    _applyUser(j);
+    await _applyUser(j);
   }
 
   Future<void> authWithGoogle({required String handle, required String displayName}) async {
     final j = await _post('/api/auth/google-mock', {'handle': handle, 'displayName': displayName});
-    _applyUser(j);
+    await _applyUser(j);
   }
 
-  void _applyUser(Map<String, dynamic> j) {
+  Future<void> _applyUser(Map<String, dynamic> j) async {
     final user = j['user'] as Map<String, dynamic>;
+    final userId = user['id'] as String;
+
+    // Before this account can see anything, make the local data on this device
+    // its own: park whoever had it, hand back this account's if it has been
+    // here before. Runs first so the swap can never touch the session we are
+    // about to write. See AccountScope.
+    final switched = await AccountScope.adopt(userId);
+
     _cfg
       ..authToken = j['token'] as String
-      ..userId = user['id'] as String
+      ..userId = userId
       ..displayName = user['display_name'] as String?
       ..handle = user['handle'] as String?;
     // Persist so the next launch (or "continue with Google" again) restores the
     // whole account without re-authing.
-    SessionStore.save();
+    await SessionStore.save();
+
+    // Swapping the keys is only half of it: the providers built at launch are
+    // still holding the previous user's tasks and goals in memory, and would
+    // write them straight back over the new account's. Rebuild the app once
+    // the new session is in place, so everything reloads from disk.
+    if (switched) AccountScope.onSwitched?.call();
   }
 
   /// Clear the in-memory + on-disk session. Used by sign out.
@@ -100,7 +150,7 @@ class ApiClient {
       ..handle = null;
   }
 
-  /// Fetches a dev JWT for a seeded user and wires [ApiConfig]. Dev only — in
+  /// Fetches a dev JWT for a seeded user and wires [ApiConfig]. Dev only - in
   /// production this is replaced by the real Supabase Auth sign-in.
   Future<void> devSignIn({String user = 'sam'}) async {
     final j = await _get('/api/dev/token?user=$user');
@@ -166,6 +216,16 @@ class ApiClient {
     });
     return FocusRoom.fromJson(j);
   }
+  /// Resolve a join code to a room.
+  ///
+  /// Throws when the code does not resolve. The server answers the same 404
+  /// whether the room never existed, has ended, or is private and the code was
+  /// a guess, so this cannot be used to enumerate private rooms.
+  Future<FocusRoom> joinRoomByCode(String code) async {
+    final j = await _post('/api/rooms/join-by-code', {'code': code});
+    return FocusRoom.fromJson(j);
+  }
+
 
   Future<void> completeSession(String roomId, int completedSecs) =>
       _post('/api/sessions/complete', {'roomId': roomId, 'completedSecs': completedSecs});
@@ -196,9 +256,56 @@ class ApiClient {
     return (j['friends'] as List).map((f) => BdFriend.fromJson((f as Map).cast())).toList();
   }
 
+  // ── Your own profile ──
+  /// Everything about the signed-in account, including the parts only they see.
+  Future<Map<String, dynamic>> fetchMe() async {
+    final j = await _get('/api/me');
+    return (j['user'] as Map).cast<String, dynamic>();
+  }
+
+  /// Change the name everyone else sees. Returns the updated profile.
+  Future<Map<String, dynamic>> updateDisplayName(String name) async {
+    final res = await _client.patch(_cfg.rest('/api/me'),
+        headers: _cfg.authHeaders, body: jsonEncode({'displayName': name}));
+    final j = _decode(res);
+    final user = (j['user'] as Map).cast<String, dynamic>();
+    // Keep the in-memory session in step, or the greeting on Home keeps using
+    // the old name until the next launch.
+    _cfg.displayName = user['display_name'] as String?;
+    SessionStore.save();
+    return user;
+  }
+
+  /// Set your profile picture. [bytes] is already-encoded image data.
+  Future<void> uploadAvatar(Uint8List bytes, {String mime = 'image/jpeg'}) async {
+    final res = await _client.put(
+      _cfg.rest('/api/me/avatar'),
+      headers: _cfg.authHeaders,
+      body: jsonEncode({'data': base64Encode(bytes), 'mime': mime}),
+    );
+    _decode(res);
+  }
+
+  Future<void> removeAvatar() => delete('/api/me/avatar');
+
+  // ── Per-account state (the backlog and friends follow the account) ──
+  /// The document parked under [key], with when it was last written, so the
+  /// caller can tell whether the server's copy or the phone's is the newer one.
+  Future<({Object? value, DateTime? updatedAt})> fetchState(String key) async {
+    final j = await _get('/api/state/$key');
+    final at = j['updatedAt'] as String?;
+    return (
+      value: j['value'],
+      updatedAt: at == null ? null : DateTime.tryParse(at),
+    );
+  }
+
+  Future<void> putState(String key, Object value) =>
+      put('/api/state/$key', {'value': value});
+
   // ── Body doubling ──
   /// Join the matchmaking queue. Either pairs immediately (matched=true with a
-  /// room + partner) or queues you (matched=false) — `bd_matched` arrives over
+  /// room + partner) or queues you (matched=false) - `bd_matched` arrives over
   /// the socket when a partner shows up.
   Future<BdMatch> bodyDoublingMatch() async {
     final j = await _post('/api/body-doubling/match', {});
@@ -218,13 +325,13 @@ class ApiClient {
   }
 
   // ── Groups ──
-  /// Exactly N (default 5) unjoined groups — the "Groups for you" rail.
+  /// Exactly N (default 5) unjoined groups - the "Groups for you" rail.
   Future<List<Group>> fetchSuggestedGroups({int limit = 5}) async {
     final j = await _get('/api/groups/suggested?limit=$limit');
     return (j['groups'] as List).map((g) => Group.fromJson((g as Map).cast())).toList();
   }
 
-  /// Groups the user has joined — "Your groups".
+  /// Groups the user has joined - "Your groups".
   Future<List<Group>> fetchMyGroups() async {
     final j = await _get('/api/groups/mine');
     return (j['groups'] as List).map((g) => Group.fromJson((g as Map).cast())).toList();
@@ -272,7 +379,7 @@ class ApiClient {
     return (j['messages'] as List).map((m) => ChatMsg.fromJson((m as Map).cast())).toList();
   }
 
-  /// Members of a conversation (group roster) — public identity only, no email.
+  /// Members of a conversation (group roster) - public identity only, no email.
   Future<List<ConversationMember>> fetchConversationMembers(String conversationId) async {
     final j = await _get('/api/conversations/$conversationId/members');
     return (j['members'] as List)

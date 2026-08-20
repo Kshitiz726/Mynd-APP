@@ -27,7 +27,23 @@ class FocusRoomProvider extends ChangeNotifier {
 
   // ── Room list ──
   List<FocusRoom> rooms = [];
-  int globalLive = 0; // "62 minds focusing right now"
+
+  /// Last figure the server pushed for "N minds focusing right now".
+  int _serverLive = 0;
+
+  set globalLive(int v) => _serverLive = v;
+
+  /// What the banner shows.
+  ///
+  /// The server's number arrives on a socket event, so between a cold start and
+  /// the first push it is zero even when rooms visibly have people in them.
+  /// Falling back to the sum of the room counts we already hold means the
+  /// banner is never dishonest in the meantime, and the pushed value wins as
+  /// soon as it lands.
+  int get globalLive {
+    final fromRooms = rooms.fold<int>(0, (sum, r) => sum + r.liveCount);
+    return _serverLive > fromRooms ? _serverLive : fromRooms;
+  }
 
   // ── Active room ──
   String? activeRoomId;
@@ -55,13 +71,13 @@ class FocusRoomProvider extends ChangeNotifier {
 
   void setRooms(List<FocusRoom> r, int global) {
     rooms = r;
-    globalLive = global;
+    _serverLive = global;
     bindLobby();
     notifyListeners();
   }
 
   /// Subscribe to live room-list updates: new public rooms appear, ended rooms
-  /// disappear, and counts/global update — all without a refresh (Discord-style
+  /// disappear, and counts/global update - all without a refresh (Discord-style
   /// channel list). Safe to call repeatedly.
   void bindLobby() {
     if (_lobbyBound) return;
@@ -87,7 +103,7 @@ class FocusRoomProvider extends ChangeNotifier {
     });
 
     _rt.on('global_focus_update', (d) {
-      globalLive = d['count'] as int? ?? globalLive;
+      _serverLive = d['count'] as int? ?? _serverLive;
       notifyListeners();
     });
   }
@@ -100,10 +116,32 @@ class FocusRoomProvider extends ChangeNotifier {
     }
   }
 
+  /// The room is joined but its full-screen surface is tucked away, so the user
+  /// can go read the feed or check their schedule without leaving. Presence,
+  /// the heartbeat and the session timer all keep running: only the UI hides.
+  bool _minimised = false;
+  bool get minimised => _minimised;
+
+  /// True when we are in a room and showing it full-screen.
+  bool get roomVisible => activeRoomId != null && !_minimised;
+
+  void minimiseRoom() {
+    if (activeRoomId == null || _minimised) return;
+    _minimised = true;
+    notifyListeners();
+  }
+
+  void restoreRoom() {
+    if (!_minimised) return;
+    _minimised = false;
+    notifyListeners();
+  }
+
   // ── Join / leave ──
   void joinRoom(String roomId) {
     _wireListeners();
     activeRoomId = roomId;
+    _minimised = false;
     myElapsedSecs = 0;
     _rt.joinRoom(roomId);
     _rt.toggleMute(roomId, true); // Explicitly muted by default
@@ -117,6 +155,7 @@ class FocusRoomProvider extends ChangeNotifier {
     final id = activeRoomId;
     final secs = myElapsedSecs;
     activeRoomId = null;
+    _minimised = false;
     _participants.clear();
     myElapsedSecs = 0;
     notifyListeners();

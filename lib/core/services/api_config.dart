@@ -3,13 +3,13 @@ import 'package:flutter/foundation.dart';
 
 /// Central place for the backend base URL + the auth token the app holds.
 ///
-/// The token is a Supabase Auth JWT (or your own) — the server's `verifyJwt`
+/// The token is a Supabase Auth JWT (or your own) - the server's `verifyJwt`
 /// reads `sub` as the user id. Set both at sign-in.
 class ApiConfig {
   ApiConfig._();
   static final ApiConfig instance = ApiConfig._();
 
-  /// Cloud server base URL. Override per-flavour (dev/stg/prod) — NOT localhost.
+  /// Cloud server base URL. Override per-flavour (dev/stg/prod) - NOT localhost.
   /// e.g. 'https://api.ourmynd.app'
   String baseUrl = const String.fromEnvironment(
     'OURMYND_API',

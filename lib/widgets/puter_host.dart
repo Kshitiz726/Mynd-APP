@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
 import '../core/services/puter_service.dart';
+import '../core/utils/test_mode.dart';
 
 /// Invisible, app-lifetime WebView that hosts Puter.js for [PuterService].
 ///
 /// Mounted once (in `main.dart`'s MaterialApp builder) so the JS bridge stays
-/// alive across all routes. Kept 1×1 and off-screen — it never shows UI except
+/// alive across all routes. Kept 1×1 and off-screen - it never shows UI except
 /// the one-time Puter sign-in popup, which is presented full-screen via
 /// [navigatorKey] when `puter.auth` opens a window.
 class PuterHost extends StatefulWidget {
@@ -30,7 +31,7 @@ class _PuterHostState extends State<PuterHost> {
     transparentBackground: true,
   );
 
-  // The bridge is served over http://localhost — a SECURE CONTEXT, required for
+  // The bridge is served over http://localhost - a SECURE CONTEXT, required for
   // navigator.mediaDevices.getUserMedia (mic). The server itself is owned by the
   // app-lifetime [PuterService] (on an ephemeral port) so it survives this
   // widget rebuilding/disposing and never collides across two app instances.
@@ -43,6 +44,11 @@ class _PuterHostState extends State<PuterHost> {
   @override
   void initState() {
     super.initState();
+    // Nothing to bridge to under `flutter test`: there is no webview platform,
+    // and booting anyway stood up a real localhost asset server with a periodic
+    // timer that outlived the test. Guarded here rather than only in build,
+    // because initState is where the side effects are.
+    if (kTestMode) return;
     _boot();
   }
 
@@ -54,16 +60,27 @@ class _PuterHostState extends State<PuterHost> {
 
   @override
   void dispose() {
-    // The asset server is app-lifetime (owned by PuterService) — don't close it.
+    // The asset server is app-lifetime (owned by PuterService) - don't close it.
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Off-screen 1×1 — present but never seen or touchable.
+    // There is no webview platform under `flutter test`, and building one
+    // throws, which took the app's boot smoke test down with it. The bridge is
+    // pure platform plumbing with nothing to assert about, so it sits this out
+    // rather than every widget test having to stub a browser.
+    if (kTestMode) return const SizedBox.shrink();
+
+    // A 1×1 in the very top-left corner - present but effectively invisible
+    // (the bridge page is an empty, transparent document). It is kept ON-screen
+    // rather than pushed off at negative coordinates on purpose: Android
+    // suspends the mic capture of a WebView it considers off-screen, which was
+    // cutting voice recordings off after a few seconds. A composited 1px surface
+    // keeps getUserMedia/MediaRecorder running for the whole dump.
     return Positioned(
-      left: -2,
-      top: -2,
+      left: 0,
+      top: 0,
       width: 1,
       height: 1,
       child: IgnorePointer(
@@ -86,7 +103,7 @@ class _PuterHostState extends State<PuterHost> {
     );
   }
 
-  /// Puter's first-time sign-in opens a window — present it full-screen so the
+  /// Puter's first-time sign-in opens a window - present it full-screen so the
   /// user can authenticate once (token is cached by the WebView afterwards).
   /// Returns `true` SYNCHRONOUSLY so the native WebView doesn't stall waiting on
   /// the dialog lifecycle (awaiting the push froze the bridge on Windows).

@@ -1,0 +1,207 @@
+/* ===========================================================================
+   Record video.html to an mp4, frame by frame.
+   ---------------------------------------------------------------------------
+   No dependencies. Node 22+ ships a WebSocket client, which is all that is
+   needed to speak the Chrome DevTools Protocol directly.
+
+   The trick that makes this exact rather than approximate is CDP virtual time:
+   the renderer's clock is paused, then advanced by exactly one frame at a time,
+   and timers, transitions and CSS animations all move with it. So the output is
+   deterministic - the same run twice is the same file - and it does not matter
+   how long a frame takes to encode.
+
+   Frames go straight down a pipe into ffmpeg. Nothing is written to disk except
+   the finished film.
+
+   Usage:  node tools/record.mjs [--fps 30] [--out ourmynd.mp4] [--port 4321]
+   ======================================================================== */
+
+import { spawn } from 'node:child_process';
+import { rename, rm } from 'node:fs/promises';
+import { setTimeout as sleep } from 'node:timers/promises';
+
+const arg = (name, fallback) => {
+  const i = process.argv.indexOf('--' + name);
+  return i > -1 ? process.argv[i + 1] : fallback;
+};
+
+const FPS = Number(arg('fps', 30));
+const OUT = arg('out', 'ourmynd-walkthrough.mp4');
+// ffmpeg writes the moov atom last, so the output path holds an unplayable file
+// for the entire length of the render - twenty-odd minutes of a video that is
+// there but broken. Write beside it and rename at the end instead: the final
+// path either does not exist or is finished.
+const TMP = OUT.replace(/\.mp4$/, '') + '.part.mp4';
+const PORT = Number(arg('port', 4321));
+// A fresh port and profile per run. A previous run that was interrupted can
+// leave Chrome holding the old port, and /json/list then hands back ITS page -
+// which has already played the film through, so every captured frame is the
+// end card. Silent, deterministic, and completely wrong.
+const DEBUG_PORT = Number(arg('debug-port', 9400 + Math.floor(Math.random() * 400)));
+const WIDTH = 1080;
+const HEIGHT = 1920;
+
+const CHROME = arg('chrome',
+  'C:/Program Files/Google/Chrome/Application/chrome.exe');
+
+/* ---- CCP plumbing -------------------------------------------------------- */
+class CDP {
+  constructor(ws) {
+    this.ws = ws;
+    this.id = 0;
+    this.pending = new Map();
+    this.listeners = new Map();
+    ws.addEventListener('message', (e) => {
+      const msg = JSON.parse(e.data);
+      if (msg.id && this.pending.has(msg.id)) {
+        const { resolve, reject } = this.pending.get(msg.id);
+        this.pending.delete(msg.id);
+        msg.error ? reject(new Error(msg.error.message)) : resolve(msg.result);
+      } else if (msg.method) {
+        (this.listeners.get(msg.method) || []).forEach((fn) => fn(msg.params));
+      }
+    });
+  }
+  send(method, params = {}) {
+    const id = ++this.id;
+    this.ws.send(JSON.stringify({ id, method, params }));
+    return new Promise((resolve, reject) => this.pending.set(id, { resolve, reject }));
+  }
+  on(method, fn) {
+    if (!this.listeners.has(method)) this.listeners.set(method, []);
+    this.listeners.get(method).push(fn);
+  }
+  once(method) {
+    return new Promise((resolve) => {
+      const fn = (p) => {
+        const arr = this.listeners.get(method);
+        arr.splice(arr.indexOf(fn), 1);
+        resolve(p);
+      };
+      this.on(method, fn);
+    });
+  }
+}
+
+async function connect(url) {
+  const ws = new WebSocket(url);
+  await new Promise((res, rej) => {
+    ws.addEventListener('open', res, { once: true });
+    ws.addEventListener('error', rej, { once: true });
+  });
+  return new CDP(ws);
+}
+
+/* ---- go ------------------------------------------------------------------ */
+const url = `http://127.0.0.1:${PORT}/video.html`;
+
+console.log('launching chrome...');
+const chrome = spawn(CHROME, [
+  '--headless=new',
+  '--disable-gpu',
+  '--hide-scrollbars',
+  '--mute-audio',
+  '--no-first-run',
+  '--force-device-scale-factor=1',
+  `--window-size=${WIDTH},${HEIGHT}`,
+  `--remote-debugging-port=${DEBUG_PORT}`,
+  `--user-data-dir=${process.env.TEMP || '/tmp'}/om-record-${DEBUG_PORT}`,
+  url,
+], { stdio: 'ignore' });
+
+// Wait for the debugger to answer, then find the page target.
+let target = null;
+for (let i = 0; i < 60 && !target; i++) {
+  await sleep(500);
+  try {
+    const list = await (await fetch(`http://127.0.0.1:${DEBUG_PORT}/json/list`)).json();
+    target = list.find((t) => t.type === 'page' && t.url.includes('video.html'));
+  } catch { /* not up yet */ }
+}
+if (!target) { chrome.kill(); throw new Error('chrome never opened the page'); }
+
+process.on('exit', () => { try { chrome.kill(); } catch {} });
+process.on('SIGINT', () => { try { chrome.kill(); } catch {} process.exit(1); });
+
+const cdp = await connect(target.webSocketDebuggerUrl);
+await cdp.send('Page.enable');
+await cdp.send('Emulation.setDeviceMetricsOverride', {
+  width: WIDTH, height: HEIGHT, deviceScaleFactor: 1, mobile: false,
+});
+
+const read = async (expr) =>
+  (await cdp.send('Runtime.evaluate', { expression: expr, returnByValue: true })).result.value;
+
+// Settle in real time: fonts, the iframe and the WebGL contexts all have to
+// exist before the clock is taken away from them. Poll rather than guess a
+// sleep - a cold profile takes noticeably longer than a warm one.
+console.log('warming up...');
+let totalMs = 0;
+for (let i = 0; i < 60 && !totalMs; i++) {
+  await sleep(500);
+  totalMs = Number(await read('document.documentElement.dataset.filmReady || 0'));
+}
+if (!totalMs) { chrome.kill(); throw new Error('video.html never reported a duration'); }
+await sleep(2500);   // a beat more for fonts to paint at their final metrics
+
+const frameMs = 1000 / FPS;
+// 600ms of lead-in before the first cut, plus a beat to rest on the last card.
+let frames = Math.ceil((totalMs + 600 + 1200) / frameMs);
+// --max-frames exists so the whole pipeline can be smoke-tested in seconds
+// rather than in minutes.
+const cap = Number(arg('max-frames', 0));
+if (cap) frames = Math.min(frames, cap);
+console.log(`film is ${(totalMs / 1000).toFixed(1)}s -> ${frames} frames at ${FPS}fps`);
+
+// Frames in on stdin, the soundtrack in as a second input, one mp4 out. The
+// music is cut to the film's own length and its bar length is what the shot
+// length was derived from, so no offset is needed here - both start at zero.
+const AUDIO = arg('audio', 'assets/audio/film.m4a');
+const ff = spawn('ffmpeg', [
+  '-y',
+  '-f', 'image2pipe', '-framerate', String(FPS), '-i', '-',
+  '-i', AUDIO,
+  '-map', '0:v:0', '-map', '1:a:0',
+  '-c:v', 'libx264', '-preset', 'slow', '-crf', '19',
+  '-pix_fmt', 'yuv420p', '-profile:v', 'high', '-level', '4.2',
+  '-c:a', 'aac', '-b:a', '192k',
+  '-shortest', '-movflags', '+faststart',
+  TMP,
+], { stdio: ['pipe', 'ignore', 'inherit'] });
+
+const write = (buf) => new Promise((res) => {
+  if (!ff.stdin.write(buf)) ff.stdin.once('drain', res);
+  else res();
+});
+
+// Pause the world, and only then start the film. Warming up in real time
+// would otherwise burn the first few seconds of it before frame one.
+await cdp.send('Emulation.setVirtualTimePolicy', { policy: 'pause' });
+await cdp.send('Runtime.evaluate', { expression: 'window.OM_START()' });
+
+for (let f = 0; f < frames; f++) {
+  const expired = cdp.once('Emulation.virtualTimeBudgetExpired');
+  await cdp.send('Emulation.setVirtualTimePolicy', {
+    policy: 'pauseIfNetworkFetchesPending',
+    budget: frameMs,
+  });
+  await expired;
+
+  const shot = await cdp.send('Page.captureScreenshot', {
+    format: 'jpeg', quality: 92, fromSurface: true, captureBeyondViewport: false,
+  });
+  await write(Buffer.from(shot.data, 'base64'));
+
+  if (f % (FPS * 5) === 0) {
+    process.stdout.write(`\r  ${f}/${frames} frames (${(f / FPS).toFixed(0)}s)   `);
+  }
+}
+
+process.stdout.write(`\r  ${frames}/${frames} frames — encoding...            \n`);
+ff.stdin.end();
+const code = await new Promise((res) => ff.on('close', res));
+chrome.kill();
+if (code !== 0) { await rm(TMP, { force: true }); throw new Error('ffmpeg exited ' + code); }
+await rm(OUT, { force: true });
+await rename(TMP, OUT);
+console.log('wrote', OUT);

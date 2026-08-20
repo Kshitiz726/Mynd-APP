@@ -34,7 +34,7 @@ class OmTopBar extends StatelessWidget {
   /// Right-aligned action widgets (icon buttons, pills, avatar…).
   final List<Widget> actions;
 
-  /// When provided, replaces the default title/subtitle column entirely — lets a
+  /// When provided, replaces the default title/subtitle column entirely - lets a
   /// screen keep bespoke content (e.g. the coach's model picker) while still
   /// sharing the bar's height, spacing and action layout.
   final Widget? titleWidget;

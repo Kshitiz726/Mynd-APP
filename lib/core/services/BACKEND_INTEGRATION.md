@@ -2,7 +2,7 @@
 
 The UI currently uses hard-coded data + `Toast.show(...)` stubs. These services
 replace those with the real cloud backend (`/server`). Nothing here changes the
-look — only the data source.
+look - only the data source.
 
 ## 1. One-time setup (after sign-in)
 ```dart

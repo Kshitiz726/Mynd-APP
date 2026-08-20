@@ -5,22 +5,24 @@ import '../../providers/alerts_provider.dart';
 import '../../core/constants/app_spacing.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/om_icons.dart';
+import '../../core/utils/toast.dart';
 import '../../models/task.dart';
-import '../../providers/energy_provider.dart';
 import '../../providers/goal_provider.dart';
+import '../../providers/mood_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../providers/task_provider.dart';
 import '../../widgets/om_chip.dart';
 import '../../widgets/om_states.dart';
+import '../../widgets/om_time_picker.dart';
 import '../../widgets/om_tappable.dart';
-import '../../widgets/vibe_pill.dart';
-import 'widgets/day_timeline.dart';
-import 'widgets/energy_sheet.dart';
+import 'widgets/mynd_hero.dart';
 import 'widgets/home_banners.dart';
 import 'widgets/home_dashboard.dart';
+import 'widgets/mood_bar.dart';
+import 'widgets/progress_bars.dart';
 import 'widgets/task_tile.dart';
 
-/// The "Today" dashboard — the app's home base.
+/// The "Today" dashboard - the app's home base.
 ///
 /// Composition (reference-styled): top bar → hero mascot + stat → vibe →
 /// featured goal → do-this-now → your day timeline → backlog.
@@ -42,32 +44,68 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  /// The check-in is asked once, on the first open of the day. [_asked] guards
+  /// against re-prompting when Home rebuilds, and the provider's own
+  /// [MoodProvider.needsCheckIn] guards against asking again tomorrow morning
+  /// if they already logged one.
+  bool _asked = false;
+
+  void _maybeAskMood(BuildContext context) {
+    if (_asked) return;
+    final mood = context.read<MoodProvider>();
+    if (!mood.needsCheckIn) return;
+    _asked = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) showMoodCheckIn(context);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    final energy = context.watch<EnergyProvider>().current;
-    final tasks = context.watch<TaskProvider>();
-
     final c = context.omColors;
+    // Watched, so the prompt fires as soon as stored moods have loaded.
+    context.watch<MoodProvider>();
+    _maybeAskMood(context);
 
     return Stack(
       children: [
-        // A single soft, radiant peach glow blooming from the top — no hard
-        // circles, just a clean radial wash that melts into the surface.
+        // Home is the app's face, so it carries the brand rather than a neutral
+        // wash: coral warming the top where the mascot sits, brand purple
+        // cooling the bottom, and two off-centre blooms so the colour has a
+        // direction instead of sitting there as a flat ramp.
         Positioned.fill(
           child: DecoratedBox(
             decoration: BoxDecoration(
-              gradient: RadialGradient(
-                center: const Alignment(0, -1.05),
-                radius: 1.25,
-                colors: [
-                  const Color(0xFFFFE6D0), // warm peach core
-                  Color.lerp(const Color(0xFFFFE6D0), c.surface, 0.55)!,
-                  c.surface,
-                ],
-                stops: const [0.0, 0.42, 0.85],
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: context.isDark
+                    ? [
+                        Color.lerp(c.accent, c.bg, 0.80)!,
+                        Color.lerp(c.primary, c.bg, 0.84)!,
+                        c.bg,
+                      ]
+                    : [
+                        const Color(0xFFFFD9C2), // coral, warm
+                        const Color(0xFFEADEFF), // brand lilac
+                        const Color(0xFFF6F2FF),
+                      ],
+                stops: const [0.0, 0.55, 1.0],
               ),
             ),
           ),
+        ),
+        // Coral bloom behind the mascot.
+        Positioned(
+          top: -80,
+          right: -60,
+          child: _Bloom(color: c.accent, size: 300, alpha: context.isDark ? 0.22 : 0.42),
+        ),
+        // Brand bloom low-left, so the page is lit from two sides.
+        Positioned(
+          top: 260,
+          left: -90,
+          child: _Bloom(color: c.primary, size: 320, alpha: context.isDark ? 0.20 : 0.30),
         ),
         ListView(
           padding: const EdgeInsets.fromLTRB(
@@ -79,29 +117,25 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             const LowStimBanner(),
             const HomeTopBar(),
-            const HomeHero(),
-            const SizedBox(height: AppSpacing.lg),
-            Center(
-              child: VibePill(energy: energy, onTap: () => showEnergyPicker(context)),
-            ),
+            const MyndHero(),
             const SizedBox(height: AppSpacing.xl),
-            const OmSectionHeader('your goals'),
-            const GoalAchievementCard(),
-            const GoalsList(),
+
+            // What is in your head, first. Everything below this is the app
+            // reporting on you; this is the one thing that only you can put
+            // there, and it is worth nothing if you have to scroll past three
+            // cards to reach it while holding the thought.
             const BrainDumpCard(),
 
             const OmSectionHeader('do this now'),
             const QuickActions(),
 
-            const OmSectionHeader('your day', trailing: 'view all'),
-            const _SleepScheduleBar(),
-            const SizedBox(height: AppSpacing.sm),
-            const DayTimeline(),
+            const SizedBox(height: AppSpacing.md),
+            const ProgressBars(),
+            const MoodBar(),
 
-            const OmSectionHeader('backlog'),
-            _BacklogFilters(),
-            const SizedBox(height: AppSpacing.lg),
-            _Backlog(tasks: tasks),
+            const OmSectionHeader('your goals'),
+            const GoalAchievementCard(),
+            const GoalsList(),
           ],
         ),
       ],
@@ -109,7 +143,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-class _BacklogFilters extends StatelessWidget {
+class BacklogFiltersX extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tasks = context.watch<TaskProvider>();
@@ -135,8 +169,8 @@ class _BacklogFilters extends StatelessWidget {
   }
 }
 
-class _Backlog extends StatelessWidget {
-  const _Backlog({required this.tasks});
+class BacklogX extends StatelessWidget {
+  const BacklogX({required this.tasks});
 
   final TaskProvider tasks;
 
@@ -148,7 +182,7 @@ class _Backlog extends StatelessWidget {
     if (items.isEmpty) {
       final f = tasks.filter;
       final phrase = f == BacklogFilter.all ? 'right now' : '${f.energy?.filterLabel ?? f.label} right now';
-      return OmEmptyState(message: 'nothing $phrase — wanna add a 2-min win?');
+      return OmEmptyState(message: 'nothing $phrase - wanna add a 2-min win?');
     }
 
     final visible = items.take(cap).toList();
@@ -157,7 +191,7 @@ class _Backlog extends StatelessWidget {
     return Column(
       children: [
         for (final t in visible) TaskTile(task: t),
-        if (hidden > 0) _ShowMore(count: hidden, items: items, cap: cap),
+        if (hidden > 0) ShowMoreX(count: hidden, items: items, cap: cap),
       ],
     );
   }
@@ -165,18 +199,18 @@ class _Backlog extends StatelessWidget {
 
 /// Reveals the capped-off tasks. Kept as a small stateful widget so the cap is
 /// a soft default, not a hard wall.
-class _ShowMore extends StatefulWidget {
-  const _ShowMore({required this.count, required this.items, required this.cap});
+class ShowMoreX extends StatefulWidget {
+  const ShowMoreX({required this.count, required this.items, required this.cap});
 
   final int count;
   final List<Task> items;
   final int cap;
 
   @override
-  State<_ShowMore> createState() => _ShowMoreState();
+  State<ShowMoreX> createState() => ShowMoreStateX();
 }
 
-class _ShowMoreState extends State<_ShowMore> {
+class ShowMoreStateX extends State<ShowMoreX> {
   bool _expanded = false;
 
   @override
@@ -195,11 +229,11 @@ class _ShowMoreState extends State<_ShowMore> {
   }
 }
 
-class _SleepScheduleBar extends StatelessWidget {
-  const _SleepScheduleBar();
+class SleepScheduleBarX extends StatelessWidget {
+  const SleepScheduleBarX();
 
   Future<void> _pickTime(BuildContext context, TimeOfDay current, ValueChanged<TimeOfDay> onChanged) async {
-    final t = await showTimePicker(context: context, initialTime: current);
+    final t = await showOmTimePicker(context: context, initialTime: current);
     if (t != null) onChanged(t);
   }
 
@@ -213,7 +247,7 @@ class _SleepScheduleBar extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: _TimePill(
+            child: TimePillX(
               icon: 'sun',
               label: 'Wake',
               value: settings.wakeUpTime.format(context),
@@ -222,7 +256,7 @@ class _SleepScheduleBar extends StatelessWidget {
           ),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
-            child: _TimePill(
+            child: TimePillX(
               icon: 'moon',
               label: 'Sleep',
               value: settings.sleepTime.format(context),
@@ -231,14 +265,34 @@ class _SleepScheduleBar extends StatelessWidget {
           ),
           const SizedBox(width: AppSpacing.sm),
           OmTappable(
-            onTap: () {
-              context.read<GoalProvider>().refreshTodayTasks();
-              context.read<TaskProvider>().autoScheduleDay(
-                    settings.wakeUpTime,
-                    settings.sleepTime,
-                    context.read<AlertsProvider>(),
-                    settings.selectedRingtone,
-                  );
+            // A day that has already happened is a record, so there is nothing
+            // to plan on it.
+            onTap: !context.watch<TaskProvider>().canPlan(context.watch<TaskProvider>().selectedDate)
+                ? null
+                : () {
+              final tasks = context.read<TaskProvider>();
+              // Surface the goal step belonging to *this* day before packing,
+              // so planning a future day schedules that day's step rather than
+              // today's.
+              context.read<GoalProvider>().showDay(tasks.selectedDate);
+              final r = tasks.autoScheduleDay(
+                settings.wakeUpTime,
+                settings.sleepTime,
+                context.read<AlertsProvider>(),
+                settings.selectedRingtone,
+                // Plan the day being looked at, not always today.
+                day: tasks.selectedDate,
+              );
+              // Nothing fitting before bedtime looks identical to a button that
+              // did not work, so say which it was.
+              if (r.noRoom > 0) {
+                Toast.show(
+                  context,
+                  r.placed == 0
+                      ? 'no room left before bed - try tomorrow'
+                      : '${r.noRoom} left over - past your bedtime',
+                );
+              }
             },
             feedback: OmTapFeedback.medium,
             pressedScale: 0.95,
@@ -278,8 +332,8 @@ class _SleepScheduleBar extends StatelessWidget {
 
 /// A compact tappable pill showing a labelled time (Wake / Sleep) on the day
 /// header. Opens a time picker on tap.
-class _TimePill extends StatelessWidget {
-  const _TimePill({
+class TimePillX extends StatelessWidget {
+  const TimePillX({
     required this.icon,
     required this.label,
     required this.value,
@@ -319,6 +373,38 @@ class _TimePill extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A soft radial bloom of brand colour. Blurring is expensive on a scrolling
+/// page, so the softness comes from the gradient's own falloff.
+class _Bloom extends StatelessWidget {
+  const _Bloom({required this.color, required this.size, required this.alpha});
+
+  final Color color;
+  final double size;
+  final double alpha;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: RadialGradient(
+              colors: [
+                color.withValues(alpha: alpha),
+                color.withValues(alpha: 0.0),
+              ],
+              stops: const [0.0, 1.0],
+            ),
+          ),
         ),
       ),
     );

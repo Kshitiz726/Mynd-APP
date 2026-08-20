@@ -2,8 +2,10 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_spacing.dart';
+import '../../core/constants/legal.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/om_icons.dart';
+import '../../widgets/om_back_button.dart';
 import '../../widgets/om_top_bar.dart';
 import '../../widgets/om_tappable.dart';
 
@@ -37,21 +39,38 @@ class AboutScreen extends StatelessWidget {
                 AppSpacing.screenBottom,
               ),
               children: [
-                OmTopBar(
-                  title: 'about',
-                  actions: [
-                    OmTopBarAction(
-                      icon: OmIcons.byName('close'),
-                      onTap: () => Navigator.of(context).pop(),
-                    ),
-                  ],
-                ),
+                // A chevron on the left, not a cross on the right: this is a
+                // pushed page like any other, and dismissal should not have two
+                // different shapes depending on which page you are on.
+                const OmTopBar(title: 'about', leading: OmBackButton()),
                 const SizedBox(height: AppSpacing.lg),
                 
                 const _AboutCard(title: 'App Version', subtitle: 'v1.0.0 (Build 42)', icon: 'smartphone'),
-                const _AboutCard(title: 'Terms of Service', subtitle: 'Read our terms', icon: 'file-text', showArrow: true),
-                const _AboutCard(title: 'Privacy Policy', subtitle: 'How we handle your data', icon: 'shield', showArrow: true),
-                const _AboutCard(title: 'Open Source Licenses', subtitle: 'Libraries we use', icon: 'code', showArrow: true),
+                _AboutCard(
+                  title: 'Terms of Service',
+                  subtitle: 'Read our terms',
+                  icon: 'file-text',
+                  showArrow: true,
+                  onTap: () => Legal.openTerms(context),
+                ),
+                _AboutCard(
+                  title: 'Privacy Policy',
+                  subtitle: 'How we handle your data',
+                  icon: 'shield',
+                  showArrow: true,
+                  onTap: () => Legal.openPrivacy(context),
+                ),
+                _AboutCard(
+                  title: 'Open Source Licenses',
+                  subtitle: 'Libraries we use',
+                  icon: 'code',
+                  showArrow: true,
+                  onTap: () => showLicensePage(
+                    context: context,
+                    applicationName: 'OurMynd',
+                    applicationVersion: 'v1.0.0',
+                  ),
+                ),
                 
                 const SizedBox(height: AppSpacing.xl * 2),
                 Center(
@@ -100,6 +119,7 @@ class _AboutCard extends StatelessWidget {
     required this.subtitle,
     required this.icon,
     this.showArrow = false,
+    this.onTap,
   });
 
   final String title;
@@ -107,14 +127,19 @@ class _AboutCard extends StatelessWidget {
   final String icon;
   final bool showArrow;
 
+  /// Null for the rows that are statements rather than destinations (the
+  /// version number). Those get no press feedback, because a card that
+  /// animates under your finger and then does nothing reads as broken.
+  final VoidCallback? onTap;
+
   @override
   Widget build(BuildContext context) {
     final c = context.omColors;
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.md),
       child: OmTappable(
-        onTap: () {},
-        pressedScale: 0.98,
+        onTap: onTap,
+        pressedScale: onTap == null ? 1.0 : 0.98,
         child: ClipRRect(
           borderRadius: BorderRadius.circular(20),
           child: BackdropFilter(

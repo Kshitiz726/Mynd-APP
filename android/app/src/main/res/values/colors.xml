@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The window background the OS paints before Flutter has drawn anything.
+     Must match OmColors.light.bg in lib/core/theme/app_colors.dart, or the
+     launch screen arrives as a visible change of colour. -->
+<resources>
+    <color name="launch_bg">#F6F4F1</color>
+</resources>

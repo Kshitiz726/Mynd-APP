@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Semantic color palette for OurMynd — the **Dusk Calm** system: soft
+/// Semantic color palette for OurMynd - the **Dusk Calm** system: soft
 /// periwinkle-indigo + warm peach on warm paper, tuned for a calm, premium,
 /// ADHD-friendly wellness feel.
 ///
@@ -47,7 +47,7 @@ class OmColors extends ThemeExtension<OmColors> {
   final Color error;
   final Color border;
 
-  /// Energy levels — the core of OurMynd's task model.
+  /// Energy levels - the core of OurMynd's task model.
   final Color energyHigh;
   final Color energyLow;
   final Color energyDead;
@@ -60,7 +60,7 @@ class OmColors extends ThemeExtension<OmColors> {
   final Color gradEnd;
 
   /// Tinted shadow colour (indigo-leaning in light, black in dark). Apply with
-  /// `.withValues(alpha: …)` — softer and more premium than pure black.
+  /// `.withValues(alpha: …)` - softer and more premium than pure black.
   final Color shadow;
 
   /// The signature brand gradient (top-left → bottom-right).

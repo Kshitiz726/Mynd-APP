@@ -30,7 +30,8 @@
     "pg-promise": "^11.9.1",
     "pino": "^9.3.2",
     "pino-http": "^10.2.0",
-    "socket.io": "^4.7.5"
+    "socket.io": "^4.7.5",
+    "stripe": "^17.7.0"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",

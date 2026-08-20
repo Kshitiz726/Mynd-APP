@@ -61,7 +61,7 @@ r.get('/conversations/:id/messages', requireAuth, async (req, res) => {
 });
 
 // ── Members of a conversation (drives the group "members" sheet) ──
-// Returns only public identity (display name, initial, avatar colour) — never
+// Returns only public identity (display name, initial, avatar colour) - never
 // the email/handle. Member-gated so only people in the room can see the roster.
 r.get('/conversations/:id/members', requireAuth, async (req, res) => {
   if (!(await isMember(req.params.id, req.user.id))) {
