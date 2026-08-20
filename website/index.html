@@ -936,7 +936,7 @@
     background: #eceefa;
     transform-style: preserve-3d;
     box-shadow: 0 40px 70px -34px rgba(23, 24, 51, 0.55);
-    transition: transform 0.66s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.45s ease, box-shadow 0.5s ease;
+    transition: transform 0.62s cubic-bezier(0.24, 0.72, 0.24, 1), opacity 0.42s ease, box-shadow 0.5s ease;
     will-change: transform;
   }
   .card img {
@@ -1947,7 +1947,6 @@
   deck.tabIndex = 0;
 
   layout();
-  restart();
 })();
 </script>
 <script>
@@ -2107,7 +2106,7 @@
   function go(i) { active = ((i % N) + N) % N; layout(); restart(); }
 
   /* It moves on by itself, and gets out of the way the moment you take over. */
-  const DWELL = 5200;
+  const DWELL = 1000;
   const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   let timer = null;
   let held = false;
@@ -2118,10 +2117,8 @@
     timer = setInterval(() => { active = (active + 1) % N; layout(); }, DWELL);
   }
   function hold(on) { held = on; restart(); }
-  show.addEventListener("pointerenter", () => hold(true));
-  show.addEventListener("pointerleave", () => hold(false));
-  show.addEventListener("focusin", () => hold(true));
-  show.addEventListener("focusout", () => hold(false));
+  stage.addEventListener("pointerenter", () => hold(true));
+  stage.addEventListener("pointerleave", () => hold(false));
   document.addEventListener("visibilitychange", () => hold(document.hidden));
 
   cards.forEach((c, i) => c.addEventListener("click", () => { if (i !== active) go(i); }));
@@ -2228,5 +2225,6 @@
   show.tabIndex = 0;
 
   layout();
+  restart();
 })();
 </script>
