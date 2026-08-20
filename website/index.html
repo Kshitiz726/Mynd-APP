@@ -101,7 +101,8 @@
     gap: 24px;
   }
   .wordmark { display: flex; align-items: center; }
-  .wordmark img { height: 22px; width: auto; display: block; filter: brightness(0); opacity: 0.86; }
+  .wordmark img { height: 31px; width: auto; display: block; filter: brightness(0); opacity: 0.9; }
+  @media (max-width: 900px) { .wordmark img { height: 26px; } }
 
   nav { display: flex; align-items: center; justify-content: center; gap: clamp(20px, 3vw, 44px); font-size: var(--step--1); color: var(--mist); }
   nav a { text-decoration: none; transition: color 0.25s ease; }
