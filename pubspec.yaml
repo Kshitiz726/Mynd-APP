@@ -101,14 +101,14 @@ flutter:
 # iOS forbids alpha in app icons (App Store rejects them), so we flatten the
 # transparent logo onto white — matching the logo's own background.
 flutter_launcher_icons:
-  image_path: "assets/logo.png"
+  image_path: "assets/branding/app_icon.png"
   android: true
   ios: true
   remove_alpha_ios: true
   background_color_ios: "#FFFFFF"
   web:
     generate: true
-    image_path: "assets/logo.png"
+    image_path: "assets/branding/app_icon.png"
   macos:
     generate: true
-    image_path: "assets/logo.png"
+    image_path: "assets/branding/app_icon.png"
