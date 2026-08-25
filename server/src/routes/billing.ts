@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import type Stripe from 'stripe';
 import { config } from '../config.js';
+import { db } from '../db.js';
 import { requireAuth } from '../auth.js';
 import {
   stripe,
@@ -152,7 +153,13 @@ billingRouter.post('/billing/confirm', requireAuth, async (req, res) => {
       expand: ['subscription'],
     });
     // Guard: the session must belong to the caller.
-    if (session.client_reference_id && session.client_reference_id !== req.user.id) {
+    //
+    // Fails closed. This used to be `if (client_reference_id && ...)`, which
+    // skipped the check entirely whenever the field was absent - so a session
+    // created without one could be claimed by any authenticated caller who
+    // knew its id. Checkout always stamps it, so a missing value means
+    // something we did not create, and the answer to that is no.
+    if (session.client_reference_id !== req.user.id) {
       return res.status(403).json({ error: 'session does not belong to you' });
     }
     if (session.payment_status === 'paid' && session.subscription) {
@@ -223,12 +230,48 @@ export async function billingWebhookHandler(req: Request, res: Response) {
       console.error('[billing] bad webhook signature:', e?.message ?? e);
       return res.status(400).send(`Webhook Error: ${e?.message}`);
     }
+  } else if (config.isProd) {
+    // Unsigned events are never acceptable in production.
+    //
+    // This branch used to parse them anyway, guarded only by a comment saying
+    // "dev only" and by nothing at all in code. Deployed with the secret unset,
+    // it meant any unauthenticated caller could POST a subscription event and
+    // grant themselves premium: an entitlement endpoint with no authentication
+    // in front of it. Refusing outright is the only safe reading, and a 500 is
+    // honest - this is our misconfiguration, not a malformed request, and it
+    // makes the failure loud in the Stripe dashboard rather than silent.
+    console.error('[billing] STRIPE_WEBHOOK_SECRET is not set - refusing unsigned webhook');
+    return res.status(500).json({ error: 'webhook verification not configured' });
   } else {
-    // No secret configured - accept unverified (dev only).
+    // Local development only, and only ever reachable when NODE_ENV !== production.
     try {
       event = JSON.parse((req.body as Buffer).toString('utf8')) as Stripe.Event;
     } catch {
       return res.status(400).end();
+    }
+  }
+
+  // Idempotency. Stripe retries on any non-2xx and may deliver the same event
+  // more than once even on success, so applying an event twice has to be a
+  // no-op rather than a second upgrade or a double-counted cancellation. The
+  // insert is the lock: a duplicate id violates the primary key, and losing
+  // that race means somebody else is already handling this event.
+  if (config.hasDb && event.id) {
+    try {
+      const fresh = await db.oneOrNone(
+        `insert into billing_events (id, type) values ($1, $2)
+         on conflict (id) do nothing
+         returning id`,
+        [event.id, event.type],
+      );
+      if (!fresh) {
+        return res.json({ received: true, duplicate: true });
+      }
+    } catch (e: any) {
+      console.error('[billing] idempotency check failed:', e?.message ?? e);
+      // Fall through and process. Refusing here would let a transient database
+      // error drop a real payment event permanently, which is worse than the
+      // rare double-apply this is guarding against.
     }
   }
 
@@ -244,6 +287,25 @@ export async function billingWebhookHandler(req: Request, res: Response) {
             typeof sub.customer === 'string' ? sub.customer : sub.customer.id,
           ));
         if (userId) await applyStripeSubscription(userId, sub);
+        break;
+      }
+
+      // Money going back out has to take the entitlement with it. Without
+      // these, a refunded or disputed payment left the account premium
+      // indefinitely: the subscription events never fire for a chargeback, so
+      // nothing else would ever revoke it.
+      case 'charge.refunded':
+      case 'charge.dispute.created': {
+        const charge = event.data.object as Stripe.Charge;
+        const customerId =
+          typeof charge.customer === 'string' ? charge.customer : charge.customer?.id;
+        if (customerId) {
+          const userId = await billingStore.userForCustomer(customerId);
+          if (userId) {
+            console.warn('[billing] revoking entitlement after', event.type, { customerId });
+            await billingStore.clear(userId);
+          }
+        }
         break;
       }
       default:

@@ -4,7 +4,15 @@ import { db } from '../db.js';
 
 // One Stripe client for the process. Null when no secret key is configured, so
 // the routes can answer a clean 503 instead of throwing on boot.
-export const stripe = config.hasStripe ? new Stripe(config.stripe.secretKey) : null;
+// Bounded and retried.
+//
+// The SDK defaults to no timeout, so a slow Stripe call could pin a request
+// (and its database connection) open for as long as the socket stayed up.
+// Two retries because checkout and webhook handling are worth one more attempt
+// before failing a paying customer.
+export const stripe = config.hasStripe
+  ? new Stripe(config.stripe.secretKey, { timeout: 10_000, maxNetworkRetries: 2 })
+  : null;
 
 export type Tier = 'free' | 'plus' | 'pro';
 export type Interval = 'month' | 'year';
@@ -121,6 +129,25 @@ export const billingStore = {
       ],
     );
     return next;
+  },
+
+  /**
+   * Drop the account back to free, keeping the Stripe ids.
+   *
+   * Used when money is reversed - a refund or a dispute - where there may be no
+   * subscription event to follow. The customer id is deliberately retained so a
+   * later legitimate purchase still reconciles to the same Stripe customer
+   * rather than creating a second one.
+   */
+  async clear(userId: string): Promise<SubRecord> {
+    return this.upsert(userId, {
+      tier: 'free',
+      status: 'canceled',
+      interval: null,
+      stripeSubscriptionId: null,
+      priceId: null,
+      currentPeriodEnd: null,
+    });
   },
 
   /** Find the user id we stamped on a Stripe customer, for webhook reconciliation. */
