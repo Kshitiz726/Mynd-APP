@@ -505,6 +505,17 @@ authRouter.post('/auth/logout', requireAuth, async (req, res) => {
 });
 
 authRouter.post('/auth/google-mock', async (req, res) => {
+  // Dev only. This mints a full session from nothing but a handle - no
+  // credential, no token, no proof of anything - so in production it is an
+  // account takeover for any address an attacker can guess. It was reachable
+  // on the live server because only devRoutes is gated by !isProd, and this
+  // sits on authRouter, which mounts unconditionally.
+  //
+  // It only failed there by accident: issueTokens reads users.token_version,
+  // which did not exist yet, so it 500'd instead of handing out a session.
+  // Running the migration would have quietly turned it into a working bypass.
+  if (config.isProd) return res.status(404).json({ error: 'not found' });
+
   const { handle } = req.body;
   if (!handle) return res.status(400).json({ error: 'missing handle' });
 
