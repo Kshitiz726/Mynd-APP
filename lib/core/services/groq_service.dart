@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
+import 'api_config.dart';
+
 /// All communication with the Groq REST API lives here.
 ///
 /// Two modes:
@@ -15,11 +17,22 @@ class GroqService {
 
   // ─── Config ───────────────────────────────────────────────────────────────
 
-  /// Provided at build/run time via `--dart-define=GROQ_API_KEY=...`.
-  /// Never hard-code the key - it must not be committed to source control.
-  static const _apiKey = String.fromEnvironment('GROQ_API_KEY');
-  static const _endpoint =
-      'https://api.groq.com/openai/v1/chat/completions';
+  // The key used to live here, supplied by `--dart-define=GROQ_API_KEY=...`.
+  // That is not a way of keeping a secret: a dart-define is compiled into the
+  // snapshot as a constant, and the key was recoverable with `strings` from any
+  // installed build. There is no client-side fix for that, so the app no longer
+  // holds a provider key at all - it calls our own server, which holds the key
+  // and enforces the free-tier cap in the same place. See
+  // server/src/routes/coach.ts.
+  static Uri get _endpoint => ApiConfig.instance.rest('/api/coach/completions');
+
+  /// Session auth, not a provider key.
+  static Map<String, String> get _headers => {
+        ...ApiConfig.instance.authHeaders,
+        // Lets the server bucket the daily cap by the user's own midnight
+        // rather than UTC's.
+        'X-Timezone': DateTime.now().timeZoneName,
+      };
 
   // Groq decommissioned the Llama chat models; llama-3.3-70b-versatile and
   // llama-3.1-8b-instant both answer 404 model_not_found, which surfaced in the
@@ -57,11 +70,8 @@ class GroqService {
   Stream<String> streamCompletion(
     List<Map<String, String>> messages,
   ) async* {
-    final request = http.Request('POST', Uri.parse(_endpoint));
-    request.headers.addAll({
-      'Authorization': 'Bearer $_apiKey',
-      'Content-Type': 'application/json',
-    });
+    final request = http.Request('POST', _endpoint);
+    request.headers.addAll(_headers);
     request.body = jsonEncode({
       'model': _chatModel,
       'reasoning_effort': _reasoningEffort,
@@ -76,8 +86,14 @@ class GroqService {
 
     if (response.statusCode != 200) {
       final body = await response.stream.bytesToString();
+      // 402 is the daily free-tier cap, refused by the server rather than by
+      // the composer. Given its own type so the UI can open the paywall instead
+      // of showing a generic failure.
+      if (response.statusCode == 402) {
+        throw CoachLimitException(body);
+      }
       throw GroqException(
-        'Groq API returned ${response.statusCode}: $body',
+        'Coach request failed (${response.statusCode}): $body',
         statusCode: response.statusCode,
       );
     }
@@ -106,8 +122,8 @@ class GroqService {
 
   // ─── Transcription (Whisper) ──────────────────────────────────────────────
 
-  static const _transcribeEndpoint =
-      'https://api.groq.com/openai/v1/audio/transcriptions';
+  static Uri get _transcribeEndpoint =>
+      ApiConfig.instance.rest('/api/coach/transcribe');
 
   /// Fast, cloud speech-to-text. Turbo Whisper is quick and cheap; it works on
   /// emulators (which have no on-device recogniser) as long as the mic captured
@@ -118,22 +134,22 @@ class GroqService {
     String filename = 'audio.m4a',
     String model = 'whisper-large-v3-turbo',
   }) async {
-    final request = http.MultipartRequest('POST', Uri.parse(_transcribeEndpoint))
-      ..headers['Authorization'] = 'Bearer $_apiKey'
-      ..fields['model'] = model
-      ..fields['response_format'] = 'json'
-      // temperature 0 + a fixed language make Whisper far less likely to invent
-      // filler ("Thank you.", "you") when the audio is quiet.
-      ..fields['temperature'] = '0'
-      ..fields['language'] = 'en'
-      ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: filename));
-
-    final streamed = await _client.send(request);
-    final response = await http.Response.fromStream(streamed);
+    // Base64 in a JSON body rather than multipart: it is the transport the
+    // avatar upload already uses, and it keeps the proxy route simple. The
+    // server attaches the provider key and forwards it.
+    final response = await _client.post(
+      _transcribeEndpoint,
+      headers: _headers,
+      body: jsonEncode({
+        'audio': base64Encode(bytes),
+        'mime': 'audio/m4a',
+        'model': model,
+      }),
+    );
 
     if (response.statusCode != 200) {
       throw GroqException(
-        'Groq transcription returned ${response.statusCode}: ${response.body}',
+        'Transcription failed (${response.statusCode}): ${response.body}',
         statusCode: response.statusCode,
       );
     }
@@ -164,11 +180,8 @@ class GroqService {
   /// Non-streaming completion - for summarisation and housekeeping tasks.
   Future<String> complete(List<Map<String, String>> messages) async {
     final response = await _client.post(
-      Uri.parse(_endpoint),
-      headers: {
-        'Authorization': 'Bearer $_apiKey',
-        'Content-Type': 'application/json',
-      },
+      _endpoint,
+      headers: _headers,
       body: jsonEncode({
         'model': _summaryModel,
         'reasoning_effort': _reasoningEffort,
@@ -180,8 +193,9 @@ class GroqService {
     );
 
     if (response.statusCode != 200) {
+      if (response.statusCode == 402) throw CoachLimitException(response.body);
       throw GroqException(
-        'Groq API returned ${response.statusCode}: ${response.body}',
+        'Coach request failed (${response.statusCode}): ${response.body}',
         statusCode: response.statusCode,
       );
     }
@@ -191,6 +205,18 @@ class GroqService {
   }
 
   void dispose() => _client.close();
+}
+
+/// The server refused the turn because today's free-tier messages are spent.
+///
+/// Distinct from a generic failure so the UI can offer the paywall rather than
+/// telling someone the coach is broken. The limit is now the server's - the
+/// device counter it replaced could be reset by clearing app data.
+class CoachLimitException implements Exception {
+  const CoachLimitException(this.body);
+  final String body;
+  @override
+  String toString() => 'CoachLimitException';
 }
 
 class GroqException implements Exception {
