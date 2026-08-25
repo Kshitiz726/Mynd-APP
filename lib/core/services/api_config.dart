@@ -9,15 +9,36 @@ class ApiConfig {
   ApiConfig._();
   static final ApiConfig instance = ApiConfig._();
 
-  /// Cloud server base URL. Override per-flavour (dev/stg/prod) - NOT localhost.
-  /// e.g. 'https://api.ourmynd.app'
+  /// Cloud server base URL.
+  ///
+  /// The default is the **hosted** server, not localhost. It used to be
+  /// `http://localhost:8080`, which meant that forgetting the dart-define did
+  /// not fail loudly - it produced an app that looked fine, pointed at a
+  /// machine that was not there, and failed every request once it left the
+  /// developer's desk. That is exactly how a build reached the simulator
+  /// talking to a laptop, and it is not a mistake worth leaving available to a
+  /// release build.
+  ///
+  /// Local work overrides it explicitly (`./run-ios.local.sh` without
+  /// `OURMYND_ENV=cloud`), so the safe value is the default and the risky one
+  /// has to be asked for.
+  static const String hostedApi = 'https://ourmynd-server.onrender.com';
+
   String baseUrl = const String.fromEnvironment(
     'OURMYND_API',
-    defaultValue: 'http://localhost:8080',
+    defaultValue: hostedApi,
   );
 
   /// Current user's bearer token. Null until signed in.
+  ///
+  /// Short-lived now (30 minutes) rather than the month it used to last, so a
+  /// copy lifted from a device is worth very little. [refreshToken] is what
+  /// keeps the user signed in across that.
   String? authToken;
+
+  /// Long-lived credential used only against /api/auth/refresh. Never sent to
+  /// any other endpoint - see ApiClient._refreshSession.
+  String? refreshToken;
 
   /// Current user id (the JWT `sub`), used to tell "me" from others in grids.
   String? userId;

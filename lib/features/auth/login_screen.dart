@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import '../../core/constants/legal.dart';
-import '../../core/routes/app_routes.dart';
 import '../../core/services/api_client.dart';
 import '../../core/services/google_auth.dart';
 // Desktop-only real Google OAuth (loopback). Web/mobile pull in the stub.
@@ -17,6 +16,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/utils/haptics.dart';
 import '../../widgets/fluid_orb.dart';
 import '../../widgets/om_tappable.dart';
+import '../onboarding/onboarding_gate.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -91,7 +91,7 @@ class _LoginScreenState extends State<LoginScreen>
       await ApiClient.instance
           .authWithGoogle(handle: 'test_$n', displayName: 'Test User $n');
       RealtimeService.instance.connect();
-      if (mounted) Navigator.of(context).pushReplacementNamed(AppRoutes.shell);
+      if (mounted) OnboardingGate.enter(context);
     } catch (e) {
       if (mounted)
         ScaffoldMessenger.of(context)
@@ -139,7 +139,7 @@ class _LoginScreenState extends State<LoginScreen>
       RealtimeService.instance.connect();
 
       if (mounted) {
-        Navigator.of(context).pushReplacementNamed(AppRoutes.shell);
+        OnboardingGate.enter(context);
       }
     } on SignInWithAppleAuthorizationException catch (e) {
       // Backing out of the sheet is a choice, not a failure worth reporting.
@@ -216,7 +216,7 @@ class _LoginScreenState extends State<LoginScreen>
       RealtimeService.instance.connect();
 
       if (mounted) {
-        Navigator.of(context).pushReplacementNamed(AppRoutes.shell);
+        OnboardingGate.enter(context);
       }
     } catch (e) {
       if (mounted) {
