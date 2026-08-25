@@ -19,6 +19,20 @@ class CoachContextBuilder {
 
   // ─── Public API ───────────────────────────────────────────────────────────
 
+  /// [healthConsent] decides whether the health-related half of this snapshot
+  /// is assembled at all.
+  ///
+  /// Five of these fields describe someone's mental state rather than their
+  /// to-do list: the energy level, the mood logs, the parked brain dumps, the
+  /// rolling memory of what has been discussed, and the patterns derived from
+  /// all of it. Without consent they are not built, so there is nothing for a
+  /// later stage to leak - the prompt builder is handed a context in which
+  /// that information does not exist, rather than one it is trusted to skip.
+  ///
+  /// The other half still goes: tasks, habits, focus stats, the name and the
+  /// brevity preference. A coach that can still see your backlog is the app
+  /// working as promised for someone who declined, which is the difference
+  /// between an optional consent and a compulsory one wearing a checkbox.
   CoachContext build({
     required EnergyProvider energy,
     required TaskProvider tasks,
@@ -26,35 +40,43 @@ class CoachContextBuilder {
     required FocusProvider focus,
     required SettingsProvider settings,
     required String userName,
+    required bool healthConsent,
     String userMemory = '',
   }) {
     final memory = CoachMemoryService.instance;
 
     return CoachContext(
       userName: userName.isNotEmpty ? userName : 'friend',
-      currentEnergyLevel: _energyLabel(energy.current),
+      // 'unknown' rather than a guess: the prompt already handles not knowing,
+      // and substituting a plausible default would be inventing the very thing
+      // consent was withheld for.
+      currentEnergyLevel: healthConsent ? _energyLabel(energy.current) : 'unknown',
       recentMoodLogs: const [], // populated from Firebase when integrated
-      recentBrainDumps: _buildBrainDumps(memory),
+      recentBrainDumps: healthConsent ? _buildBrainDumps(memory) : const [],
       todayTasks: _buildTaskSummaries(tasks),
       habitProgress: _buildHabitProgress(habits),
       focusStatistics: _buildFocusStats(focus),
       // The user's own memory leads: it is the durable picture of who they
       // are, where the session memo is only what was said last time.
-      previousConversationSummary: [
-        if (userMemory.isNotEmpty) userMemory,
-        if (memory.memorySummary.isNotEmpty)
-          'From your last sessions together:\n${memory.memorySummary}',
-      ].join('\n\n'),
+      previousConversationSummary: !healthConsent
+          ? ''
+          : [
+              if (userMemory.isNotEmpty) userMemory,
+              if (memory.memorySummary.isNotEmpty)
+                'From your last sessions together:\n${memory.memorySummary}',
+            ].join('\n\n'),
       userPreferences: CoachUserPreferences(
         prefersBrevity: settings.lowStim,
         preferredName: userName.isNotEmpty ? userName : null,
       ),
-      detectedPatterns: _detectPatterns(
-        energy: energy.current,
-        tasks: tasks,
-        habits: habits,
-        memory: memory,
-      ),
+      detectedPatterns: !healthConsent
+          ? const []
+          : _detectPatterns(
+              energy: energy.current,
+              tasks: tasks,
+              habits: habits,
+              memory: memory,
+            ),
     );
   }
 

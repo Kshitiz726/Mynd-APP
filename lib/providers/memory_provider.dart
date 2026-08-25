@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/services/groq_service.dart';
 import '../models/user_memory.dart';
+import 'health_consent_provider.dart';
 
 /// Owns "what OurMynd knows about you": one short, readable profile written by
 /// the AI from everything the app has seen, plus the thoughts you parked.
@@ -179,6 +180,13 @@ class MemoryProvider extends ChangeNotifier {
   /// otherwise whenever something real has happened and the cooldown is up.
   bool get wantsRefresh {
     if (!_loaded || _refreshing) return false;
+    // No consent, no automatic rewriting. This memory is a written profile of
+    // someone's mental state assembled from their mood, their parked thoughts
+    // and their coaching conversations, so building it is exactly the
+    // processing the consent screen asks about. Withholding consent stops it
+    // being written; it does not delete what is already there, which stays
+    // theirs to read and to erase deliberately from Settings.
+    if (!HealthConsentProvider.instance.granted) return false;
     if (isStale) return true;
     if (!_dirty) return false;
     final last = _lastAttempt;
@@ -190,6 +198,14 @@ class MemoryProvider extends ChangeNotifier {
   /// tree has the other providers to hand.
   Future<void> refresh(String snapshot) async {
     if (_refreshing) return;
+    // Guarded here as well as in [wantsRefresh], because this is also reachable
+    // from the refresh button on the memory screen. A gate that only covers the
+    // automatic path leaves a button that walks straight around it.
+    if (!HealthConsentProvider.instance.granted) {
+      _error = 'Turn on health-data consent in Settings to let this update.';
+      notifyListeners();
+      return;
+    }
     _refreshing = true;
     _dirty = false;
     _lastAttempt = DateTime.now();

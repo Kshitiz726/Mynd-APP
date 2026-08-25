@@ -3,13 +3,13 @@ import 'package:url_launcher/url_launcher.dart';
 
 /// Where the legal documents live, and the one way to open them.
 ///
-/// Both URLs are placeholders until the real site exists. They are deliberately
-/// the only two string literals in the app that point at it, so swapping them
-/// later is one edit here rather than a search across every screen that happens
-/// to link to them.
+/// These are deliberately the only string literals in the app that point at the
+/// site, so a move is one edit here rather than a search across every screen
+/// that happens to link to them.
 abstract final class Legal {
-  static const String termsUrl = 'https://example.com/terms';
-  static const String privacyUrl = 'https://example.com/privacy';
+  static const String termsUrl = 'https://ourmynd.com/terms';
+  static const String privacyUrl = 'https://ourmynd.com/privacy';
+  static const String copyrightUrl = 'https://ourmynd.com/copyright';
 
   /// Opens a legal page in an in-app browser.
   ///
@@ -40,4 +40,6 @@ abstract final class Legal {
   static Future<void> openTerms(BuildContext context) => open(context, termsUrl);
   static Future<void> openPrivacy(BuildContext context) =>
       open(context, privacyUrl);
+  static Future<void> openCopyright(BuildContext context) =>
+      open(context, copyrightUrl);
 }
