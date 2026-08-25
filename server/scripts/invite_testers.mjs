@@ -171,11 +171,37 @@ for (const t of testers) {
     console.log(`  invited  ${t.email}`);
     added++;
   } catch (e) {
-    // Already on the account is the common, harmless case: add them to this
-    // group instead of treating it as an error.
+    // Already on the account is the common, harmless case - anyone who tested
+    // an earlier build is in this branch. It used to only SAY it was adding
+    // them to the group and then do nothing, so an existing tester was counted
+    // as handled and never actually received the new build. Look them up and
+    // attach them for real.
+    //
+    // This only ever adds a group membership. It does not remove them from any
+    // group they are already in, so testers on an older build keep it.
     if (/already exists|ENTITY_ERROR.*taken/i.test(e.message)) {
-      console.log(`  exists   ${t.email} (adding to group)`);
-      already++;
+      try {
+        const found = await call(
+          `/betaTesters?filter[email]=${encodeURIComponent(t.email)}&limit=1`,
+        );
+        const existing = found.data?.[0];
+        if (!existing) throw new Error('already exists, but no tester matched that email');
+        await call(`/betaGroups/${group.id}/relationships/betaTesters`, {
+          method: 'POST',
+          body: JSON.stringify({ data: [{ type: 'betaTesters', id: existing.id }] }),
+        });
+        console.log(`  exists   ${t.email} -> added to "${GROUP_NAME}"`);
+        already++;
+      } catch (e2) {
+        // Already in this group is itself fine, and not a failure.
+        if (/already exists|ENTITY_ERROR.*taken/i.test(e2.message)) {
+          console.log(`  exists   ${t.email} (already in "${GROUP_NAME}")`);
+          already++;
+        } else {
+          console.error(`  FAILED   ${t.email} (group attach)\n${e2.message}`);
+          failed.push(t.email);
+        }
+      }
     } else {
       console.error(`  FAILED   ${t.email}\n${e.message}`);
       failed.push(t.email);
