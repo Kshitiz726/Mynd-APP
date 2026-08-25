@@ -77,7 +77,7 @@ class _SplashScreenState extends State<SplashScreen> {
     // where a single blank frame is most visible - it is the whole content.
     if (!_precached) {
       _precached = true;
-      precacheImage(const AssetImage('assets/logo.png'), context);
+      precacheImage(const AssetImage('assets/branding/app_icon.png'), context);
     }
   }
 
@@ -169,7 +169,7 @@ class _SplashScreenState extends State<SplashScreen> {
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(_logoSize * 0.2237),
                 child: Image.asset(
-                  'assets/logo.png',
+                  'assets/branding/app_icon.png',
                   width: _logoSize,
                   height: _logoSize,
                   // The source is 1024px and this draws at 200; letting the

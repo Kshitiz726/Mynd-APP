@@ -1,4 +1,8 @@
-# OurMynd
+<p align="center">
+  <img src="assets/branding/mynd_logo.png" alt="MYND" width="420">
+</p>
+
+<h1 align="center">OurMynd</h1>
 
 An **ADHD-focused productivity, wellness & community app** built with Flutter, backed
 by a realtime Node + TypeScript server. OurMynd organizes the day around your *energy*
@@ -11,8 +15,10 @@ focus rooms so you never have to work alone.
 ---
 
 <p align="center">
-  <img src="assets/logo.png" alt="OurMynd Logo" width="128">
+  <img src="assets/branding/app_icon.png" alt="OurMynd app icon" width="140">
 </p>
+
+<p align="center"><i>The app icon, as it appears on your home screen.</i></p>
 
 ## 🎥 Demo
 

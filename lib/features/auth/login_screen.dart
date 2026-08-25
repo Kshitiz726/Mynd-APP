@@ -56,7 +56,7 @@ class _LoginScreenState extends State<LoginScreen>
     // starts whether or not the asset is ready.
     if (!_precached) {
       _precached = true;
-      precacheImage(const AssetImage('assets/logo.png'), context);
+      precacheImage(const AssetImage('assets/branding/app_icon.png'), context);
     }
   }
 
@@ -293,7 +293,7 @@ class _LoginScreenState extends State<LoginScreen>
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(_logoSize * 0.2237),
                       child: Image.asset(
-                        'assets/logo.png',
+                        'assets/branding/app_icon.png',
                         width: _logoSize,
                         height: _logoSize,
                         // The source is 1024px square. Without this it decodes

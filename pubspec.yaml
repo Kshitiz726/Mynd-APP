@@ -90,10 +90,10 @@ flutter:
   assets:
     - assets/audio/
     - assets/puter/
-    # The app icon, bundled so the launch screen can show the same mark the
-    # user tapped. It was previously only a build-time source for
-    # flutter_launcher_icons and was not shipped inside the app at all.
-    - assets/logo.png
+    # The app icon, bundled so the splash and login screens can show the same
+    # mark the user tapped. flutter_launcher_icons only reads it at build time;
+    # displaying it inside the app needs it shipped as well.
+    - assets/branding/app_icon.png
 
   # The orb is generated on the GPU rather than decoded from a video, which is
   # why there is no longer an assets/video/ directory: fluid.mp4 and the still
@@ -103,18 +103,17 @@ flutter:
 
 # App-icon generation from the OurMynd logo.
 # Run: dart run flutter_launcher_icons
-# iOS forbids alpha in app icons (App Store rejects them). assets/logo.png is
-# already flat RGB and bleeds to every edge, so the two settings below are a
-# safety net rather than something the current logo relies on.
+# iOS forbids alpha in app icons (App Store rejects them), so the two settings
+# below flatten it onto white.
 flutter_launcher_icons:
-  image_path: "assets/logo.png"
+  image_path: "assets/branding/app_icon.png"
   android: true
   ios: true
   remove_alpha_ios: true
   background_color_ios: "#FFFFFF"
   web:
     generate: true
-    image_path: "assets/logo.png"
+    image_path: "assets/branding/app_icon.png"
   macos:
     generate: true
-    image_path: "assets/logo.png"
+    image_path: "assets/branding/app_icon.png"

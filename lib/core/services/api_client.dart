@@ -145,7 +145,7 @@ class ApiClient {
   /// bundle id, then returns our own session JWT + user, same as Google.
   Future<void> authWithAppleIdentityToken(String identityToken) async {
     final j = await _post('/api/auth/apple', {'identityToken': identityToken});
-    _applyUser(j);
+    await _applyUser(j);
   }
 
   /// Desktop (Windows/Linux) real Google OAuth: hands the backend the auth code
