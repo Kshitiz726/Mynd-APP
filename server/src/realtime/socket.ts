@@ -30,6 +30,44 @@ export function attachRealtime(io: Server) {
   io.on('connection', (socket) => {
     const user: AuthUser = socket.data.user;
     socket.data.rooms = new Set<string>();
+
+    // ── Per-socket event budget ──
+    //
+    // Nothing throttled socket events, so a single client could emit chat
+    // messages or presence patches in a tight loop and every other member of
+    // the room would receive all of them - a flood amplified by the server, at
+    // no cost to the sender. The HTTP rate limiters do not help here: this
+    // traffic never touches Express.
+    //
+    // A sliding window over the whole socket rather than per event name, so
+    // rotating between event types cannot multiply the budget. The ceiling is
+    // far above real use (a timer tick and a heartbeat are seconds apart, and
+    // a fast typist sends a message every second or two) and far below what a
+    // loop produces.
+    let windowStart = Date.now();
+    let eventsInWindow = 0;
+    const WINDOW_MS = 10_000;
+    const MAX_EVENTS = 120;
+
+    socket.use((_packet, next) => {
+      const now = Date.now();
+      if (now - windowStart > WINDOW_MS) {
+        windowStart = now;
+        eventsInWindow = 0;
+      }
+      if (++eventsInWindow > MAX_EVENTS) {
+        console.warn('[socket] event flood, disconnecting', {
+          userId: user.id.slice(0, 8),
+          events: eventsInWindow,
+        });
+        // Disconnect rather than silently drop: a client this far over budget
+        // is either broken or hostile, and in both cases the useful signal is
+        // that it has to reconnect and start again.
+        socket.disconnect(true);
+        return;
+      }
+      next();
+    });
     socket.join(`user:${user.id}`); // personal room for DMs + notifications
     socket.join('lobby'); // receives room-list updates (new public rooms, counts)
 
@@ -73,10 +111,18 @@ export function attachRealtime(io: Server) {
         socket.emit('voice_unavailable', { roomId, reason: 'LiveKit not configured' });
         return;
       }
+      // 15 minutes, not the 4 hours this used to mint.
+      //
+      // The grant is already scoped to one room and one identity, so the TTL is
+      // about how long a leaked token stays useful - and a token good for four
+      // hours is good for the entire focus session and most of the evening
+      // after it. The client asks again on reconnect (voice_join is re-emitted
+      // on every join), and LiveKit keeps an established connection alive past
+      // token expiry, so a short life costs a re-request rather than a drop.
       const at = new AccessToken(config.livekit.apiKey, config.livekit.apiSecret, {
         identity: user.id,
         name: user.displayName,
-        ttl: '4h',
+        ttl: '15m',
       });
       at.addGrant({
         roomJoin: true,
