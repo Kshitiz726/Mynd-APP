@@ -5,6 +5,7 @@ import '../../core/constants/app_spacing.dart';
 import '../../core/constants/legal.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/haptics.dart';
+import '../../core/services/api_client.dart';
 import '../../core/utils/toast.dart';
 import '../../providers/health_consent_provider.dart';
 import '../../widgets/om_tappable.dart';
@@ -56,16 +57,33 @@ class _HealthConsentScreenState extends State<HealthConsentScreen> {
       } else {
         await consent.withdraw(source: 'onboarding');
       }
-      if (mounted) widget.onDecided(granted);
     } catch (e) {
       // The decision has to reach the server to count, so a failure here must
       // not look like it worked. Staying on the screen with the buttons live
       // is the honest outcome: nothing was recorded, and they can try again.
+      //
+      // Logged with the actual cause: this used to say "check your connection"
+      // for every failure, including a 500 from the server, which sent us
+      // looking at the network when the request had arrived perfectly well and
+      // the database had rejected it.
+      debugPrint('[consent] save failed: $e');
       if (mounted) {
         setState(() => _saving = false);
-        Toast.show(context, "Couldn't save that. Check your connection and try again.");
+        Toast.show(
+          context,
+          e is ApiException && e.statusCode >= 500
+              ? "Couldn't save that - the server had a problem. Try again."
+              : "Couldn't save that. Check your connection and try again.",
+        );
       }
+      return;
     }
+
+    // Outside the catch on purpose. This used to sit inside the try, so a
+    // navigation failure - which is what a stale BuildContext produces - was
+    // reported to the user as a failed save, on a decision the server had
+    // already recorded.
+    if (mounted) widget.onDecided(granted);
   }
 
   @override

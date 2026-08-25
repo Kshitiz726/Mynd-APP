@@ -46,11 +46,17 @@ abstract final class OnboardingGate {
 
     Navigator.of(context).pushReplacement(
       MaterialPageRoute<void>(
-        builder: (_) => HealthConsentScreen(
+        // `ctx` is this route's own context, deliberately - not the enclosing
+        // `context`. pushReplacement destroys the route that `context` belongs
+        // to, so by the time onDecided runs it is a deactivated widget and
+        // Navigator.of throws on it. The consent had already been saved at
+        // that point, so the failure surfaced as "couldn't save that, check
+        // your connection" on a request that had succeeded.
+        builder: (ctx) => HealthConsentScreen(
           // Both answers lead into the app. That is the whole point of the
           // screen being a question rather than a gate.
           onDecided: (_) =>
-              Navigator.of(context).pushReplacementNamed(AppRoutes.shell),
+              Navigator.of(ctx).pushReplacementNamed(AppRoutes.shell),
         ),
       ),
     );
