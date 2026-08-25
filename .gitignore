@@ -69,3 +69,10 @@ OURMYND_SETUP.txt
 OURMYND_MAC_HANDOFF.txt
 AuthKey_*.p8
 *.p8
+
+# Scratch/setup documents that carry real credentials in plaintext.
+# OURMYND_TESTFLIGHT_PROMPT.txt held the Groq API key and was untracked but NOT
+# ignored, so a single `git add .` would have committed it.
+OURMYND_TESTFLIGHT_PROMPT.txt
+OURMYND_SETUP.txt
+PROGRESS_PAUSE,TXT
