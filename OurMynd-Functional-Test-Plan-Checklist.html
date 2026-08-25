@@ -1,0 +1,521 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>OurMynd Functional Test Plan</title>
+<style>
+  @page { size: A4; margin: 11mm 12mm 10mm; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", Arial, Helvetica, sans-serif;
+    color: #111; font-size: 7pt; line-height: 1.3;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .sheet { page-break-after: always; }
+  .sheet:last-child { page-break-after: auto; }
+
+  .masthead { display: flex; align-items: flex-end; justify-content: space-between;
+    border-bottom: 1.4pt solid #111; padding-bottom: 4pt; margin-bottom: 3pt; }
+  .masthead h1 { font-size: 13pt; font-weight: 700; letter-spacing: -0.2pt; margin: 0; }
+  .masthead .sub { font-size: 7pt; color: #444; margin: 1.5pt 0 0; }
+  .meta { text-align: right; font-size: 6.6pt; color: #444; line-height: 1.5; }
+  .meta b { color: #111; }
+
+  .ribbon { display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 0.5pt solid #bbb; padding: 3pt 0 4pt; margin-bottom: 6pt;
+    font-size: 6.6pt; color: #444; }
+  .ribbon .part { font-weight: 700; color: #111; letter-spacing: 0.4pt; text-transform: uppercase; }
+
+  section { margin-bottom: 7pt; break-inside: avoid; }
+  h2 { font-size: 7.8pt; margin: 0 0 3pt; padding-bottom: 1.5pt;
+    border-bottom: 0.5pt solid #111; display: flex; justify-content: space-between; }
+  h2 span { font-weight: 400; color: #666; font-size: 6.4pt; }
+
+  table { width: 100%; border-collapse: collapse; }
+  td { padding: 2pt 3pt; vertical-align: top; border-bottom: 0.25pt solid #ddd; }
+  tr:last-child td { border-bottom: none; }
+  td.id { width: 22pt; color: #666; font-variant-numeric: tabular-nums; }
+  td.chk { width: 37%; }
+  td.st { width: 44pt; text-align: center; }
+  td.ev { color: #444; font-size: 6.5pt; }
+  code { font-family: "SF Mono", Consolas, monospace; font-size: 6.2pt; background: #f2f2f4; padding: 0 1.5pt; }
+
+  .b { display: inline-block; padding: 0.5pt 3pt; border-radius: 2pt;
+       font-size: 5.9pt; font-weight: 700; letter-spacing: 0.3pt; }
+  .pass    { background: #d8efdc; color: #14532d; }
+  .fail    { background: #fadbd8; color: #7f1d1d; }
+  .fixed   { background: #dbeafe; color: #1e3a8a; }
+  .device  { background: #e2e8f0; color: #334155; }
+  .two     { background: #fdf0d5; color: #78350f; }
+
+  .summary { border: 0.8pt solid #111; padding: 5pt 6pt; margin-bottom: 7pt; }
+  .summary h3 { margin: 0 0 3pt; font-size: 8pt; }
+  .tally { display: flex; gap: 10pt; font-size: 6.8pt; margin-bottom: 3pt; flex-wrap: wrap; }
+  .tally b { font-size: 8pt; }
+  .crit { background: #fadbd8; border-left: 2.5pt solid #991b1b; padding: 3pt 5pt; margin-top: 4pt; font-size: 6.6pt; }
+  .crit b { color: #7f1d1d; }
+  .good { background: #d8efdc; border-left: 2.5pt solid #14532d; padding: 3pt 5pt; margin-top: 4pt; font-size: 6.6pt; }
+  .good b { color: #14532d; }
+
+  .signoff { display: flex; gap: 9pt; margin-top: 8pt; }
+  .signoff > div { flex: 1; }
+  .signoff .lab { font-size: 6pt; color: #666; text-transform: uppercase; letter-spacing: 0.4pt; }
+  .signoff .rule { border-bottom: 0.6pt solid #111; height: 12pt; }
+  .signoff .filled { border-bottom: 0.6pt solid #111; height: 12pt; font-size: 7.2pt; font-weight: 600; padding-top: 3pt; }
+  .foot { display: flex; justify-content: space-between; margin-top: 5pt;
+          border-top: 0.5pt solid #bbb; padding-top: 3pt; font-size: 6pt; color: #666; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════ SHEET 1 ═══════════ -->
+<div class="sheet">
+  <div class="masthead">
+    <div>
+      <h1>OurMynd Functional Test Plan</h1>
+      <p class="sub">Screen by screen verification, mapped to the feature modules in the codebase.</p>
+    </div>
+    <div class="meta">
+      <b>The Social Globe Ltd</b><br>
+      Company no. 13923693<br>
+      Version 1.1 &middot; 25 August 2026
+    </div>
+  </div>
+  <div class="ribbon">
+    <span class="part">Part 1 &middot; Launch, home and planning</span>
+    <span>Clean install on a physical device. <span class="b two">2 DEV</span> needs two signed-in accounts at once.</span>
+  </div>
+
+  <div class="summary">
+    <h3>How to read this</h3>
+    <div class="tally">
+      <span><span class="b pass">PASS</span> verified from code or observed</span>
+      <span><span class="b fixed">FIXED</span> was broken, fixed this session, verified</span>
+      <span><span class="b fail">FAIL</span> not working</span>
+      <span><span class="b device">DEVICE</span> needs a device run</span>
+    </div>
+    <div style="font-size:6.6pt;color:#444">
+      Nothing is marked passing without evidence named in the row. DEVICE rows give the exact
+      steps and the correct result, so they can be run without reading the code.
+    </div>
+    <div class="good">
+      <b>Fixed this session:</b> the free-tier coach cap is now enforced by the server (12.6&ndash;12.9),
+      account deletion and data export have working screens (2.13, 24.6), and the coach no longer
+      fails silently at the cap. Details in each row.
+    </div>
+    <div class="crit">
+      <b>Section 21 is unbuilt</b>, exactly as the plan says. Reporting, blocking, strikes and
+      minor-account matchmaking rules do not exist in any form, so all nine of its checks fail.
+      Apple Guideline 1.2 blocks approval of a user-generated-content app without them.
+      <b>20.6 also cannot pass</b> until LiveKit credentials are set on Render.
+    </div>
+  </div>
+
+  <section>
+    <h2>1. Splash and launch <span>splash/</span></h2>
+    <table>
+      <tr><td class="id">1.1</td><td class="chk">Cold start with no stored session lands on the login screen</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Observed 25 Aug: <code>[splash] next=/login</code> with no session, login screen rendered.</td></tr>
+      <tr><td class="id">1.2</td><td class="chk">Cold start with a valid session lands on home without showing login</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Observed: <code>[splash] handing over to /shell</code>, Home rendered directly.</td></tr>
+      <tr><td class="id">1.3</td><td class="chk">Splash animation completes without a frozen frame or a white flash</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Observed on simulator; the orb is a shader so there is no decode gap. <code>spent=1509ms floor=900ms</code>.</td></tr>
+      <tr><td class="id">1.4</td><td class="chk">Launch with an expired token routes to login rather than an error</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Observed exactly this: a token minted by a different backend 401'd and the app landed on login via <code>onSessionExpired</code>.</td></tr>
+      <tr><td class="id">1.5</td><td class="chk">Launch with no network shows a usable state, not an indefinite splash</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Airplane mode, force-quit, relaunch. Correct: Home with local data; splash still ends on its 2s budget. Boot steps are individually guarded (<code>_bootStep</code>).</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>2. Sign in and account <span>auth/</span></h2>
+    <table>
+      <tr><td class="id">2.1</td><td class="chk">Google sign in completes on Android</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"><b>Blocked until you create a new Android OAuth client</b> — the package id changed from <code>com.example.ourmynd</code> to <code>com.ourmynd.app</code> (security fix 9.4), so the old client no longer matches.</td></tr>
+      <tr><td class="id">2.2</td><td class="chk">Google sign in completes on iOS using the separate iOS client</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Launch with <code>OURMYND_ENV=cloud ./run-ios.local.sh</code>, tap <b>Continue with Google</b>. Correct: account picker, then Home with data restored. A bare <code>flutter run</code> compiles an empty client id and cannot work.</td></tr>
+      <tr><td class="id">2.3</td><td class="chk">Apple sign in completes, including the hide my email relay path</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Choose <b>Hide My Email</b>. Sign out and repeat: must return to the <i>same</i> account (keyed on the Apple <code>sub</code>, <code>auth.ts</code>).</td></tr>
+      <tr><td class="id">2.4</td><td class="chk">Cancelling the provider sheet returns to login with no stuck error</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Cancellation is handled as a choice, not a failure: <code>login_screen.dart</code> suppresses <code>AuthorizationErrorCode.canceled</code>.</td></tr>
+      <tr><td class="id">2.5</td><td class="chk">Anonymous display name assigned; the real provider name never displayed</td><td class="st"><span class="b pass">PASS</span></td><td class="ev"><code>randomUsername()</code>; <code>publicUser()</code> strips identity fields from every response. Live account shows as <code>BrambleAspen28</code>.</td></tr>
+      <tr><td class="id">2.6</td><td class="chk">Signing in on a second device restores the same account and its data</td><td class="st"><span class="b two">2 DEV</span></td><td class="ev">Correct: same display name, tasks and goals. Mood and coach memory sync only with health consent granted — expected, not a failure.</td></tr>
+      <tr><td class="id">2.7</td><td class="chk">Sign out clears the session and returns to login with no residual data</td><td class="st"><span class="b fixed">FIXED</span></td><td class="ev">Now also revokes server side: <code>signOut()</code> calls <code>/auth/logout</code>, which bumps <code>token_version</code>. Verified: the old token returns 401 immediately. Previously only the device copy was cleared.</td></tr>
+      <tr><td class="id">2.8</td><td class="chk">Account deletion completes, and signing in again produces a new empty account</td><td class="st"><span class="b fixed">FIXED</span></td><td class="ev">Was entirely missing. Now <code>DELETE /api/me</code> plus a screen at <b>Settings → Privacy → Your data</b>. Verified server side: wrong confirmation 400, correct 200, token dead afterwards. <b>Device step:</b> delete, then sign in again — expect an empty account with a new display name.</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>3. Shell and navigation <span>shell/</span></h2>
+    <table>
+      <tr><td class="id">3.1</td><td class="chk">Every tab opens its screen and keeps its own scroll position</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Scroll Home, switch to Schedule, come back. Correct: same position. Tabs live in an <code>IndexedStack</code>, so state is retained by construction.</td></tr>
+      <tr><td class="id">3.2</td><td class="chk">Switching tabs does not rebuild or reset the screen you return to</td><td class="st"><span class="b pass">PASS</span></td><td class="ev"><code>AnimatedIndexStack</code> in <code>app_shell.dart</code> keeps all four alive.</td></tr>
+      <tr><td class="id">3.3</td><td class="chk">The live focus pill appears during a session and returns you to it</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Start a focus session, switch tabs. Correct: pill visible, tapping returns to the timer.</td></tr>
+      <tr><td class="id">3.4</td><td class="chk">Android back gesture behaves correctly at the root of each tab</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Android only. Correct: back from a non-Home root goes to Home, not out of the app.</td></tr>
+      <tr><td class="id">3.5</td><td class="chk">Deep routes open and dismiss cleanly, and return to the correct tab</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Open Settings → Memory → back twice.</td></tr>
+      <tr><td class="id">3.6</td><td class="chk">No visible jank on tab transitions</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Profile mode. Watch the glass cards and the shader orb.</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>4. Home dashboard <span>home/</span></h2>
+    <table>
+      <tr><td class="id">4.1</td><td class="chk">Correct date, greeting and hero state on launch</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Observed: Home rendered with the correct day and the orb hero.</td></tr>
+      <tr><td class="id">4.2</td><td class="chk">Summary card figures agree with the underlying task and goal data</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Add 3 tasks, complete 1. Correct: "1 done today &middot; 3 scheduled".</td></tr>
+      <tr><td class="id">4.3</td><td class="chk">Week strip highlights today, and selecting another day loads that day</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">4.4</td><td class="chk">Day timeline renders a full day with no overlap, clipping or gaps</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Add blocks at 00:00, 12:00 and 23:30.</td></tr>
+      <tr><td class="id">4.5</td><td class="chk">Banners appear only in their intended conditions and can be dismissed</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"><code>home_banners.dart</code>.</td></tr>
+      <tr><td class="id">4.6</td><td class="chk">Empty state shows on a new account with no data</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Observed on the live account: zeroed counts, empty dashboard, no error.</td></tr>
+      <tr><td class="id">4.7</td><td class="chk">Pull to refresh reloads from the backend</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">4.8</td><td class="chk">Illustrations render correctly in both themes</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Dark mode requires premium to toggle.</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>5. Tasks <span>home/widgets</span></h2>
+    <table>
+      <tr><td class="id">5.1</td><td class="chk">Create a task with a title, time and any optional fields</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">5.2</td><td class="chk">Edit an existing task and see the change on the timeline immediately</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">5.3</td><td class="chk">Complete a task, and undo the completion</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">5.4</td><td class="chk">Reorder tasks and confirm the order survives a restart</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Long-press to drag, then force-quit and reopen.</td></tr>
+      <tr><td class="id">5.5</td><td class="chk">Delete a task, including one with a pending reminder</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Correct: the notification is cancelled too — verify nothing fires.</td></tr>
+      <tr><td class="id">5.6</td><td class="chk">Brain dump accepts a block of text and produces separate tasks</td><td class="st"><span class="b fixed">FIXED</span></td><td class="ev">Was failing with <code>Groq 401 Invalid API Key</code> whenever the app was launched without the key. The key is no longer compiled into the app at all — brain dump now goes through <code>/api/coach/completions</code> with the key held server side. <b>Requires <code>GROQ_API_KEY</code> set on Render.</b></td></tr>
+      <tr><td class="id">5.7</td><td class="chk">Voice dump captures speech and produces correctly broken down tasks</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Now proxied through <code>/api/coach/transcribe</code>. Speak three tasks; expect three separate items.</td></tr>
+      <tr><td class="id">5.8</td><td class="chk">A task created offline appears after reconnecting</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Airplane mode, add a task, reconnect. <code>StateSync</code> debounces 3s.</td></tr>
+      <tr><td class="id">5.9</td><td class="chk">Very long titles, emoji and pasted text do not break the layout</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Paste ~500 chars plus emoji and an RTL string.</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>6. Goals and habits <span>home/widgets</span></h2>
+    <table>
+      <tr><td class="id">6.1</td><td class="chk">Create, edit and delete a goal</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">6.2</td><td class="chk">Goal progress bar reflects completed work accurately</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">6.3</td><td class="chk">Habits strip shows today state and can be marked complete</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">6.4</td><td class="chk">Habit progress accumulates correctly across several days</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Multi-day observation, or move the device clock forward.</td></tr>
+      <tr><td class="id">6.5</td><td class="chk">A habit missed for a day is shown as missed rather than silently reset</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>7. Mood, energy and streak <span>home/widgets</span></h2>
+    <table>
+      <tr><td class="id">7.1</td><td class="chk">Record a mood entry and see it in the mood bar</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Drag the dial, tap <b>log it</b>. <b>Note:</b> without health consent this stays on-device — the server returns 403 by design.</td></tr>
+      <tr><td class="id">7.2</td><td class="chk">Record an energy level and confirm it influences suggestions</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">7.3</td><td class="chk">Streak increments on the first completion of the day, not on every one</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Complete three tasks. Correct: streak rises by exactly 1.</td></tr>
+      <tr><td class="id">7.4</td><td class="chk">Streak calendar marks the correct days</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">7.5</td><td class="chk">Streak survives an app restart and a device reboot</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">7.6</td><td class="chk">Streak rolls over correctly at local midnight</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Move the clock past midnight.</td></tr>
+      <tr><td class="id">7.7</td><td class="chk">Changing the device timezone or clock does not corrupt the streak</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Change region, then move the clock back. Correct: never double-increments, never resets.</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>8. Global search <span>home/search</span></h2>
+    <table>
+      <tr><td class="id">8.1</td><td class="chk">Search returns matching tasks, notes and goals</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">8.2</td><td class="chk">Results open the correct screen when tapped</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">8.3</td><td class="chk">No results state is shown for an unmatched query</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">8.4</td><td class="chk">Search handles partial words, case differences and punctuation</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+    </table>
+  </section>
+
+  <div class="foot"><span>OurMynd Functional Test Plan, version 1.1</span><span>Part 1 &middot; sheet 1 of 2</span></div>
+</div>
+
+<!-- ═══════════ SHEET 2 ═══════════ -->
+<div class="sheet">
+  <div class="ribbon" style="margin-top:0">
+    <span class="part">Part 1 (continued)</span><span>Sections 9 to 11</span>
+  </div>
+
+  <section>
+    <h2>9. Schedule <span>schedule/</span></h2>
+    <table>
+      <tr><td class="id">9.1</td><td class="chk">Day view renders every scheduled item at the right time</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">9.2</td><td class="chk">Moving between days loads the correct data</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">9.3</td><td class="chk">Overlapping items are shown legibly rather than stacked invisibly</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Create two items at the same time.</td></tr>
+      <tr><td class="id">9.4</td><td class="chk">A day with no items shows an empty state</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">9.5</td><td class="chk">A schedule created by the coach from speech appears here correctly</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Depends on 5.7. Requires the server Groq key.</td></tr>
+      <tr><td class="id">9.6</td><td class="chk">Edits made here appear on home and in reminders</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>10. Notes <span>notes/</span></h2>
+    <table>
+      <tr><td class="id">10.1</td><td class="chk">Create, open, edit and delete a note</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">10.2</td><td class="chk">Long content saves without truncation</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Paste ~10,000 characters. <b>At risk</b> — there is still no server-side length cap on note bodies, so the failure mode is a rejected sync rather than a clean error.</td></tr>
+      <tr><td class="id">10.3</td><td class="chk">Content is not lost when the app is backgrounded mid edit</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">10.4</td><td class="chk">Notes list orders correctly and reflects recent edits</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">10.5</td><td class="chk">Notes persist across restart and appear on a second device</td><td class="st"><span class="b two">2 DEV</span></td><td class="ev"></td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>11. Reminders <span>reminders/</span></h2>
+    <table>
+      <tr><td class="id">11.1</td><td class="chk">Create a reminder with a specific date and time</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">11.2</td><td class="chk">Editing a reminder reschedules the underlying notification</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Set one 5 min out, move it to 2 min. Correct: fires once, at the new time.</td></tr>
+      <tr><td class="id">11.3</td><td class="chk">Deleting a reminder cancels the pending notification</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">11.4</td><td class="chk">Recurring reminders fire on each occurrence</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">11.5</td><td class="chk">The list shows upcoming and past reminders correctly</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+    </table>
+  </section>
+
+  <div class="ribbon" style="margin-top:10pt">
+    <span class="part">Part 2 &middot; Coach, alerts and focus</span>
+    <span>Notification checks need a physical device with the screen locked, not an emulator.</span>
+  </div>
+
+  <section>
+    <h2>12. Coach chat <span>coach/coach_screen</span></h2>
+    <table>
+      <tr><td class="id">12.1</td><td class="chk">Send a message and receive a coherent, in character reply</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Coach tab → connect Puter when prompted → send "i'm stuck". <b>Precondition:</b> a Puter account must be signed in.</td></tr>
+      <tr><td class="id">12.2</td><td class="chk">Coach recalls context from earlier in the same conversation</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">12.3</td><td class="chk">Coach recalls context from a previous session after a restart</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Correct <i>with consent granted</i>: it remembers. <i>Without consent</i>: it does not, and that is correct by design.</td></tr>
+      <tr><td class="id">12.4</td><td class="chk">Coach can create tasks and schedule items, and they appear on home</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">12.5</td><td class="chk">Coach sets a reminder when asked, and it fires</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">12.6</td><td class="chk">Free tier daily message cap is enforced</td><td class="st"><span class="b fixed">FIXED</span></td><td class="ev">Was a SharedPreferences counter — advice, not a limit. The reply is generated by Puter on the device, so the cap could not be enforced by proxying; it is now claimed through <code>POST /api/coach/turn</code> before each turn, counted in the <code>coach_usage</code> table. Verified: turns 1&ndash;5 returned 200 with a decrementing <code>remaining</code>, turn 6 returned <b>402</b>.</td></tr>
+      <tr><td class="id">12.7</td><td class="chk">The cap cannot be reset by starting a new conversation</td><td class="st"><span class="b fixed">FIXED</span></td><td class="ev">Nor by clearing app data, which the old counter could not survive. The count is per account per day, server side.</td></tr>
+      <tr><td class="id">12.8</td><td class="chk">The cap resets at local midnight</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Bucketed by the client's IANA timezone (<code>X-Timezone</code> header, <code>dayKey()</code>), so it resets at the user's midnight, not UTC's. A client lying about its zone gains at most one boundary, not extra turns.</td></tr>
+      <tr><td class="id">12.9</td><td class="chk">Reaching the cap shows the paywall rather than a silent failure</td><td class="st"><span class="b fixed">FIXED</span></td><td class="ev">Nothing caught the refusal before — it surfaced as "having trouble connecting". Now <code>CoachTurnRefused</code> rolls back the optimistic message and sets <code>limitReached</code>, which locks the composer behind the paywall. <b>Device step:</b> send 6 messages on a free account; the 6th must show the paywall, not an error bubble.</td></tr>
+      <tr><td class="id">12.10</td><td class="chk">Upgrading removes the cap immediately without a restart</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Stripe <b>test mode</b> only. Correct: composer unlocks without a restart.</td></tr>
+      <tr><td class="id">12.11</td><td class="chk">Long messages, rapid sending and sending while offline all behave</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Paste ~2000 chars; send three in a row; airplane mode mid-send.</td></tr>
+      <tr><td class="id">12.12</td><td class="chk">Backgrounding mid response does not lose the reply</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">12.13</td><td class="chk">Provider slow, rate limited or unavailable produces a clear message</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Correct: "having a bit of trouble connecting", not a spinner or a crash.</td></tr>
+      <tr><td class="id">12.14</td><td class="chk">Distress phrasing produces a safe response consistent with the published terms</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"><b>Run this one deliberately.</b> Correct: signposts real support, does not attempt therapy, matches ourmynd.com/terms.</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>13. Coach history and gate <span>coach/history, puter_gate</span></h2>
+    <table>
+      <tr><td class="id">13.1</td><td class="chk">Past conversations list correctly and open with full content</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">13.2</td><td class="chk">Starting a new conversation does not delete the old one</td><td class="st"><span class="b pass">PASS</span></td><td class="ev"><code>_archiveCurrent()</code> parks the live thread before clearing (<code>coach_provider.dart</code>).</td></tr>
+      <tr><td class="id">13.3</td><td class="chk">Deleting a conversation removes it everywhere</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">13.4</td><td class="chk">The WebView bridge initialises on both platforms and recovers from a failure</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Observed initialising on iOS: <code>[puter] bridge ready</code>. Recovery path untested.</td></tr>
+      <tr><td class="id">13.5</td><td class="chk">No provider key or internal detail is visible in the WebView</td><td class="st"><span class="b fixed">FIXED</span></td><td class="ev">Puter authenticates as the end user, so no OurMynd key was ever on that path — but the <b>Groq</b> key was compiled into the binary and recoverable with <code>strings</code>. It has been removed from the client entirely; verified no <code>gsk_</code> literal remains in <code>lib/</code>. <b>Rotate the old key.</b></td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>14. Coach voice <span>coach/coach_voice</span></h2>
+    <table>
+      <tr><td class="id">14.1</td><td class="chk">Microphone permission is requested with a clear reason, and denial is handled</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">14.2</td><td class="chk">Speech is captured and transcribed accurately</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Now via <code>/api/coach/transcribe</code>. Requires the server Groq key.</td></tr>
+      <tr><td class="id">14.3</td><td class="chk">Spoken plan is broken into separate tasks on the schedule</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">14.4</td><td class="chk">Voice replies play at the correct volume and respect the silent switch</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">14.5</td><td class="chk">Talk mode holds a back and forth without dropping the session</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">14.6</td><td class="chk">An incoming phone call interrupts and resumes cleanly</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Real device with a SIM.</td></tr>
+      <tr><td class="id">14.7</td><td class="chk">Bluetooth headset and speaker output both work</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>15. Memory <span>memory/</span></h2>
+    <table>
+      <tr><td class="id">15.1</td><td class="chk">Memory screen shows what the coach has retained about the user</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Settings → Memory.</td></tr>
+      <tr><td class="id">15.2</td><td class="chk">Editing is premium gated, and free users see the locked state</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">15.3</td><td class="chk">Tapping the locked control opens the paywall</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">15.4</td><td class="chk">An edit changes the coach subsequent behaviour</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">15.5</td><td class="chk">Deleting a memory removes it from future coach context</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">15.6</td><td class="chk">Refresh regenerates without discarding user edits</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"><b>Without health consent, refresh is deliberately blocked</b> and shows "Turn on health-data consent in Settings". That is correct, not a bug.</td></tr>
+      <tr><td class="id">15.7</td><td class="chk">Memory is scoped to the account and never shows another user content</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Sign out, sign in as a second account on the same device. Correct: empty memory (<code>AccountScope.adopt</code>).</td></tr>
+    </table>
+  </section>
+
+  <div class="foot"><span>OurMynd Functional Test Plan, version 1.1</span><span>Part 2 &middot; sheet 1 of 2</span></div>
+</div>
+
+<!-- ═══════════ SHEET 3 ═══════════ -->
+<div class="sheet">
+  <div class="ribbon" style="margin-top:0">
+    <span class="part">Part 2 (continued)</span><span>Sections 16 to 18</span>
+  </div>
+
+  <section>
+    <h2>16. Notifications <span>notifications/, services</span></h2>
+    <table>
+      <tr><td class="id">16.1</td><td class="chk">Permission requested at the right moment, denial handled with a route to settings</td><td class="st"><span class="b pass">PASS</span></td><td class="ev"><code>notification_primer.dart</code> explains before raising the system prompt; declining is recoverable from the reminders screen.</td></tr>
+      <tr><td class="id">16.2</td><td class="chk">A scheduled reminder fires at the exact time with the screen locked</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Physical device. Set 2 min out, lock.</td></tr>
+      <tr><td class="id">16.3</td><td class="chk">The notification shows the app icon and the correct task text</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Correct: the new "M" mark. A stripped icon previously killed Android release builds — check <code>res/raw/keep.xml</code> still protects it.</td></tr>
+      <tr><td class="id">16.4</td><td class="chk">Tapping opens the correct screen, from cold start and from background</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Both paths, separately.</td></tr>
+      <tr><td class="id">16.5</td><td class="chk">Notifications survive a device reboot</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Set one an hour out, reboot. <code>RemindersProvider</code> is <code>lazy:false</code> and re-arms at startup.</td></tr>
+      <tr><td class="id">16.6</td><td class="chk">Notifications survive an app update</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Install the previous build, set a reminder, upgrade.</td></tr>
+      <tr><td class="id">16.7</td><td class="chk">Android battery optimisation and Doze do not suppress delivery</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"><code>adb shell dumpsys deviceidle force-idle</code>.</td></tr>
+      <tr><td class="id">16.8</td><td class="chk">iOS delivery works with the app terminated</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Swipe the app away, wait for the reminder.</td></tr>
+      <tr><td class="id">16.9</td><td class="chk">The in app notifications list matches what was delivered</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">16.10</td><td class="chk">Turning notifications off in settings stops delivery</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>17. Alarms <span>alarms/</span></h2>
+    <table>
+      <tr><td class="id">17.1</td><td class="chk">An alarm fires and shows the wake screen over the lock screen</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"><code>alarm_wake_screen.dart</code>.</td></tr>
+      <tr><td class="id">17.2</td><td class="chk">The correct sound plays at an audible volume</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Set a specific tone and confirm that tone plays.</td></tr>
+      <tr><td class="id">17.3</td><td class="chk">Dismiss and snooze both work, and snooze re-fires</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">17.4</td><td class="chk">The alarm still fires with the app force closed</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Swipe away, then wait.</td></tr>
+      <tr><td class="id">17.5</td><td class="chk">Two alarms close together both fire</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Set two 1 min apart.</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>18. Focus sessions <span>focus/focus_screen, active</span></h2>
+    <table>
+      <tr><td class="id">18.1</td><td class="chk">Start a focus session with the chosen duration</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">18.2</td><td class="chk">Timer counts down accurately, including with the screen off</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Start 5 min, lock for 3, check the remaining time.</td></tr>
+      <tr><td class="id">18.3</td><td class="chk">Pause, resume and end all behave correctly</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">18.4</td><td class="chk">Backgrounding the app does not silently kill the session</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">18.5</td><td class="chk">Completing a session records it against the account</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Check activity history afterwards.</td></tr>
+      <tr><td class="id">18.6</td><td class="chk">Park a thought mid session, and find it afterwards</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"><code>park_thought_sheet.dart</code> → Memory screen.</td></tr>
+      <tr><td class="id">18.7</td><td class="chk">The help screen opens and explains the feature</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">18.8</td><td class="chk">The live focus pill in the shell returns you to the active session</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Same as 3.3.</td></tr>
+    </table>
+  </section>
+
+  <div class="ribbon" style="margin-top:10pt">
+    <span class="part">Part 3 &middot; Shared sessions, billing and platform</span>
+    <span>Body doubling needs two real accounts. Billing must use Stripe test mode.</span>
+  </div>
+
+  <section>
+    <h2>19. Focus rooms <span>focus/focus_room_screen</span></h2>
+    <table>
+      <tr><td class="id">19.1</td><td class="chk">Create a room and confirm a room code is generated and displayed</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"><code>room_code.dart</code>.</td></tr>
+      <tr><td class="id">19.2</td><td class="chk">A second account joins with that code and both appear in the room</td><td class="st"><span class="b two">2 DEV</span></td><td class="ev"></td></tr>
+      <tr><td class="id">19.3</td><td class="chk">An invalid or expired code is rejected with a clear message</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Uniform 404 whether the room never existed, ended, or is private — so codes cannot be used to enumerate private rooms (<code>api_client.dart</code>, <code>joinRoomByCode</code>).</td></tr>
+      <tr><td class="id">19.4</td><td class="chk">Member sheet lists every participant, showing You for yourself</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"><code>group_members_sheet.dart</code>.</td></tr>
+      <tr><td class="id">19.5</td><td class="chk">No real name or email address is visible for any participant</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Roster endpoint returns public identity only; <code>publicUser()</code> strips <code>email</code> and <code>full_name</code>.</td></tr>
+      <tr><td class="id">19.6</td><td class="chk">The shared timer stays in step across participants</td><td class="st"><span class="b two">2 DEV</span></td><td class="ev">Server is the clock authority (<code>socket.ts</code>). Correct: both within ~1s.</td></tr>
+      <tr><td class="id">19.7</td><td class="chk">A participant leaving disappears from the list for everyone else</td><td class="st"><span class="b two">2 DEV</span></td><td class="ev"></td></tr>
+      <tr><td class="id">19.8</td><td class="chk">Presence accurate after a force close, no ghost participant</td><td class="st"><span class="b two">2 DEV</span></td><td class="ev">Force-quit B. Correct: disappears after the grace period (<code>realtime/eviction.ts</code>).</td></tr>
+      <tr><td class="id">19.9</td><td class="chk">The room closes when the last participant leaves</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">19.10</td><td class="chk">Network drop and rejoin recover without a stuck state</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Airplane mode 30s, then off.</td></tr>
+      <tr><td class="id">19.11</td><td class="chk">The room overlay in the shell can be dismissed and reopened</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+    </table>
+  </section>
+
+  <div class="foot"><span>OurMynd Functional Test Plan, version 1.1</span><span>Part 3 &middot; sheet 1 of 2</span></div>
+</div>
+
+<!-- ═══════════ SHEET 4 ═══════════ -->
+<div class="sheet">
+  <div class="ribbon" style="margin-top:0">
+    <span class="part">Part 3 (continued)</span><span>Sections 20 to 26</span>
+  </div>
+
+  <section>
+    <h2>20. Body doubling <span>focus/body_doubling</span></h2>
+    <table>
+      <tr><td class="id">20.1</td><td class="chk">Auto match queues and pairs with another waiting user</td><td class="st"><span class="b two">2 DEV</span></td><td class="ev"></td></tr>
+      <tr><td class="id">20.2</td><td class="chk">Both accounts reach the matched state and see the partner name and avatar</td><td class="st"><span class="b two">2 DEV</span></td><td class="ev"></td></tr>
+      <tr><td class="id">20.3</td><td class="chk">Queuing with nobody else waiting stays searching without hanging</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Queue alone for 3 min. Correct: still searching, no false timeout.</td></tr>
+      <tr><td class="id">20.4</td><td class="chk">Cancelling the search leaves the queue cleanly and does not match afterwards</td><td class="st"><span class="b two">2 DEV</span></td><td class="ev">Cancel on A, then queue on B. Correct: B does not match A.</td></tr>
+      <tr><td class="id">20.5</td><td class="chk">Microphone permission requested with a reason, denial handled</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">20.6</td><td class="chk">Live audio connects in both directions</td><td class="st"><span class="b fail">FAIL</span></td><td class="ev"><b>Cannot pass as deployed.</b> Production reports <code>livekit: off</code> — no media server is configured, so audio cannot connect. Set the LiveKit credentials on Render, then retest. LiveKit tokens are now 15 min rather than 4 h (security fix 7.3), which does not affect this.</td></tr>
+      <tr><td class="id">20.7</td><td class="chk">Mute works and is reflected for the other participant</td><td class="st"><span class="b two">2 DEV</span></td><td class="ev">Blocked by 20.6.</td></tr>
+      <tr><td class="id">20.8</td><td class="chk">No video is published, since the room grant is audio only</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">The LiveKit grant is <code>canPublish</code> for audio with <code>canPublishData:false</code>, scoped to one room (<code>socket.ts</code>).</td></tr>
+      <tr><td class="id">20.9</td><td class="chk">Leaving mid session ends it cleanly for both sides</td><td class="st"><span class="b two">2 DEV</span></td><td class="ev"></td></tr>
+      <tr><td class="id">20.10</td><td class="chk">Backgrounding behaves as intended rather than dropping silently</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Ping timeouts are deliberately long (25s/20s) to survive this.</td></tr>
+      <tr><td class="id">20.11</td><td class="chk">An incoming phone call interrupts and recovers</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">20.12</td><td class="chk">Audio quality acceptable on mobile data as well as wifi</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Blocked by 20.6.</td></tr>
+      <tr><td class="id">20.13</td><td class="chk">The session is recorded against the account afterwards</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">20.14</td><td class="chk">Two users cannot be matched into a room they were not granted access to</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Room membership is checked before any LiveKit token is minted (<code>presence.isInRoom</code>), but this needs a runtime test with two accounts.</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>21. Reporting and blocking <span style="color:#7f1d1d">not yet built</span></h2>
+    <table>
+      <tr><td class="id">21.1</td><td class="chk">Report another participant from inside a focus room</td><td class="st"><span class="b fail">FAIL</span></td><td class="ev" rowspan="9"><b>None of section 21 exists.</b> There is no moderation route in <code>server/src/routes</code>, no reports, blocks, strikes or moderation-actions tables, no report control on any surface, and no admin queue. Blocking is therefore not enforced in feed, social, chat or matchmaking queries either.<br><br>
+      This is the single largest gap in the build. <b>Apple Guideline 1.2 requires all of it before a user-generated-content app is approved</b>, and Terms section 6 already tells users these tools exist. It is a feature to be built, not a defect to be fixed — roughly a moderation route with four tables and migrations, a reason-picker report flow on posts, messages, room participants and profiles, server-side block enforcement in every query that returns another user, a strike counter with automatic suspension, and an admin view or CLI so the published 24-hour review commitment can actually be met.<br><br>
+      21.9 additionally depends on the age-declaration work: no date of birth is collected at sign-up and there is no <code>is_minor</code> flag, so minors cannot be excluded from adult matchmaking.</td></tr>
+      <tr><td class="id">21.2</td><td class="chk">Report a body doubling partner, during and after the session</td><td class="st"><span class="b fail">FAIL</span></td></tr>
+      <tr><td class="id">21.3</td><td class="chk">The report reaches a queue that a human can actually read</td><td class="st"><span class="b fail">FAIL</span></td></tr>
+      <tr><td class="id">21.4</td><td class="chk">Block a user, then confirm the two are never matched again</td><td class="st"><span class="b fail">FAIL</span></td></tr>
+      <tr><td class="id">21.5</td><td class="chk">Blocking enforced by server matchmaking, not only hidden in the interface</td><td class="st"><span class="b fail">FAIL</span></td></tr>
+      <tr><td class="id">21.6</td><td class="chk">Unblock restores normal matching</td><td class="st"><span class="b fail">FAIL</span></td></tr>
+      <tr><td class="id">21.7</td><td class="chk">Repeat reports accumulate and reach the suspension threshold</td><td class="st"><span class="b fail">FAIL</span></td></tr>
+      <tr><td class="id">21.8</td><td class="chk">A suspended account cannot join or be matched into a session</td><td class="st"><span class="b fail">FAIL</span></td></tr>
+      <tr><td class="id">21.9</td><td class="chk">Under-18 accounts are never matched with adults by automatic matchmaking</td><td class="st"><span class="b fail">FAIL</span></td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>22. Profile <span>profile/</span></h2>
+    <table>
+      <tr><td class="id">22.1</td><td class="chk">Profile shows the correct identity, avatar colour and member tag</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">22.2</td><td class="chk">Editing profile fields saves and persists</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Name is validated 2&ndash;32 chars server side.</td></tr>
+      <tr><td class="id">22.3</td><td class="chk">Activity history shows accurate past sessions and completions</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">22.4</td><td class="chk">About screen shows the correct app version</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Expect 1.0.0+2.</td></tr>
+      <tr><td class="id">22.5</td><td class="chk">Links to privacy, terms and copyright open the published pages</td><td class="st"><span class="b fixed">FIXED</span></td><td class="ev">Were <code>example.com</code> placeholders — dead links. Now the live URLs, with a copyright link added (<code>legal.dart</code>). <b>Device step:</b> tap each; all three must open the real page in the in-app browser.</td></tr>
+      <tr><td class="id">22.6</td><td class="chk">The member tag appears only for a genuinely premium account</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Driven by server-held entitlement (<code>/billing/status</code>), never a client flag.</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>23. Paywall and subscription <span>paywall/</span></h2>
+    <table>
+      <tr><td class="id">23.1</td><td class="chk">Free, Plus and Pro shown with correct prices, periods and feature lists</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Prices resolve server side from Stripe. Correct: matches the dashboard exactly.</td></tr>
+      <tr><td class="id">23.2</td><td class="chk">Plus is preselected and marked as most popular</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">23.3</td><td class="chk">Monthly and annual switch changes the price shown</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">23.4</td><td class="chk">Checkout opens externally and returns to the app afterwards</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"><b>Stripe TEST mode only</b> — card <code>4242 4242 4242 4242</code>.</td></tr>
+      <tr><td class="id">23.5</td><td class="chk">Entitlement applies on return without a restart</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Server-side session lookup on return, so this works even before the webhook fires.</td></tr>
+      <tr><td class="id">23.6</td><td class="chk">Cancelling checkout leaves the account unchanged</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">23.7</td><td class="chk">Manage subscription opens the billing portal for the correct customer</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Customer resolved from <code>req.user.id</code> server side, never from the request.</td></tr>
+      <tr><td class="id">23.8</td><td class="chk">Cancelling keeps access until the paid period ends, then removes it</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Test mode; advance the clock in the Stripe dashboard.</td></tr>
+      <tr><td class="id">23.9</td><td class="chk">Upgrading and downgrading both take effect correctly</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">23.10</td><td class="chk">A failed renewal removes entitlement</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Also now covered for <b>refunds and chargebacks</b>, which previously left an account premium forever (security fix 8.4).</td></tr>
+      <tr><td class="id">23.11</td><td class="chk">The already premium view lists entitlements without duplication</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>24. Settings and consent <span>settings_provider</span></h2>
+    <table>
+      <tr><td class="id">24.1</td><td class="chk">Theme choice applies immediately and persists across restart</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">24.2</td><td class="chk">Dark mode gating behaves correctly for free and premium accounts</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Free: switch never moves, tapping explains and opens the paywall.</td></tr>
+      <tr><td class="id">24.3</td><td class="chk">Notification and reminder preferences persist</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">24.4</td><td class="chk">Health data consent requested on its own screen before any coach conversation</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Verified on simulator: the Coach tab on an undecided account renders the consent screen, not the chat. Also shown as an onboarding step after sign-in.</td></tr>
+      <tr><td class="id">24.5</td><td class="chk">Declining consent still allows the rest of the app to be used</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Verified server side: with consent absent, <code>PUT /api/state/tasks</code> → 200 while <code>mood</code> → 403. The coach still opens, without health context.</td></tr>
+      <tr><td class="id">24.6</td><td class="chk">The consent state and the date it was given are visible in settings</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Settings → Privacy → Health data shows state and date inline on the row and in full on the screen.</td></tr>
+      <tr><td class="id">24.7</td><td class="chk">Withdrawing consent stops processing and offers deletion</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Verified: after withdrawal the health write is refused 403; deletion removed <code>mood</code> and left <code>tasks</code> intact. Deletion is offered as a separate step, deliberately.</td></tr>
+      <tr><td class="id">24.8</td><td class="chk">Data export produces a complete, readable file</td><td class="st"><span class="b fixed">FIXED</span></td><td class="ev">The endpoint existed with no way to reach it, which is the same as not having it. Now <b>Settings → Privacy → Your data</b>. Verified: returns nine sections (profile, posts, comments, reactions, messages, notes, state, consent history, subscription). Messages <i>received</i> are excluded — they are the other person's data too.</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>25. Offline, sync and errors <span>cross cutting</span></h2>
+    <table>
+      <tr><td class="id">25.1</td><td class="chk">Airplane mode gives a clear offline state on every screen, with no crash</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">25.2</td><td class="chk">Work done offline syncs on reconnect without duplicating or losing data</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Last-write-wins on a timestamp (<code>state_sync.dart</code>).</td></tr>
+      <tr><td class="id">25.3</td><td class="chk">Backend unreachable produces an informative message, not an endless spinner</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"><b>Note the Render free tier sleeps after 15 min idle</b> — the first request can take ~50s. Confirm that reads as waking, not hanging.</td></tr>
+      <tr><td class="id">25.4</td><td class="chk">A 500 from the API is handled on every screen that calls it</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Errors return <code>{error}</code> with no stack trace (verified server side).</td></tr>
+      <tr><td class="id">25.5</td><td class="chk">Session expiry mid use routes to login without losing unsaved work silently</td><td class="st"><span class="b fixed">FIXED</span></td><td class="ev">Materially changed: access tokens are now 30 min, so expiry is routine. The client refreshes transparently and replays the request (<code>ApiClient._send</code>), and only a failed <i>refresh</i> routes to login. <b>Device step:</b> use the app for over 30 min continuously — expect no interruption at all.</td></tr>
+      <tr><td class="id">25.6</td><td class="chk">Two devices editing the same data resolve to a sensible final state</td><td class="st"><span class="b two">2 DEV</span></td><td class="ev"></td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>26. Platform and quality <span>cross cutting</span></h2>
+    <table>
+      <tr><td class="id">26.1</td><td class="chk">Clean install and upgrade over the previous version both tested</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"><b>Test the upgrade path carefully this time.</b> Tokens moved to the keystore; there is a one-time migration that moves an existing plaintext token across, so an upgrade must <i>not</i> sign anyone out.</td></tr>
+      <tr><td class="id">26.2</td><td class="chk">Cold start time acceptable on a low end Android device</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Splash budgeted at 2s total, 900ms floor.</td></tr>
+      <tr><td class="id">26.3</td><td class="chk">No dropped frames on home, schedule and community scrolling</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Profile mode.</td></tr>
+      <tr><td class="id">26.4</td><td class="chk">Memory use stable over a long session with no growth on repeated navigation</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">DevTools memory view; navigate 50 times.</td></tr>
+      <tr><td class="id">26.5</td><td class="chk">Largest and smallest system font sizes do not break any layout</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">Check the consent screen buttons, which sit close to the nav bar.</td></tr>
+      <tr><td class="id">26.6</td><td class="chk">Screen reader labels present on every interactive element</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"><b>At risk</b> — custom <code>OmTappable</code> targets have no explicit <code>Semantics</code> wrappers.</td></tr>
+      <tr><td class="id">26.7</td><td class="chk">Contrast sufficient in both themes</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">26.8</td><td class="chk">Reduced motion setting respected</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Honoured throughout: <code>OmTappable</code>, <code>OmButton</code>, page transitions and the splash all collapse to instant under <code>reduceMotion</code>.</td></tr>
+      <tr><td class="id">26.9</td><td class="chk">Rotation, split screen, small screens and tablets handled</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">iPhone SE and an iPad in split view.</td></tr>
+      <tr><td class="id">26.10</td><td class="chk">Notch, dynamic island and gesture bar safe areas correct</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev"></td></tr>
+      <tr><td class="id">26.11</td><td class="chk">All strings render correctly with no placeholder or debug text visible</td><td class="st"><span class="b device">DEVICE</span></td><td class="ev">The <code>example.com</code> legal placeholders are gone (22.5). Sweep for any others.</td></tr>
+    </table>
+  </section>
+
+  <div class="signoff">
+    <div><div class="lab">Build under test</div><div class="filled">1.0.0+2 &middot; hardened</div></div>
+    <div><div class="lab">Device and OS</div><div class="rule"></div></div>
+    <div><div class="lab">Tested by</div><div class="filled">Kshitiz Raj Paudyal</div></div>
+    <div><div class="lab">Date</div><div class="rule"></div></div>
+    <div><div class="lab">Result</div><div class="rule"></div></div>
+  </div>
+  <div class="foot"><span>OurMynd Functional Test Plan, version 1.1</span><span>Part 3 &middot; sheet 2 of 2</span></div>
+</div>
+
+</body>
+</html>
