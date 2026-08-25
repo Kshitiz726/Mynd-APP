@@ -77,3 +77,9 @@ OURMYND_TESTFLIGHT_PROMPT.txt
 OURMYND_SETUP.txt
 PROGRESS_PAUSE,TXT
 beta_testers.txt
+
+# Live Stripe signing secret pasted here while configuring the endpoint.
+# Never commit: anyone holding it can forge webhook events and grant
+# themselves a paid entitlement.
+webhooki_secret.txt
+*_secret.txt
