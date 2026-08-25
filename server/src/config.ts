@@ -11,15 +11,42 @@ const lkKey = process.env.LK_API_KEY ?? '';
 const lkSecret = process.env.LK_API_SECRET ?? '';
 const stripeSecret = process.env.STRIPE_SECRET_KEY ?? '';
 
+// Where browser clients are allowed to call us from.
+//
+// The default used to be '*', which is fine on a laptop and wrong the moment it
+// ships: an unset CLIENT_ORIGIN in production served
+// `Access-Control-Allow-Origin: *` to every caller, so any web page on the
+// internet could script the API. The default is now the closed one, and
+// production refuses to start without an explicit value - a missing env var
+// should stop a deploy, not silently widen it. Comma-separated for the handful
+// of legitimate origins (site, admin, local web build).
+function resolveClientOrigins(): string[] {
+  const raw = (process.env.CLIENT_ORIGIN ?? '').trim();
+  if (raw) return raw.split(',').map((s) => s.trim()).filter(Boolean);
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'CLIENT_ORIGIN must be set in production (comma-separated list of allowed origins). ' +
+        'Refusing to start with a wildcard CORS policy.',
+    );
+  }
+  // Dev only: the Flutter web build and the local tooling.
+  return ['http://localhost:8080', 'http://localhost:5000', 'http://127.0.0.1:8080'];
+}
+
 export const config = {
   port: Number(process.env.PORT ?? 8080),
   isProd: process.env.NODE_ENV === 'production',
-  clientOrigin: process.env.CLIENT_ORIGIN ?? '*',
+  clientOrigins: resolveClientOrigins(),
 
   // In dev (no DB) the server trusts JWTs signed with this secret and builds the
   // user from the token claims. In prod, set JWT_SECRET to your Supabase secret.
   jwtSecret: process.env.JWT_SECRET ?? 'dev-insecure-secret-change-me',
   jwtIssuer: process.env.JWT_ISSUER ?? 'ourmynd',
+
+  // The coach model provider's key. Server-side only, deliberately: it used to
+  // be compiled into the app with --dart-define, where it was recoverable from
+  // the binary. See routes/coach.ts.
+  groqApiKey: process.env.GROQ_API_KEY ?? '',
 
   // Real Google OAuth: the Web Client ID from Google Cloud Console. The client
   // sends a Google ID token; the server verifies its signature + audience here.
