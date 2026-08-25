@@ -1,0 +1,69 @@
+name: security
+
+# Runs on every push and pull request, and once a week so that a newly
+# disclosed vulnerability in an unchanged dependency is still noticed.
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  schedule:
+    - cron: '0 6 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  secret-scan:
+    name: secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Gitleaks needs the history, not just the tip: a key that was
+          # committed and then removed is still a leaked key, and a shallow
+          # clone would report the repository clean.
+          fetch-depth: 0
+
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  dependency-audit:
+    name: dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: npm ci
+        working-directory: server
+        run: npm ci
+
+      # Fails the build on high or critical only. Moderate findings are
+      # reported by `npm audit` in the log but do not block a deploy, because a
+      # policy that cries wolf on every transitive advisory gets switched off.
+      - name: npm audit
+        working-directory: server
+        run: npm audit --audit-level=high
+
+      - name: typecheck
+        working-directory: server
+        run: npx tsc --noEmit
+
+  flutter-analyze:
+    name: flutter analyze
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter pub get
+      # Analyzer *errors* fail the build; the existing info/warning backlog does
+      # not, so this can be switched on today rather than after a cleanup.
+      - run: flutter analyze --no-fatal-infos --no-fatal-warnings
