@@ -7,6 +7,7 @@ import '../../core/utils/haptics.dart';
 import '../../core/utils/om_icons.dart';
 import '../../models/focus_ambience.dart';
 import '../../providers/focus_provider.dart';
+import 'widgets/room_music_strip.dart';
 import '../../providers/nav_provider.dart';
 import '../../providers/task_provider.dart';
 import '../../widgets/om_avatar.dart';
@@ -153,6 +154,11 @@ class FocusActiveScreen extends StatelessWidget {
                       ),
                     ],
                   ),
+                  // Between the timer controls and the secondary actions: reachable
+                  // without hunting, but below the thing the session is actually
+                  // about. Same widget the room uses, so the two cannot drift apart.
+                  const SizedBox(height: AppSpacing.md),
+                  const SoloMusicStrip(),
                   const SizedBox(height: AppSpacing.md),
                   _ActionButton(
                     label: 'park a thought',

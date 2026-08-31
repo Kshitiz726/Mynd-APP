@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import '../core/services/api_client.dart';
 import '../core/services/api_config.dart';
 import '../core/services/realtime_service.dart';
+import '../core/utils/spotify_uri.dart';
+import '../models/room_music.dart';
 import '../core/services/voice_service.dart';
 import '../models/focus/focus_room.dart';
 import '../models/focus/room_participant.dart';
@@ -48,6 +50,35 @@ class FocusRoomProvider extends ChangeNotifier {
   // ── Active room ──
   String? activeRoomId;
   String ambience = 'cafe';
+
+  /// What the room is playing, or null. Shared state, not shared audio: each
+  /// device plays its own copy, so positions drift between people.
+  RoomMusic? music;
+
+  /// Set when the server refuses a link, cleared on the next accepted change.
+  String? musicError;
+
+  /// Change what the room is playing. Pass null to stop.
+  ///
+  /// Normalised here so a bad paste is refused against the text field
+  /// immediately rather than travelling to the server and coming back. The
+  /// server normalises again regardless; this is convenience, not the check.
+  void setMusic(String? raw, {String? title}) {
+    final id = activeRoomId;
+    if (id == null) return;
+    if (raw == null) {
+      _rt.setMusic(id, null);
+      return;
+    }
+    final uri = normaliseSpotifyUri(raw);
+    if (uri == null) {
+      musicError = 'that is not a Spotify link';
+      notifyListeners();
+      return;
+    }
+    musicError = null;
+    _rt.setMusic(id, uri, title: title);
+  }
   final Map<String, RoomParticipant> _participants = {};
   List<RoomParticipant> get participants => _participants.values.toList();
   int get participantCount => _participants.length;
@@ -221,6 +252,10 @@ class FocusRoomProvider extends ChangeNotifier {
 
     _rt.on('room_state', (d) {
       ambience = d['ambience'] as String? ?? 'cafe';
+      // The snapshot carries music so someone arriving late knows what the
+      // room is on. Without this they would only find out when somebody next
+      // changed it, which for a room settled on one playlist is never.
+      music = RoomMusic.fromJson((d['music'] as Map?)?.cast<String, dynamic>());
       _participants
         ..clear()
         ..addEntries(((d['participants'] as List)
@@ -267,6 +302,21 @@ class FocusRoomProvider extends ChangeNotifier {
 
     _rt.on('ambience_changed', (d) {
       ambience = d['ambience'] as String? ?? ambience;
+      notifyListeners();
+    });
+
+    _rt.on('music_changed', (d) {
+      // A null music payload is a real state, not a missing one: it is how the
+      // server says the room stopped playing.
+      music = RoomMusic.fromJson((d['music'] as Map?)?.cast<String, dynamic>());
+      musicError = null;
+      notifyListeners();
+    });
+
+    // Only the person who sent a bad link hears about it, so it is a field
+    // rather than a broadcast: nobody else in the room needs to see it.
+    _rt.on('music_rejected', (d) {
+      musicError = d['reason'] as String? ?? 'that is not a Spotify link';
       notifyListeners();
     });
 

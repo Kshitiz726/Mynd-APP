@@ -10,6 +10,7 @@ import '../../core/utils/om_icons.dart';
 import '../../core/utils/toast.dart';
 import '../../models/focus/room_participant.dart';
 import '../../providers/focus_room_provider.dart';
+import 'widgets/room_music_strip.dart';
 import '../../widgets/om_avatar.dart';
 import '../../widgets/om_back_button.dart';
 import '../../widgets/om_tappable.dart';
@@ -248,6 +249,13 @@ class _FocusRoomScreenState extends State<FocusRoomScreen> {
                         ),
                       ],
                     ),
+                  ),
+                  // Under the controls, not beside them: the room's music is context,
+                  // not something anyone is here to operate, and it must not compete
+                  // with the timer for attention.
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: AppSpacing.screenH),
+                    child: RoomMusicStrip(),
                   ),
                   // Leave Button
                   Padding(
