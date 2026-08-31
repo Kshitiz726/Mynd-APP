@@ -107,8 +107,7 @@ class _GaugePainter extends CustomPainter {
 
   /// How tall the dial is relative to its width: the top of the circle down to
   /// the lowest point of the arc, which is its two ends, plus the stroke.
-  static final double heightRatio =
-      (1 + math.sin(_start)) / 2 * 0.925 + 0.075;
+  static final double heightRatio = (1 + math.sin(_start)) / 2 * 0.925 + 0.075;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -284,45 +283,70 @@ class _MoodDialPickerState extends State<MoodDialPicker> {
     final c = context.omColors;
     final box = Size(widget.size, widget.size * _GaugePainter.heightRatio);
     final m = _sel;
-    final tint =
-        m == null ? Color.lerp(c.text2, c.surfaceAlt, 0.5)! : Color.lerp(c.accent, c.primary, m.value)!;
+    final tint = m == null
+        ? Color.lerp(c.text2, c.surfaceAlt, 0.5)!
+        : Color.lerp(c.accent, c.primary, m.value)!;
 
     // A raw Listener, not a GestureDetector: this dial lives inside a
     // drag-to-dismiss bottom sheet, and a pan recogniser here would fight the
     // sheet for every downward drag. Listener takes the pointer stream directly
     // without entering the gesture arena, so the knob always follows the thumb
     // and the sheet still dismisses from everywhere else.
-    return Listener(
+    // The Listener picks the mood; the GestureDetector around it exists only to
+    // claim vertical drags so the sheet cannot.
+    //
+    // Listener alone was not enough. It stays out of the gesture arena, which
+    // is what lets the knob follow the thumb - but it also means the sheet's
+    // drag-to-dismiss recogniser won every vertical drag uncontested. The whole
+    // sheet then travelled with the finger, so localPosition barely changed
+    // relative to the dial and the selection never moved off its starting
+    // stop. Tapping worked because a tap has no drag for the sheet to take,
+    // which is exactly the difference that was reported.
+    //
+    // The drag callbacks are deliberately empty: winning the arena is the
+    // entire job, and the picking is already handled by the pointer stream.
+    return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onPointerDown: (e) => _pick(e.localPosition, box),
-      onPointerMove: (e) => _pick(e.localPosition, box),
-      child: SizedBox(
-        width: box.width,
-        height: box.height,
-        child: TweenAnimationBuilder<double>(
-          // Quick enough to feel like the knob is under the thumb, eased enough
-          // that the jump between two stops still glides.
-          duration: const Duration(milliseconds: 240),
-          curve: Curves.easeOutCubic,
-          tween: Tween(end: m == null ? 0.0 : m.value),
-          builder: (context, v, _) => CustomPaint(
-            painter: _GaugePainter(
-              value: m == null ? null : v,
-              tint: tint,
-              track: c.ringTrack,
-              pending: false,
-            ),
-            child: Center(
-              child: Padding(
-                padding: EdgeInsets.only(bottom: widget.size * 0.1),
-                child: Text(
-                  m?.label ?? 'drag to set',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: m == null ? c.text2 : tint,
-                    fontSize: widget.size * (m == null ? 0.075 : 0.155),
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.2,
+      // These both CLAIM the vertical drag and act on it. Claiming alone would
+      // be enough in theory - Listener sits outside the arena and still sees
+      // every raw pointer move - but relying on that is relying on a subtlety,
+      // and this is the gesture that was broken. Picking here too means the
+      // selection follows the thumb whichever path the events take.
+      onVerticalDragStart: (d) => _pick(d.localPosition, box),
+      onVerticalDragUpdate: (d) => _pick(d.localPosition, box),
+      onVerticalDragEnd: (_) {},
+      child: Listener(
+        behavior: HitTestBehavior.opaque,
+        onPointerDown: (e) => _pick(e.localPosition, box),
+        onPointerMove: (e) => _pick(e.localPosition, box),
+        child: SizedBox(
+          width: box.width,
+          height: box.height,
+          child: TweenAnimationBuilder<double>(
+            // Quick enough to feel like the knob is under the thumb, eased enough
+            // that the jump between two stops still glides.
+            duration: const Duration(milliseconds: 240),
+            curve: Curves.easeOutCubic,
+            tween: Tween(end: m == null ? 0.0 : m.value),
+            builder: (context, v, _) => CustomPaint(
+              painter: _GaugePainter(
+                value: m == null ? null : v,
+                tint: tint,
+                track: c.ringTrack,
+                pending: false,
+              ),
+              child: Center(
+                child: Padding(
+                  padding: EdgeInsets.only(bottom: widget.size * 0.1),
+                  child: Text(
+                    m?.label ?? 'drag to set',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: m == null ? c.text2 : tint,
+                      fontSize: widget.size * (m == null ? 0.075 : 0.155),
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.2,
+                    ),
                   ),
                 ),
               ),
