@@ -161,6 +161,15 @@ class RealtimeService {
   void setState(String roomId, String state) => emit('set_state', {'roomId': roomId, 'state': state});
   void setAmbience(String roomId, String ambience) =>
       emit('set_ambience', {'roomId': roomId, 'ambience': ambience});
+
+  /// Change what the room is playing. Pass null to stop.
+  ///
+  /// [uri] must already be canonical - normaliseSpotifyUri is applied at the
+  /// point the user pastes, so a rejection is shown against the text field
+  /// rather than arriving later as a silent no-op. The server normalises again
+  /// regardless; this is convenience, not the control.
+  void setMusic(String roomId, String? uri, {String? title}) =>
+      emit('set_music', {'roomId': roomId, 'uri': uri, 'title': title});
   void voiceJoin(String roomId) => emit('voice_join', {'roomId': roomId});
 
   void watchPost(String postId) => emit('watch_post', {'postId': postId});

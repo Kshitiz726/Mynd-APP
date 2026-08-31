@@ -4,6 +4,12 @@ import { pubClient, subClient } from '../redis.js';
 import { verifyJwt, type AuthUser } from '../auth.js';
 import { AccessToken } from 'livekit-server-sdk';
 import { config } from '../config.js';
+import { normaliseSpotifyUri } from './spotify_uri.js';
+
+/// Last set_music per socket, for the spam ceiling in the handler below.
+/// Keyed by socket id and cleaned up on disconnect, so it cannot grow without
+/// bound the way a per-user map would across reconnects.
+const musicRateLimit = new Map<string, number>();
 import { makePresence } from './presence.js';
 import { toggleReaction, type ReactionKind } from '../services/reactions.js';
 import { persistMessage, isMember, otherMemberIds, type MessageKind, type MediaMeta } from '../services/chat.js';
@@ -205,6 +211,58 @@ export function attachRealtime(io: Server) {
       io.to(`room:${roomId}`).emit('ambience_changed', { roomId, ambience, changedBy: user.id });
     });
 
+    // ── Room music (shared state; each device plays its own copy) ──
+    //
+    // Anyone in the room can change it, which is what "they can change the
+    // music" asks for. Ownership would be a check right here if that changes.
+    socket.on('set_music', async ({ roomId, uri, title }: {
+      roomId: string; uri: unknown; title?: unknown;
+    }) => {
+      if (typeof roomId !== 'string' || !roomId) return;
+
+      // Members only. Without this, anyone holding a socket could push a track
+      // into a room they are not in, to people who cannot see them.
+      if (!socket.rooms.has(`room:${roomId}`)) return;
+
+      // Spam ceiling. One change every two seconds is far more than anyone
+      // choosing music needs, and it stops a script fanning hundreds of events
+      // out to every participant.
+      const now = Date.now();
+      const last = musicRateLimit.get(socket.id) ?? 0;
+      if (now - last < 2000) return;
+      musicRateLimit.set(socket.id, now);
+
+      // Stopping is a real request, not a malformed one.
+      if (uri === null) {
+        await presence.setRoomMusic(roomId, null);
+        io.to(`room:${roomId}`).emit('music_changed', { roomId, music: null, changedBy: user.id });
+        return;
+      }
+
+      // The client's string is never trusted: this is broadcast to everyone in
+      // the room, so an unvalidated value is a way to put arbitrary text - or a
+      // link somewhere else entirely - onto other people's screens.
+      const canonical = normaliseSpotifyUri(uri);
+      if (!canonical) {
+        socket.emit('music_rejected', { roomId, reason: 'not a Spotify link' });
+        return;
+      }
+
+      await presence.setRoomMusic(roomId, {
+        uri: canonical,
+        // Cosmetic and attacker-controlled, so it is stripped of control
+        // characters and capped.
+        title: typeof title === 'string'
+          ? title.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 120) || null
+          : null,
+        changedBy: user.id,
+        changedAt: now,
+      });
+      const music = await presence.roomMusic(roomId);
+      io.to(`room:${roomId}`).emit('music_changed', { roomId, music, changedBy: user.id });
+    });
+
+
     // ════════════ FEED REACTIONS (live) ════════════
     socket.on('new_reaction', async ({ postId, kind }: { postId: string; kind: ReactionKind }) => {
       const { counts, active } = await toggleReaction(postId, user.id, kind);
@@ -292,6 +350,8 @@ export function attachRealtime(io: Server) {
 
     // ════════════ DISCONNECT ════════════
     socket.on('disconnect', async () => {
+      // Or the rate-limit map grows by one entry per connection, forever.
+      musicRateLimit.delete(socket.id);
       await presence.handleDisconnect(socket.id, user.id, [...socket.data.rooms]);
     });
   });
