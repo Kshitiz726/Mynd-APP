@@ -22,10 +22,38 @@
 	<string>$(FLUTTER_BUILD_NAME)</string>
 	<key>CFBundleSignature</key>
 	<string>????</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.571086253646-9b5qfcvkffu4efrvrgncfemck9mk5uil</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>GIDClientID</key>
+	<string>571086253646-9b5qfcvkffu4efrvrgncfemck9mk5uil.apps.googleusercontent.com</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>OurMynd uses the camera for video in focus rooms.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>OurMynd uses the microphone for voice coaching and focus rooms.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>OurMynd lets you attach images to posts and your profile.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>OurMynd turns what you say into text so you can talk to your coach and voice-dump tasks.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -49,6 +77,10 @@
 	</dict>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
@@ -66,40 +98,5 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>OurMynd uses the microphone for voice coaching and focus rooms.</string>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>OurMynd turns what you say into text so you can talk to your coach and voice-dump tasks.</string>
-	<key>NSCameraUsageDescription</key>
-	<string>OurMynd uses the camera for video in focus rooms.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>OurMynd lets you attach images to posts and your profile.</string>
-	<key>NSAppTransportSecurity</key>
-	<dict>
-		<key>NSAllowsLocalNetworking</key>
-		<true/>
-	</dict>
-	<!-- Google Sign-In (iOS). The plugin reads GIDClientID to start the native
-	     flow; the URL scheme below is that same id REVERSED, which is how Google
-	     hands the result back to the app. This is the iOS OAuth client, distinct
-	     from the web client the app passes as serverClientId - that one stays the
-	     token's audience, which is what the server verifies (auth.ts). -->
-	<key>GIDClientID</key>
-	<string>571086253646-9b5qfcvkffu4efrvrgncfemck9mk5uil.apps.googleusercontent.com</string>
-	<key>CFBundleURLTypes</key>
-	<array>
-		<dict>
-			<key>CFBundleTypeRole</key>
-			<string>Editor</string>
-			<key>CFBundleURLSchemes</key>
-			<array>
-				<string>com.googleusercontent.apps.571086253646-9b5qfcvkffu4efrvrgncfemck9mk5uil</string>
-			</array>
-		</dict>
-	</array>
-	<!-- Answers App Store Connect's export-compliance question once, here, so
-	     every TestFlight upload stops asking it. False = only standard HTTPS. -->
-	<key>ITSAppUsesNonExemptEncryption</key>
-	<false/>
 </dict>
 </plist>

@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:math' as math;
 
+import 'package:audioplayers/audioplayers.dart' as ap;
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -9,10 +11,12 @@ import '../../../core/constants/app_spacing.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../core/utils/music_link.dart';
+import '../../../core/utils/music_playback.dart';
 import '../../../core/utils/toast.dart';
 import '../../../models/room_music.dart';
 import '../../../widgets/om_card.dart';
 import '../../../widgets/om_tappable.dart';
+import 'music_disc.dart';
 
 /// The music surface for a focus session, solo or shared.
 ///
@@ -40,6 +44,7 @@ class MusicPlayerCard extends StatefulWidget {
     required this.handOffNote,
     this.onPausedChanged,
     this.error,
+    this.sessionRunning = true,
   });
 
   final RoomMusic? music;
@@ -60,6 +65,14 @@ class MusicPlayerCard extends StatefulWidget {
 
   final String? error;
 
+  /// Whether the focus timer itself is running.
+  ///
+  /// Music follows the session: pausing the timer to take a call should not
+  /// leave the track playing, and resuming should bring it back without a
+  /// second tap. Rooms pass true and use their own room-wide pause instead,
+  /// because there the timer is server-driven and shared.
+  final bool sessionRunning;
+
   @override
   State<MusicPlayerCard> createState() => _MusicPlayerCardState();
 }
@@ -76,6 +89,32 @@ class _MusicPlayerCardState extends State<MusicPlayerCard> {
 
   YoutubeError _ytError = YoutubeError.none;
   PlayerState _state = PlayerState.unknown;
+
+  /// Set when the listener paused the music by hand.
+  ///
+  /// Kept so that following the session cannot undo a deliberate choice: if
+  /// someone silenced the track and then paused and resumed the timer, the
+  /// music should stay silent rather than come back on its own.
+  bool _pausedByHand = false;
+
+  /// The audio-only engine, used for direct stream URLs.
+  ///
+  /// Separate from the YouTube controller rather than hidden behind one
+  /// interface, because they differ in the way that matters: this one has no
+  /// picture and no terms attached to showing one.
+  ap.AudioPlayer? _audio;
+  final List<StreamSubscription<dynamic>> _audioSubs = [];
+  bool _audioPlaying = false;
+  String? _audioError;
+
+  StreamSubscription<YoutubeVideoState>? _posSub;
+  Duration _position = Duration.zero;
+  Duration _duration = Duration.zero;
+
+  /// Elapsed fraction for the ring, or null while the duration is unknown.
+  double? get _progress => _duration.inMilliseconds <= 0
+      ? null
+      : _position.inMilliseconds / _duration.inMilliseconds;
 
   bool get _isRoom => widget.onPausedChanged != null;
 
@@ -119,14 +158,91 @@ class _MusicPlayerCardState extends State<MusicPlayerCard> {
   void didUpdateWidget(MusicPlayerCard old) {
     super.didUpdateWidget(old);
     _sync();
+    // Only on the edge, never on every rebuild: reasserting the desired state
+    // continuously would override the listener's own play/pause a frame after
+    // they pressed it.
+    if (old.sessionRunning != widget.sessionRunning) _followSession();
+  }
+
+  /// Pause with the timer, and come back with it.
+  void _followSession() {
+    final audio = _audio;
+    if (audio != null) {
+      if (!widget.sessionRunning) {
+        audio.pause();
+        return;
+      }
+      if (_pausedByHand || (widget.music?.paused ?? false)) return;
+      audio.resume();
+      return;
+    }
+    final yt = _yt;
+    if (yt == null || _refused) return;
+    if (!widget.sessionRunning) {
+      _quietly(yt.pauseVideo);
+      return;
+    }
+    // A hand-paused track stays paused, and so does one the room has stopped.
+    if (_pausedByHand || (widget.music?.paused ?? false)) return;
+    _quietly(yt.playVideo);
   }
 
   @override
   void dispose() {
     _drift?.cancel();
     _sub?.cancel();
+    _posSub?.cancel();
     _yt?.close();
+    _disposeAudio();
     super.dispose();
+  }
+
+  void _disposeAudio() {
+    for (final s in _audioSubs) {
+      s.cancel();
+    }
+    _audioSubs.clear();
+    _audio?.dispose();
+    _audio = null;
+  }
+
+  /// Start (or re-point) the audio-only engine.
+  Future<void> _loadAudio(String url, {required bool play, Duration? at}) async {
+    final player = _audio ??= ap.AudioPlayer();
+    if (_audioSubs.isEmpty) {
+      _audioSubs.addAll([
+        player.onPositionChanged.listen((d) {
+          if (!mounted || d.inSeconds == _position.inSeconds) return;
+          setState(() => _position = d);
+        }),
+        player.onDurationChanged.listen((d) {
+          if (!mounted || d == _duration) return;
+          setState(() => _duration = d);
+        }),
+        player.onPlayerStateChanged.listen((st) {
+          if (!mounted) return;
+          setState(() => _audioPlaying = st == ap.PlayerState.playing);
+        }),
+      ]);
+    }
+    try {
+      // Playback category, so audio keeps going when the phone is locked and
+      // mixes politely rather than stopping whatever else is playing.
+      await player.setAudioContext(ap.AudioContextConfig(
+        focus: ap.AudioContextConfigFocus.mixWithOthers,
+      ).build());
+      await player.setSourceUrl(url);
+      if (at != null && at > Duration.zero) await player.seek(at);
+      if (play) {
+        await player.resume();
+      }
+      if (mounted && _audioError != null) setState(() => _audioError = null);
+    } catch (e) {
+      debugPrint('[focus-music] audio load failed: $e');
+      if (mounted) {
+        setState(() => _audioError = "that audio link would not play");
+      }
+    }
   }
 
   /// Bring the embedded player in line with what the session says is playing.
@@ -137,11 +253,14 @@ class _MusicPlayerCardState extends State<MusicPlayerCard> {
     // Nothing playable in-app: tear the webview down rather than leaving it
     // parked. It is the most expensive thing on this screen.
     if (music == null || link == null || !music.playsInApp) {
+      _disposeAudio();
       if (_yt != null) {
         _drift?.cancel();
         _drift = null;
         _sub?.cancel();
         _sub = null;
+        _posSub?.cancel();
+        _posSub = null;
         _yt?.close();
         _yt = null;
         _loadedUri = null;
@@ -152,18 +271,44 @@ class _MusicPlayerCardState extends State<MusicPlayerCard> {
     }
 
     if (_loadedUri == music.uri) {
-      _applyPlayState(music);
+      // Same track: react only to the room stopping it. Reasserting "play"
+      // here would mean every unrelated rebuild overrode a local pause.
+      if (!music.paused) return;
+      if (link.audioOnly) {
+        _audio?.pause();
+      } else {
+        _quietly(_yt!.pauseVideo);
+      }
       return;
     }
     _loadedUri = music.uri;
     // A new track gets a clean slate, or the previous video's refusal would
-    // hide a working one.
+    // hide a working one - and choosing a track is itself a request to hear
+    // it, so a previous hand-pause does not carry over.
     _ytError = YoutubeError.none;
     _state = PlayerState.unknown;
+    _pausedByHand = false;
+    _position = Duration.zero;
+    _duration = Duration.zero;
 
     // Where the room already is, not the beginning. Someone joining twenty
     // minutes in hears what everybody else hears.
-    final start = music.positionAt(DateTime.now()).inSeconds.toDouble();
+    final at = music.positionAt(DateTime.now());
+    final start = at.inSeconds.toDouble();
+    final shouldPlay = widget.sessionRunning && !music.paused;
+
+    // A direct audio URL has no picture and needs no webview. This is the only
+    // path that is genuinely audio-only.
+    if (link.audioOnly) {
+      _yt?.close();
+      _yt = null;
+      // Seek only where there is a room clock to line up with. Solo has none,
+      // and seeking to a room position that does not exist is how the audio
+      // ended up starting past the end of the track.
+      _loadAudio(link.streamUrl!, play: shouldPlay, at: _isRoom ? at : null);
+      _startDriftCorrection();
+      return;
+    }
 
     if (_yt == null) {
       _yt = YoutubePlayerController(
@@ -185,33 +330,50 @@ class _MusicPlayerCardState extends State<MusicPlayerCard> {
       );
       _sub = _yt!.stream.listen((v) {
         if (!mounted) return;
-        if (v.error != _ytError || v.playerState != _state) {
+        final d = v.metaData.duration;
+        if (v.error != _ytError || v.playerState != _state || d != _duration) {
           setState(() {
             _ytError = v.error;
             _state = v.playerState;
+            _duration = d;
           });
         }
       });
+      _posSub = _yt!.videoStateStream.listen((v) {
+        // Only when it moves a whole second: the player reports every 100ms,
+        // and repainting the ring ten times a second on a screen nobody is
+        // watching is battery spent for nothing.
+        if (!mounted || v.position.inSeconds == _position.inSeconds) return;
+        setState(() => _position = v.position);
+      });
     }
 
-    _quietly(() => link.kind == 'playlist'
-        ? _yt!.loadPlaylist(
-            list: [link.id],
-            listType: ListType.playlist,
-            startSeconds: start,
-          )
-        : _yt!.loadVideoById(videoId: link.id, startSeconds: start));
+    // load* autoplays, cue* only prepares. Choosing between them is what
+    // makes a fresh mount respect a paused session: switching the scene wraps
+    // the screen in a Stack, which rebuilds this card from scratch, and a
+    // plain load would restart the music underneath a paused timer.
+    _quietly(() => switch (playerLoadAction(
+          isPlaylist: link.kind == 'playlist',
+          sessionRunning: widget.sessionRunning,
+          roomPaused: music.paused,
+        )) {
+          PlayerLoadAction.loadPlaylist => _yt!.loadPlaylist(
+              list: [link.id],
+              listType: ListType.playlist,
+              startSeconds: start,
+            ),
+          PlayerLoadAction.cuePlaylist => _yt!.cuePlaylist(
+              list: [link.id],
+              listType: ListType.playlist,
+              startSeconds: start,
+            ),
+          PlayerLoadAction.loadVideo =>
+            _yt!.loadVideoById(videoId: link.id, startSeconds: start),
+          PlayerLoadAction.cueVideo =>
+            _yt!.cueVideoById(videoId: link.id, startSeconds: start),
+        });
 
-    _applyPlayState(music);
     _startDriftCorrection();
-  }
-
-  void _applyPlayState(RoomMusic music) {
-    final yt = _yt;
-    if (yt == null) return;
-    // A room-wide pause is a real instruction; a solo session pauses locally,
-    // so `paused` is always false there and this is a no-op.
-    if (music.paused) _quietly(yt.pauseVideo);
   }
 
   /// Run a player command without letting its failure become an unhandled
@@ -257,7 +419,8 @@ class _MusicPlayerCardState extends State<MusicPlayerCard> {
     });
   }
 
-  bool get _playing => _state == PlayerState.playing;
+  bool get _playing =>
+      _audio != null ? _audioPlaying : _state == PlayerState.playing;
 
   void _togglePlay() {
     Haptics.light();
@@ -268,6 +431,12 @@ class _MusicPlayerCardState extends State<MusicPlayerCard> {
       onPaused(!(widget.music?.paused ?? false));
       return;
     }
+    _pausedByHand = _playing;
+    final audio = _audio;
+    if (audio != null) {
+      _playing ? audio.pause() : audio.resume();
+      return;
+    }
     final yt = _yt;
     if (yt == null) return;
     _quietly(_playing ? yt.pauseVideo : yt.playVideo);
@@ -275,59 +444,144 @@ class _MusicPlayerCardState extends State<MusicPlayerCard> {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.omColors;
     final music = widget.music;
-    final inApp = music != null && music.playsInApp && _yt != null;
+    final link = music?.link;
+    final audioOnly = link?.audioOnly ?? false;
+    final inApp = music != null && music.playsInApp && (_yt != null || audioOnly);
+    final refused = inApp && !audioOnly && _refused;
+
+    final content = Padding(
+        padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.lg, vertical: AppSpacing.xl),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (refused)
+              _Refusal(reason: _refusalReason, url: music.webUrl)
+            else
+              MusicDisc(
+                artworkUrl: music?.link?.artworkUrl,
+                playing: _showAsPlaying,
+                progress: _progress,
+              ),
+            const SizedBox(height: AppSpacing.lg),
+            Text(
+              music?.displayLabel ?? 'nothing playing',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: music == null ? c.text2 : c.text,
+              ),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              _caption(refused: refused, inApp: inApp),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 12, color: c.text2),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (music != null && !inApp)
+                  _IconButton(
+                    icon: LucideIcons.externalLink,
+                    color: c.primary,
+                    onTap: () => _open(context, music.webUrl),
+                  ),
+                if (inApp && !refused) _PlayButton(
+                  playing: _showAsPlaying,
+                  onTap: _togglePlay,
+                ),
+                _IconButton(
+                  icon: LucideIcons.pencil,
+                  color: c.text2,
+                  onTap: () => _edit(context),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+
+    // The YouTube player itself, kept on screen on purpose.
+    //
+    // Their API Terms require the embedded player to be visible and not
+    // obscured, and set a 200x200 minimum. Shrinking it to nothing or parking
+    // it off-screen to fake an audio-only player is the specific thing that
+    // gets API access pulled, so the disc above is the hero and this stays
+    // where it can be seen.
+    // No webview for a direct audio URL: there is nothing to show, and
+    // nothing that has to be shown.
+    if (!inApp || refused || audioOnly) return OmCard(child: content);
 
     return OmCard(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (inApp && _refused)
-            _Refusal(reason: _refusalReason, url: music.webUrl)
-          else if (inApp)
-            ClipRRect(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
-              // The player is display-only: every control belongs to the card,
-              // so nothing here should react to a touch. This kills accidental
-              // taps landing on the video.
-              //
-              // It does NOT make the card scrollable. Measured on an iPhone 15
-              // simulator: a swipe starting on the player still scrolls
-              // nothing, while the same swipe a few points higher scrolls
-              // normally. The WKWebView intercepts the touch in the native view
-              // hierarchy, below the level Flutter's hit testing reaches, so
-              // neither this nor `pointerEvents: none` hands the drag back.
-              // Left as a known rough edge rather than papered over with a
-              // transparent drag-forwarding overlay, which would fight the
-              // scroll physics for a gesture users can make anywhere else on
-              // the screen.
-              child: IgnorePointer(
-                child: YoutubePlayer(
-                  controller: _yt!,
-                  aspectRatio: 16 / 9,
-                  enableFullScreenOnVerticalDrag: false,
-                  autoFullScreen: false,
+          content,
+          Text('playing from YouTube',
+              style: TextStyle(fontSize: 10.5, color: c.text2)),
+          const SizedBox(height: AppSpacing.sm),
+          LayoutBuilder(
+            builder: (ctx, box) {
+              // Full card width, so a 16:9 video fills the frame instead of
+              // sitting in black bars. Height is floored at the 200 minimum,
+              // which only bites on the narrowest phones - there it letterboxes
+              // a little rather than dropping under the limit.
+              final w = box.maxWidth;
+              final h = math.max(200.0, w * 9 / 16);
+              return ClipRRect(
+                borderRadius: const BorderRadius.vertical(
+                    bottom: Radius.circular(AppRadius.card)),
+                child: SizedBox(
+                  width: w,
+                  height: h,
+                  // Display-only: every control belongs to the card above.
+                  child: IgnorePointer(
+                    child: YoutubePlayer(
+                      controller: _yt!,
+                      aspectRatio: w / h,
+                      enableFullScreenOnVerticalDrag: false,
+                      autoFullScreen: false,
+                    ),
+                  ),
                 ),
-              ),
-            ),
-          Padding(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            child: _Row(
-              music: music,
-              emptyHint: widget.emptyHint,
-              handOffNote: widget.handOffNote,
-              // Nothing to play or pause while the video is being refused.
-              onTogglePlay: inApp && !_refused ? _togglePlay : null,
-              // "playing here" would be a lie while the panel above it is
-              // explaining that it will not play at all.
-              refused: inApp && _refused,
-              showAsPlaying: _isRoom ? !(music?.paused ?? true) : _playing,
-              onEdit: () => _edit(context),
-            ),
+              );
+            },
           ),
         ],
       ),
     );
+  }
+
+  /// True when the card should look like it is playing.
+  ///
+  /// In a room that is the room's flag, so every screen agrees even before the
+  /// local player has caught up; solo it is the player's own state.
+  bool get _showAsPlaying =>
+      _isRoom ? !(widget.music?.paused ?? true) : _playing;
+
+  String _caption({required bool refused, required bool inApp}) {
+    if (widget.music == null) return widget.emptyHint;
+    if (_audioError != null) return _audioError!;
+    if (refused) return 'not playing';
+    if (!inApp) return widget.handOffNote;
+    return widget.sessionRunning ? 'playing here' : 'paused with your session';
+  }
+
+  Future<void> _open(BuildContext context, Uri url) async {
+    Haptics.light();
+    final ok = await launchUrl(url, mode: LaunchMode.externalApplication);
+    if (!ok && context.mounted) {
+      Toast.show(context, "couldn't open that link");
+    }
   }
 
   Future<void> _edit(BuildContext context) async {
@@ -395,101 +649,33 @@ class _Refusal extends StatelessWidget {
   }
 }
 
-/// The title line and the controls, below the player.
-class _Row extends StatelessWidget {
-  const _Row({
-    required this.music,
-    required this.emptyHint,
-    required this.handOffNote,
-    required this.onTogglePlay,
-    required this.showAsPlaying,
-    required this.refused,
-    required this.onEdit,
-  });
 
-  final RoomMusic? music;
-  final String emptyHint;
-  final String handOffNote;
-  final VoidCallback? onTogglePlay;
-  final bool showAsPlaying;
-  final bool refused;
-  final VoidCallback onEdit;
+/// The primary transport control.
+///
+/// Deliberately the largest thing under the disc: it is the one control anyone
+/// reaches for mid-session, and a focus app is the wrong place to make someone
+/// aim at a 17px glyph.
+class _PlayButton extends StatelessWidget {
+  const _PlayButton({required this.playing, required this.onTap});
+
+  final bool playing;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final c = context.omColors;
-    final m = music;
-    final inApp = m?.playsInApp ?? false;
-
-    return Row(
-      children: [
-        if (!inApp) ...[
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: m == null ? c.surfaceAlt : c.primary.withValues(alpha: 0.14),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(
-              m == null ? LucideIcons.music : LucideIcons.music4,
-              size: 18,
-              color: m == null ? c.text2 : c.primary,
-            ),
-          ),
-          const SizedBox(width: AppSpacing.md),
-        ],
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                m?.displayLabel ?? 'nothing playing',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  color: m == null ? c.text2 : c.text,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                m == null
-                    ? emptyHint
-                    : refused
-                        ? 'not playing'
-                        : (inApp ? 'playing here' : handOffNote),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 11.5, color: c.text2),
-              ),
-            ],
-          ),
+    return OmTappable(
+      onTap: onTap,
+      child: Container(
+        width: 56,
+        height: 56,
+        decoration: BoxDecoration(shape: BoxShape.circle, color: c.primary),
+        child: Icon(
+          playing ? LucideIcons.pause : LucideIcons.play,
+          size: 22,
+          color: Colors.white,
         ),
-        if (onTogglePlay != null)
-          _IconButton(
-            icon: showAsPlaying ? LucideIcons.pause : LucideIcons.play,
-            color: c.primary,
-            onTap: onTogglePlay!,
-          ),
-        // Spotify is the only case that leaves the app, so it is the only case
-        // that gets a launch button.
-        if (m != null && !inApp)
-          _IconButton(
-            icon: LucideIcons.externalLink,
-            color: c.primary,
-            onTap: () async {
-              Haptics.light();
-              final ok = await launchUrl(m.webUrl,
-                  mode: LaunchMode.externalApplication);
-              if (!ok && context.mounted) {
-                Toast.show(context, "couldn't open that link");
-              }
-            },
-          ),
-        _IconButton(icon: LucideIcons.pencil, color: c.text2, onTap: onEdit),
-      ],
+      ),
     );
   }
 }
@@ -578,8 +764,9 @@ class _MusicLinkSheetState extends State<_MusicLinkSheet> {
               style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 4),
           Text(
-            'a YouTube link plays right here. a Spotify link opens in Spotify, '
-            'because Spotify cannot play inside another app.',
+            'a direct audio link (mp3, m4a, a radio stream) plays here as '
+            'audio, no video. a YouTube link plays here but has to show its '
+            'player. a Spotify link opens in Spotify.',
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: AppSpacing.lg),
@@ -589,7 +776,7 @@ class _MusicLinkSheetState extends State<_MusicLinkSheet> {
             textInputAction: TextInputAction.done,
             onChanged: (_) => setState(() {}),
             decoration: InputDecoration(
-              hintText: 'https://youtube.com/watch?v=...',
+              hintText: 'paste an audio, YouTube or Spotify link',
               errorText: widget.error,
               filled: true,
               fillColor: c.surfaceAlt,
@@ -605,15 +792,21 @@ class _MusicLinkSheetState extends State<_MusicLinkSheet> {
             Row(
               children: [
                 Icon(
-                  preview.playsInApp
-                      ? LucideIcons.play
-                      : LucideIcons.externalLink,
+                  switch (preview.provider) {
+                    MusicProvider.stream => LucideIcons.audioLines,
+                    MusicProvider.youtube => LucideIcons.play,
+                    MusicProvider.spotify => LucideIcons.externalLink,
+                  },
                   size: 14,
                   color: c.text2,
                 ),
                 const SizedBox(width: 6),
                 Text(
-                  preview.playsInApp ? 'plays in the app' : 'opens in Spotify',
+                  switch (preview.provider) {
+                    MusicProvider.stream => 'plays here as audio, no video',
+                    MusicProvider.youtube => 'plays here, with its player shown',
+                    MusicProvider.spotify => 'opens in Spotify',
+                  },
                   style: TextStyle(fontSize: 12, color: c.text2),
                 ),
               ],

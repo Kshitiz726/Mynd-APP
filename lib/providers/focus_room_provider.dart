@@ -72,7 +72,7 @@ class FocusRoomProvider extends ChangeNotifier {
     }
     final uri = normaliseMusicUri(raw);
     if (uri == null) {
-      musicError = 'paste a YouTube or Spotify link';
+      musicError = 'paste an audio, YouTube or Spotify link';
       notifyListeners();
       return;
     }

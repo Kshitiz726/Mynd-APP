@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/services/focus_music_store.dart';
+import '../../../providers/focus_provider.dart';
 import '../../../providers/focus_room_provider.dart';
 import 'music_player_card.dart';
 
@@ -19,7 +20,7 @@ class RoomMusicStrip extends StatelessWidget {
       error: room.musicError,
       onSet: (v) => room.setMusic(v),
       onPausedChanged: room.setMusicPaused,
-      emptyHint: 'paste a YouTube or Spotify link for the room',
+      emptyHint: 'paste an audio or YouTube link for the room',
       // Said plainly rather than buried in a help sheet. People WILL notice
       // they are out of step with a friend, and being told up front beats
       // discovering it and assuming it is broken.
@@ -62,9 +63,12 @@ class _SoloMusicStripState extends State<SoloMusicStrip> {
         music: _store.music,
         error: _store.error,
         onSet: (v) => _store.set(v),
+        // The music follows the timer: pausing to take a call should not leave
+        // the track playing on, and resuming should not need a second tap.
+        sessionRunning: context.watch<FocusProvider>().isRunning,
         // No room-wide pause in a solo session: the player's own controls are
         // the whole story, and there is nobody to pause it for.
-        emptyHint: 'paste a YouTube or Spotify link to play while you work',
+        emptyHint: 'paste an audio or YouTube link to play while you work',
         handOffNote: 'opens in your Spotify app',
       );
 }
