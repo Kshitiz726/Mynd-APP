@@ -43,17 +43,29 @@ class _TierInfo {
   final String? badge;
 }
 
+/// What each plan promises.
+///
+/// Every line here has to be something the app actually does, checked against
+/// the code that enforces it, because this screen is the one place where a
+/// vague claim becomes a charge on somebody's card. Two things are gated
+/// today and only two: the daily message cap (coach_screen.dart,
+/// kFreeCoachMessageLimit) and editing your memory by hand
+/// (memory_screen.dart). Both lift at Plus. Nothing else in the app reads the
+/// tier at all, so nothing else may be claimed here.
+///
+/// Pro therefore has no feature of its own to name yet. Rather than invent
+/// one, it says what it honestly is. Anything added to this list needs a gate
+/// behind it first.
 const _tiers = [
   _TierInfo(
     id: 'plus',
     name: 'OurMynd Plus',
-    tagline: 'More room to think, every day.',
+    tagline: 'Talk to Mynd as much as you need.',
     benefits: [
-      'Extended message limit',
-      'More schedule',
-      'Better AI models',
-      'Extended memory',
-      'Editing memory allowed',
+      'Unlimited messages with Mynd',
+      'Edit your memory by hand',
+      'Everything in the free plan',
+      'Support a small, independent app',
     ],
     colors: [Color(0xFF1FA2A6), Color(0xFF3E7BF0)],
     badge: 'MOST POPULAR',
@@ -61,26 +73,27 @@ const _tiers = [
   _TierInfo(
     id: 'pro',
     name: 'OurMynd Pro',
-    tagline: 'The full power of OurMynd.',
+    tagline: 'Back OurMynd at a higher tier.',
     benefits: [
       'Everything in Plus',
-      'Unlimited messages',
-      'Best schedule management',
-      'Enhanced task automation',
-      'Super memory',
-      'Editing memory allowed',
+      'A bigger share towards building the app',
     ],
     colors: [Color(0xFF6D3BF0), Color(0xFFF0B24A)],
   ),
 ];
 
 /// The free baseline, shown for comparison. Not purchasable.
+///
+/// Written from what the code enforces, not from what a free tier usually
+/// looks like: there is no task cap and no habit cap anywhere in the app, so
+/// the old "3 active tasks max" and "1 habit tracker" were describing limits
+/// that do not exist and undersold the free plan to no purpose.
 const _freeBenefits = [
-  '5 AI coach messages per day',
-  'Basic daily planner',
-  '3 active tasks max',
-  '1 habit tracker',
-  'Push notifications only',
+  '5 messages a day with Mynd',
+  'Unlimited tasks, habits and notes',
+  'Focus sessions, rooms and ambience',
+  'Your full planner and reminders',
+  'Read your memory, but not edit it',
 ];
 
 class _PaywallScreenState extends State<PaywallScreen>
