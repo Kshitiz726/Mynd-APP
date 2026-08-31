@@ -1,0 +1,190 @@
+/// Canonicalise whatever a human pasted into a music link we can act on.
+///
+/// Deliberately duplicated on the server (server/src/realtime/music_link.ts).
+/// The client copy is for telling someone immediately that what they pasted is
+/// not a link we understand; the server copy is the one that decides what gets
+/// broadcast to a room. Neither trusts the other.
+///
+/// The canonical form is `{provider}:{kind}:{id}` for both providers, so
+/// everything downstream - Redis, the socket payload, the stored solo
+/// preference - handles one shape of string.
+library;
+
+/// Where the audio comes from, which decides how it can be played.
+///
+/// This is the whole reason the two providers are not interchangeable:
+/// YouTube can be embedded and played inside the app, Spotify cannot. See
+/// [MusicLink.playsInApp].
+enum MusicProvider { spotify, youtube }
+
+/// A link we recognised, broken into its parts.
+class MusicLink {
+  const MusicLink({
+    required this.provider,
+    required this.kind,
+    required this.id,
+  });
+
+  final MusicProvider provider;
+
+  /// Spotify: track/album/playlist/artist/show/episode.
+  /// YouTube: video/playlist.
+  final String kind;
+
+  final String id;
+
+  /// `spotify:playlist:{id}` or `youtube:video:{id}`.
+  String get uri => '${provider.name}:$kind:$id';
+
+  /// Whether we can play this inside Mynd, or can only hand it to another app.
+  ///
+  /// YouTube exposes an embeddable player we are licensed to host, so a
+  /// YouTube link plays here. Spotify has no such thing on mobile: their
+  /// Web Playback SDK needs EME/Widevine and is unsupported in a webview, and
+  /// the App Remote SDK is a remote control for the Spotify app rather than a
+  /// source of audio. So a Spotify link can only ever be handed over.
+  bool get playsInApp => provider == MusicProvider.youtube;
+
+  /// The https form, for handing to the OS.
+  Uri get webUrl => switch (provider) {
+        MusicProvider.spotify =>
+          Uri.parse('https://open.spotify.com/$kind/$id'),
+        MusicProvider.youtube => kind == 'playlist'
+            ? Uri.parse('https://www.youtube.com/playlist?list=$id')
+            : Uri.parse('https://www.youtube.com/watch?v=$id'),
+      };
+
+  /// Rebuild from a canonical string, or null if it is not one. Used when
+  /// reading back something the server or shared preferences stored.
+  static MusicLink? parse(String? canonical) {
+    if (canonical == null) return null;
+    final parts = canonical.split(':');
+    if (parts.length != 3) return null;
+    return switch (parts[0]) {
+      'spotify' => _spotifyKinds.contains(parts[1]) && _spotifyId.hasMatch(parts[2])
+          ? MusicLink(provider: MusicProvider.spotify, kind: parts[1], id: parts[2])
+          : null,
+      'youtube' => _youtube(parts[1], parts[2]),
+      _ => null,
+    };
+  }
+}
+
+const _spotifyKinds = {'track', 'album', 'playlist', 'artist', 'show', 'episode'};
+
+/// Spotify ids are base62 and 22 characters in practice. Bounded rather than
+/// pinned to 22, because that length is an observation, not a guarantee.
+final _spotifyId = RegExp(r'^[A-Za-z0-9]{16,40}$');
+
+/// YouTube video ids are exactly 11 characters of the URL-safe alphabet. That
+/// one IS documented and stable, so it is pinned.
+final _ytVideoId = RegExp(r'^[A-Za-z0-9_-]{11}$');
+
+/// Playlist ids vary by type (PL/UU/LL/RD/OL/FL prefixes, plus the "WL" and
+/// "LL" specials which are private and will not embed anyway).
+final _ytPlaylistId = RegExp(r'^[A-Za-z0-9_-]{12,42}$');
+
+final _spotifyUriRe = RegExp(r'^spotify:([a-z]+):([A-Za-z0-9]+)$');
+
+const _spotifyHosts = {'open.spotify.com', 'play.spotify.com'};
+
+/// youtu.be is the share shortener; music.youtube.com serves the same ids.
+const _youtubeHosts = {
+  'youtube.com',
+  'www.youtube.com',
+  'm.youtube.com',
+  'music.youtube.com',
+};
+const _youtubeShortHosts = {'youtu.be', 'www.youtu.be'};
+
+/// Hard ceiling before parsing, so a pasted essay is cheap to reject.
+const _maxInput = 400;
+
+MusicLink? _youtube(String kind, String id) {
+  if (kind == 'video' && _ytVideoId.hasMatch(id)) {
+    return MusicLink(provider: MusicProvider.youtube, kind: 'video', id: id);
+  }
+  if (kind == 'playlist' && _ytPlaylistId.hasMatch(id)) {
+    return MusicLink(provider: MusicProvider.youtube, kind: 'playlist', id: id);
+  }
+  return null;
+}
+
+/// Parse a pasted link or canonical URI. Null means "not something we play".
+MusicLink? parseMusicLink(String? input) {
+  if (input == null) return null;
+  final raw = input.trim();
+  if (raw.isEmpty || raw.length > _maxInput) return null;
+
+  // Already canonical, or a spotify: URI.
+  final direct = MusicLink.parse(raw);
+  if (direct != null) return direct;
+
+  final m = _spotifyUriRe.firstMatch(raw);
+  if (m != null) {
+    final kind = m.group(1)!;
+    final id = m.group(2)!;
+    return _spotifyKinds.contains(kind) && _spotifyId.hasMatch(id)
+        ? MusicLink(provider: MusicProvider.spotify, kind: kind, id: id)
+        : null;
+  }
+
+  final url = Uri.tryParse(raw);
+  if (url == null) return null;
+  if (url.scheme != 'https' && url.scheme != 'http') return null;
+
+  // Exact host match, not endsWith: `open.spotify.com.example.net` is not
+  // Spotify, and a suffix check would have accepted it.
+  final host = url.host.toLowerCase();
+  if (_spotifyHosts.contains(host)) return _fromSpotifyUrl(url);
+  if (_youtubeHosts.contains(host)) return _fromYoutubeUrl(url);
+  if (_youtubeShortHosts.contains(host)) {
+    final parts = url.pathSegments.where((s) => s.isNotEmpty).toList();
+    // youtu.be/{id}. The `?si=` and `?t=` are dropped with the query.
+    return parts.length == 1 ? _youtube('video', parts.first) : null;
+  }
+  return null;
+}
+
+MusicLink? _fromSpotifyUrl(Uri url) {
+  final parts = url.pathSegments.where((s) => s.isNotEmpty).toList();
+  // Drop a leading locale segment: /intl-de/playlist/{id}.
+  if (parts.isNotEmpty && parts.first.startsWith('intl-')) parts.removeAt(0);
+  if (parts.length < 2) return null;
+
+  final kind = parts[0];
+  final id = parts[1];
+  // The query is dropped on purpose. `?si=` is a share token identifying the
+  // person who sent the link; storing it would leak that to every participant.
+  return _spotifyKinds.contains(kind) && _spotifyId.hasMatch(id)
+      ? MusicLink(provider: MusicProvider.spotify, kind: kind, id: id)
+      : null;
+}
+
+MusicLink? _fromYoutubeUrl(Uri url) {
+  final parts = url.pathSegments.where((s) => s.isNotEmpty).toList();
+  final v = url.queryParameters['v'];
+  final list = url.queryParameters['list'];
+
+  // /watch?v={id}. A watch URL can also carry ?list=, but the video is what
+  // the sender was looking at, so it wins.
+  if (parts.isNotEmpty && parts.first == 'watch' && v != null) {
+    return _youtube('video', v);
+  }
+  // /playlist?list={id}
+  if (parts.isNotEmpty && parts.first == 'playlist' && list != null) {
+    return _youtube('playlist', list);
+  }
+  // /shorts/{id}, /embed/{id}, /live/{id} all carry a plain video id.
+  if (parts.length >= 2 &&
+      const {'shorts', 'embed', 'live', 'v'}.contains(parts.first)) {
+    return _youtube('video', parts[1]);
+  }
+  // A bare ?v= with no path, and the list-only fallback.
+  if (v != null) return _youtube('video', v);
+  if (list != null) return _youtube('playlist', list);
+  return null;
+}
+
+/// The canonical string, or null. Convenience for callers that only store it.
+String? normaliseMusicUri(String? input) => parseMusicLink(input)?.uri;

@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../core/services/api_client.dart';
 import '../core/services/api_config.dart';
 import '../core/services/realtime_service.dart';
-import '../core/utils/spotify_uri.dart';
+import '../core/utils/music_link.dart';
 import '../models/room_music.dart';
 import '../core/services/voice_service.dart';
 import '../models/focus/focus_room.dart';
@@ -70,14 +70,22 @@ class FocusRoomProvider extends ChangeNotifier {
       _rt.setMusic(id, null);
       return;
     }
-    final uri = normaliseSpotifyUri(raw);
+    final uri = normaliseMusicUri(raw);
     if (uri == null) {
-      musicError = 'that is not a Spotify link';
+      musicError = 'paste a YouTube or Spotify link';
       notifyListeners();
       return;
     }
     musicError = null;
     _rt.setMusic(id, uri, title: title);
+  }
+
+  /// Pause or resume for everyone. The server owns the playhead arithmetic, so
+  /// this only states the intent and waits for `music_changed` to come back.
+  void setMusicPaused(bool paused) {
+    final id = activeRoomId;
+    if (id == null) return;
+    _rt.setMusicPlayback(id, paused);
   }
   final Map<String, RoomParticipant> _participants = {};
   List<RoomParticipant> get participants => _participants.values.toList();

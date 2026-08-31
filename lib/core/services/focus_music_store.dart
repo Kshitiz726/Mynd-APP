@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../models/room_music.dart';
-import '../utils/spotify_uri.dart';
+import '../utils/music_link.dart';
 
 /// The music a solo focus session is playing.
 ///
@@ -34,12 +34,16 @@ class FocusMusicStore extends ChangeNotifier {
     try {
       final p = await SharedPreferences.getInstance();
       final uri = p.getString(_kUri);
-      if (uri != null && normaliseSpotifyUri(uri) != null) {
+      if (uri != null && normaliseMusicUri(uri) != null) {
         _music = RoomMusic(
           uri: uri,
           title: p.getString(_kTitle),
           changedBy: '',
           changedAt: DateTime.now(),
+          // A restored track starts from the top. There is no room to line up
+          // with, and resuming a solo session mid-track hours later would be
+          // stranger than starting it over.
+          startedAt: DateTime.now(),
         );
         notifyListeners();
       }
@@ -60,9 +64,9 @@ class FocusMusicStore extends ChangeNotifier {
     }
     // The same normaliser the room uses and the server enforces. Nothing is
     // stored raw, so a share link's `?si=` tracking token never lands on disk.
-    final uri = normaliseSpotifyUri(raw);
+    final uri = normaliseMusicUri(raw);
     if (uri == null) {
-      error = 'that is not a Spotify link';
+      error = 'paste a YouTube or Spotify link';
       notifyListeners();
       return;
     }
@@ -72,6 +76,7 @@ class FocusMusicStore extends ChangeNotifier {
       title: title,
       changedBy: '',
       changedAt: DateTime.now(),
+      startedAt: DateTime.now(),
     );
     notifyListeners();
     await _persist(uri, title);

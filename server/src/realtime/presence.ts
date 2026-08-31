@@ -16,19 +16,38 @@ import { scheduleEviction, cancelEviction } from './eviction.js';
  *   room:{id}:p:{userId}    HASH ParticipantView    grid state (TTL 120s)
  *   room:{id}:ambience      STRING ambience_kind
  *   room:{id}:music         STRING JSON RoomMusic     (TTL, see MUSIC_TTL)
+ *                                                     carries startedAt: the
+ *                                                     room's shared playhead
  *   sess:{userId}           HASH {endsAt,pausedRemaining,running,roomId,sessionId,...}
  *   sock:{socketId}         HASH {userId, rooms}
  *   presence:global         SET<userId>             the "62 minds focusing" counter
  */
 
-/// What a room is playing. `uri` is always a canonical `spotify:` URI - the
-/// raw pasted string is normalised before it ever reaches here, so nothing
-/// downstream has to cope with share links or locale-prefixed URLs.
+/// What a room is playing. `uri` is always a canonical `{provider}:{kind}:{id}`
+/// string - the raw pasted string is normalised before it ever reaches here, so
+/// nothing downstream has to cope with share links or locale-prefixed URLs.
+///
+/// `startedAt` is the server's clock reading for position zero, and it is the
+/// reason a room can actually listen together rather than merely agree on a
+/// name: every client seeks to `now - startedAt` instead of starting from the
+/// beginning, so a late joiner lands where everyone else already is. It is
+/// deliberately the SERVER's clock - deriving it from whoever set the track
+/// would import their device's clock skew into everybody's playhead.
+///
+/// Null for providers that cannot be positioned from here (Spotify plays in
+/// its own app, out of our reach).
 export type RoomMusic = {
   uri: string;
   title: string | null;
   changedBy: string;
   changedAt: number;
+  /// Server clock at position zero. Null while paused.
+  startedAt: number | null;
+  paused: boolean;
+  /// Where the playhead was frozen. Only meaningful while `paused`, and it is
+  /// what `startedAt` is rebuilt from on resume, so a pause does not lose the
+  /// room's place.
+  positionMs: number;
 };
 
 const GRACE_MS = 30_000;
@@ -51,8 +70,22 @@ async function readMusic(
   const raw = await redis.get(`room:${roomId}:music`);
   if (!raw) return null;
   try {
-    const v = JSON.parse(raw) as RoomMusic;
-    return typeof v?.uri === 'string' ? v : null;
+    const v = JSON.parse(raw) as Partial<RoomMusic>;
+    if (typeof v?.uri !== 'string') return null;
+    // Defaults are filled here rather than at the call sites because this key
+    // has a day-long TTL: records written by the previous build have no
+    // startedAt/paused/positionMs, and they stay readable for a day after a
+    // deploy. Normalising once means nothing downstream has to guess whether a
+    // missing field means "not paused" or "unknown".
+    return {
+      uri: v.uri,
+      title: typeof v.title === 'string' ? v.title : null,
+      changedBy: typeof v.changedBy === 'string' ? v.changedBy : '',
+      changedAt: typeof v.changedAt === 'number' ? v.changedAt : Date.now(),
+      startedAt: typeof v.startedAt === 'number' ? v.startedAt : null,
+      paused: v.paused === true,
+      positionMs: typeof v.positionMs === 'number' ? v.positionMs : 0,
+    };
   } catch {
     return null;
   }

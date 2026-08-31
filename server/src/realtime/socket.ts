@@ -4,7 +4,7 @@ import { pubClient, subClient } from '../redis.js';
 import { verifyJwt, type AuthUser } from '../auth.js';
 import { AccessToken } from 'livekit-server-sdk';
 import { config } from '../config.js';
-import { normaliseSpotifyUri } from './spotify_uri.js';
+import { normaliseMusicUri } from './music_link.js';
 
 /// Last set_music per socket, for the spam ceiling in the handler below.
 /// Keyed by socket id and cleaned up on disconnect, so it cannot grow without
@@ -242,9 +242,12 @@ export function attachRealtime(io: Server) {
       // The client's string is never trusted: this is broadcast to everyone in
       // the room, so an unvalidated value is a way to put arbitrary text - or a
       // link somewhere else entirely - onto other people's screens.
-      const canonical = normaliseSpotifyUri(uri);
+      const canonical = normaliseMusicUri(uri);
       if (!canonical) {
-        socket.emit('music_rejected', { roomId, reason: 'not a Spotify link' });
+        socket.emit('music_rejected', {
+          roomId,
+          reason: 'paste a YouTube or Spotify link',
+        });
         return;
       }
 
@@ -257,9 +260,61 @@ export function attachRealtime(io: Server) {
           : null,
         changedBy: user.id,
         changedAt: now,
+        // The room's shared playhead starts now, on the server's clock. Every
+        // client seeks to `now - startedAt`, so someone joining in ten minutes
+        // hears what the room hears rather than starting the track over.
+        startedAt: now,
+        paused: false,
+        positionMs: 0,
       });
       const music = await presence.roomMusic(roomId);
       io.to(`room:${roomId}`).emit('music_changed', { roomId, music, changedBy: user.id });
+    });
+
+    /// Pause or resume for the whole room.
+    ///
+    /// Split from `set_music` because it is a different intent with different
+    /// arithmetic: pausing freezes the playhead into `positionMs`, resuming
+    /// rebuilds `startedAt` from it. Doing that here rather than on the client
+    /// keeps one clock in charge - if each device computed its own resume
+    /// point, they would fan out by however far their clocks disagree.
+    socket.on('set_music_playback', async ({ roomId, paused }: {
+      roomId: string; paused: unknown;
+    }) => {
+      if (typeof roomId !== 'string' || !roomId) return;
+      if (typeof paused !== 'boolean') return;
+      if (!socket.rooms.has(`room:${roomId}`)) return;
+
+      const now = Date.now();
+      const last = musicRateLimit.get(socket.id) ?? 0;
+      if (now - last < 2000) return;
+      musicRateLimit.set(socket.id, now);
+
+      const current = await presence.roomMusic(roomId);
+      // Nothing playing means there is nothing to pause; silently ignoring it
+      // beats inventing a track.
+      if (!current) return;
+      if (current.paused === paused) return;
+
+      const next = paused
+        ? {
+            ...current,
+            paused: true,
+            positionMs: current.startedAt ? Math.max(0, now - current.startedAt) : 0,
+            startedAt: null,
+          }
+        : {
+            ...current,
+            paused: false,
+            startedAt: now - (current.positionMs ?? 0),
+          };
+
+      await presence.setRoomMusic(roomId, next);
+      io.to(`room:${roomId}`).emit('music_changed', {
+        roomId,
+        music: next,
+        changedBy: user.id,
+      });
     });
 
 

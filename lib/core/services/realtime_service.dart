@@ -164,12 +164,18 @@ class RealtimeService {
 
   /// Change what the room is playing. Pass null to stop.
   ///
-  /// [uri] must already be canonical - normaliseSpotifyUri is applied at the
+  /// [uri] must already be canonical - normaliseMusicUri is applied at the
   /// point the user pastes, so a rejection is shown against the text field
   /// rather than arriving later as a silent no-op. The server normalises again
   /// regardless; this is convenience, not the control.
   void setMusic(String roomId, String? uri, {String? title}) =>
       emit('set_music', {'roomId': roomId, 'uri': uri, 'title': title});
+
+  /// Pause or resume the room's music for everyone. Separate from setMusic
+  /// because the server rebuilds the shared playhead on resume, and that is
+  /// arithmetic no client should be doing for the room.
+  void setMusicPlayback(String roomId, bool paused) =>
+      emit('set_music_playback', {'roomId': roomId, 'paused': paused});
   void voiceJoin(String roomId) => emit('voice_join', {'roomId': roomId});
 
   void watchPost(String postId) => emit('watch_post', {'postId': postId});
