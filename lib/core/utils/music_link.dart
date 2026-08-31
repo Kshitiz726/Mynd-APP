@@ -10,12 +10,17 @@
 /// preference - handles one shape of string.
 library;
 
+import 'dart:convert';
+
 /// Where the audio comes from, which decides how it can be played.
 ///
 /// This is the whole reason the two providers are not interchangeable:
 /// YouTube can be embedded and played inside the app, Spotify cannot. See
 /// [MusicLink.playsInApp].
-enum MusicProvider { spotify, youtube }
+/// - [stream] is a direct audio URL: an mp3, an m4a, an HLS manifest, an
+///   internet-radio endpoint. It is the only provider that plays as pure
+///   audio, with no video surface anywhere, because it IS just audio.
+enum MusicProvider { spotify, youtube, stream }
 
 /// A link we recognised, broken into its parts.
 class MusicLink {
@@ -43,7 +48,19 @@ class MusicLink {
   /// Web Playback SDK needs EME/Widevine and is unsupported in a webview, and
   /// the App Remote SDK is a remote control for the Spotify app rather than a
   /// source of audio. So a Spotify link can only ever be handed over.
-  bool get playsInApp => provider == MusicProvider.youtube;
+  bool get playsInApp => provider != MusicProvider.spotify;
+
+  /// Whether this plays with no video surface at all.
+  ///
+  /// Only a direct audio URL can. YouTube's API Terms require their embedded
+  /// player to stay visible and unobscured, so a YouTube link always brings a
+  /// picture with it however much we would rather it did not.
+  bool get audioOnly => provider == MusicProvider.stream;
+
+  /// The playable URL for [MusicProvider.stream].
+  String? get streamUrl => provider == MusicProvider.stream
+      ? utf8.decode(base64Url.decode(base64Url.normalize(id)))
+      : null;
 
   /// The https form, for handing to the OS.
   Uri get webUrl => switch (provider) {
@@ -52,7 +69,29 @@ class MusicLink {
         MusicProvider.youtube => kind == 'playlist'
             ? Uri.parse('https://www.youtube.com/playlist?list=$id')
             : Uri.parse('https://www.youtube.com/watch?v=$id'),
+        MusicProvider.stream => Uri.parse(streamUrl!),
       };
+
+  /// Cover art for the disc, or null where the provider does not give us one
+  /// without an authenticated API call (Spotify).
+  ///
+  /// hqdefault exists for every video and never 404s to a placeholder the way
+  /// maxresdefault does for anything not uploaded in HD.
+  String? get artworkUrl => switch (provider) {
+        MusicProvider.youtube when kind == 'video' =>
+          'https://img.youtube.com/vi/$id/hqdefault.jpg',
+        _ => null,
+      };
+
+  /// What to call this when there is no title. A stream's file name is the
+  /// only human-readable thing it carries.
+  String? get fileLabel {
+    final url = streamUrl;
+    if (url == null) return null;
+    final segs = Uri.tryParse(url)?.pathSegments.where((s) => s.isNotEmpty);
+    if (segs == null || segs.isEmpty) return Uri.tryParse(url)?.host;
+    return Uri.decodeComponent(segs.last);
+  }
 
   /// Rebuild from a canonical string, or null if it is not one. Used when
   /// reading back something the server or shared preferences stored.
@@ -65,6 +104,7 @@ class MusicLink {
           ? MusicLink(provider: MusicProvider.spotify, kind: parts[1], id: parts[2])
           : null,
       'youtube' => _youtube(parts[1], parts[2]),
+      'stream' => _stream(parts[1], parts[2]),
       _ => null,
     };
   }
@@ -99,6 +139,46 @@ const _youtubeShortHosts = {'youtu.be', 'www.youtu.be'};
 
 /// Hard ceiling before parsing, so a pasted essay is cheap to reject.
 const _maxInput = 400;
+
+/// Audio containers and manifests worth accepting.
+///
+/// An extension is required rather than accepting any URL: without one there
+/// is no way to tell an audio endpoint from an HTML page, and handing the
+/// player a web page produces a silent failure that looks like a bug.
+const _audioExt = {
+  'mp3', 'm4a', 'aac', 'ogg', 'oga', 'opus', 'flac', 'wav', 'weba',
+  'm3u8', 'pls',
+};
+
+MusicLink? _stream(String kind, String id) {
+  if (kind != 'audio') return null;
+  try {
+    final url = utf8.decode(base64Url.decode(base64Url.normalize(id)));
+    return _streamFromUrl(Uri.tryParse(url));
+  } catch (_) {
+    return null;
+  }
+}
+
+MusicLink? _streamFromUrl(Uri? url) {
+  if (url == null) return null;
+  if (url.scheme != 'https' && url.scheme != 'http') return null;
+  if (url.host.isEmpty) return null;
+  final segs = url.pathSegments.where((s) => s.isNotEmpty).toList();
+  if (segs.isEmpty) return null;
+  final last = segs.last.toLowerCase();
+  final dot = last.lastIndexOf('.');
+  if (dot < 0) return null;
+  if (!_audioExt.contains(last.substring(dot + 1))) return null;
+  // The query is kept: stream endpoints routinely carry a required token or
+  // bitrate selector, and dropping it would break the URL.
+  final canonical = url.toString();
+  return MusicLink(
+    provider: MusicProvider.stream,
+    kind: 'audio',
+    id: base64Url.encode(utf8.encode(canonical)).replaceAll('=', ''),
+  );
+}
 
 MusicLink? _youtube(String kind, String id) {
   if (kind == 'video' && _ytVideoId.hasMatch(id)) {
@@ -143,7 +223,8 @@ MusicLink? parseMusicLink(String? input) {
     // youtu.be/{id}. The `?si=` and `?t=` are dropped with the query.
     return parts.length == 1 ? _youtube('video', parts.first) : null;
   }
-  return null;
+  // Anything else is only interesting if it points straight at audio.
+  return _streamFromUrl(url);
 }
 
 MusicLink? _fromSpotifyUrl(Uri url) {

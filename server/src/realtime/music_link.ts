@@ -22,7 +22,7 @@
  *   https://music.youtube.com/watch?v={id}
  */
 
-export type MusicProvider = 'spotify' | 'youtube';
+export type MusicProvider = 'spotify' | 'youtube' | 'stream';
 
 export type MusicLink = {
   provider: MusicProvider;
@@ -44,6 +44,43 @@ const SPOTIFY_ID = /^[A-Za-z0-9]{16,40}$/;
 /** YouTube video ids ARE documented as 11 URL-safe characters, so pin it. */
 const YT_VIDEO_ID = /^[A-Za-z0-9_-]{11}$/;
 const YT_PLAYLIST_ID = /^[A-Za-z0-9_-]{12,42}$/;
+
+/**
+ * Audio containers and manifests worth accepting as a direct stream.
+ *
+ * An extension is required rather than accepting any URL: without one there is
+ * no way to tell an audio endpoint from an HTML page, and broadcasting a web
+ * page to a room produces a silent failure that looks like a bug.
+ */
+const AUDIO_EXT = new Set([
+  'mp3', 'm4a', 'aac', 'ogg', 'oga', 'opus', 'flac', 'wav', 'weba',
+  'm3u8', 'pls',
+]);
+
+function streamFromUrl(url: URL): MusicLink | null {
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
+  if (!url.hostname) return null;
+  const segs = url.pathname.split('/').filter(Boolean);
+  if (segs.length === 0) return null;
+  const last = segs[segs.length - 1].toLowerCase();
+  const dot = last.lastIndexOf('.');
+  if (dot < 0) return null;
+  if (!AUDIO_EXT.has(last.slice(dot + 1))) return null;
+  // The query is kept: stream endpoints routinely carry a required token or
+  // bitrate selector, and dropping it would break the URL.
+  const id = Buffer.from(url.toString(), 'utf8').toString('base64url');
+  return { provider: 'stream', kind: 'audio', id, uri: `stream:audio:${id}` };
+}
+
+function streamFromId(kind: string, id: string): MusicLink | null {
+  if (kind !== 'audio') return null;
+  try {
+    const url = new URL(Buffer.from(id, 'base64url').toString('utf8'));
+    return streamFromUrl(url);
+  } catch {
+    return null;
+  }
+}
 
 const SPOTIFY_HOSTS = new Set(['open.spotify.com', 'play.spotify.com']);
 const YOUTUBE_HOSTS = new Set([
@@ -82,6 +119,7 @@ export function parseCanonical(canonical: unknown): MusicLink | null {
   const [provider, kind, id] = parts;
   if (provider === 'spotify') return spotify(kind, id);
   if (provider === 'youtube') return youtube(kind, id);
+  if (provider === 'stream') return streamFromId(kind, id);
   return null;
 }
 
@@ -115,7 +153,8 @@ export function parseMusicLink(input: unknown): MusicLink | null {
     // youtu.be/{id}. The `?si=` share token and `?t=` are dropped with the query.
     return parts.length === 1 ? youtube('video', parts[0]) : null;
   }
-  return null;
+  // Anything else is only interesting if it points straight at audio.
+  return streamFromUrl(url);
 }
 
 function fromSpotifyUrl(url: URL): MusicLink | null {

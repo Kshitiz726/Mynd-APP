@@ -40,10 +40,13 @@ class FocusMusicStore extends ChangeNotifier {
           title: p.getString(_kTitle),
           changedBy: '',
           changedAt: DateTime.now(),
-          // A restored track starts from the top. There is no room to line up
-          // with, and resuming a solo session mid-track hours later would be
-          // stranger than starting it over.
-          startedAt: DateTime.now(),
+          // Null on purpose. startedAt is the ROOM's shared clock, and
+          // positionAt() measures from it - so setting it here made a solo
+          // session seek to "however long ago you picked this", which grows
+          // without bound and silently lands past the end of any track shorter
+          // than the session. A solo track has nobody to line up with and
+          // starts at the beginning.
+          startedAt: null,
         );
         notifyListeners();
       }
@@ -66,7 +69,7 @@ class FocusMusicStore extends ChangeNotifier {
     // stored raw, so a share link's `?si=` tracking token never lands on disk.
     final uri = normaliseMusicUri(raw);
     if (uri == null) {
-      error = 'paste a YouTube or Spotify link';
+      error = 'paste an audio, YouTube or Spotify link';
       notifyListeners();
       return;
     }
@@ -76,7 +79,7 @@ class FocusMusicStore extends ChangeNotifier {
       title: title,
       changedBy: '',
       changedAt: DateTime.now(),
-      startedAt: DateTime.now(),
+      startedAt: null,
     );
     notifyListeners();
     await _persist(uri, title);

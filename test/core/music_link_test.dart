@@ -84,6 +84,48 @@ void main() {
         'https://open.spotify.com/track/$spotifyId');
   });
 
+  group('direct audio URLs are the audio-only provider', () {
+    const mp3 = 'https://ice.somafm.com/groovesalad-128.mp3';
+    test('an mp3 URL round-trips to its own URL', () {
+      final l = parseMusicLink(mp3)!;
+      expect(l.provider, MusicProvider.stream);
+      expect(l.streamUrl, mp3);
+      expect(l.audioOnly, isTrue);
+      expect(l.playsInApp, isTrue);
+      expect(normaliseMusicUri(l.uri), l.uri, reason: 'not idempotent');
+    });
+
+    test('the containers people actually paste', () {
+      for (final u in [
+        'https://example.com/track.m4a',
+        'https://example.com/track.aac',
+        'https://example.com/a/b/track.ogg',
+        'https://example.com/track.opus',
+        'https://example.com/track.flac',
+        'https://example.com/live.m3u8',
+        'http://example.com/station.pls',
+        'https://example.com/TRACK.MP3',
+      ]) {
+        expect(parseMusicLink(u)?.provider, MusicProvider.stream, reason: u);
+      }
+    });
+
+    test('a required query token survives, unlike a Spotify share token', () {
+      const withToken = 'https://cdn.example.com/s.mp3?token=abc123&br=320';
+      expect(parseMusicLink(withToken)!.streamUrl, withToken);
+    });
+
+    test('only YouTube and Spotify bring a picture', () {
+      expect(parseMusicLink(mp3)!.audioOnly, isTrue);
+      expect(parseMusicLink('https://youtu.be/$videoId')!.audioOnly, isFalse);
+      expect(parseMusicLink('spotify:track:$spotifyId')!.audioOnly, isFalse);
+    });
+
+    test('a label falls back to the file name', () {
+      expect(parseMusicLink(mp3)!.fileLabel, 'groovesalad-128.mp3');
+    });
+  });
+
   group('rejects', () {
     final bad = {
       'another host': 'https://evil.example/playlist/$spotifyId',
@@ -104,6 +146,13 @@ void main() {
       'empty': '',
       'null': null,
       'absurdly long': 'https://open.spotify.com/playlist/${'x' * 5000}',
+      // No extension means no way to tell audio from an HTML page, and
+      // handing the player a web page fails silently.
+      'a web page': 'https://example.com/some/article',
+      'a bare host': 'https://example.com',
+      'a video file': 'https://example.com/clip.mp4',
+      'an image': 'https://example.com/cover.jpg',
+      'ftp scheme': 'ftp://example.com/track.mp3',
     };
     bad.forEach((name, input) {
       test(name, () => expect(normaliseMusicUri(input), isNull));
