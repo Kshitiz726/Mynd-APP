@@ -209,33 +209,47 @@ class FocusActiveScreen extends StatelessWidget {
     // The scene: a colourful full-screen gradient (recolours live when the
     // ambience is switched), a soft dark scrim so white text stays legible,
     // then the timer and controls on top.
-    final body = !onScene
-        ? content
-        : Stack(
-            fit: StackFit.expand,
-            children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 500),
-                curve: Curves.easeInOut,
-                decoration: BoxDecoration(gradient: ambience.gradient),
-              ),
-              Positioned.fill(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.black.withValues(alpha: 0.22),
-                        Colors.black.withValues(alpha: 0.4),
-                      ],
-                    ),
-                  ),
+    //
+    // Always this Stack, with these same three children, even when there is no
+    // scene at all. It used to swap between `content` on its own and a Stack
+    // wrapping it, and that swap moved the whole subtree: a moved subtree is a
+    // rebuilt one, so every State beneath it was disposed - including the
+    // music player's, which tore its webview down and cut the audio. Picking a
+    // scene must not be able to stop the music, so the shape stays fixed and
+    // only the paint changes. The same reason the scrim is faded rather than
+    // removed.
+    final body = Stack(
+      fit: StackFit.expand,
+      children: [
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 500),
+          curve: Curves.easeInOut,
+          decoration: BoxDecoration(
+            color: onScene ? null : c.bg,
+            gradient: onScene ? ambience.gradient : null,
+          ),
+        ),
+        // Never allowed to take a tap: it covers the whole screen even at zero
+        // opacity, so without this the controls beneath it would be dead.
+        IgnorePointer(
+          child: AnimatedOpacity(
+            duration: const Duration(milliseconds: 500),
+            curve: Curves.easeInOut,
+            opacity: onScene ? 1 : 0,
+            child: const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0x38000000), Color(0x66000000)],
                 ),
               ),
-              content,
-            ],
-          );
+            ),
+          ),
+        ),
+        content,
+      ],
+    );
 
     // Back press ends the session (with a confirm) only while this is the
     // focused tab; everywhere else the gesture behaves normally. The back
