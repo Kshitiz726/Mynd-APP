@@ -4,35 +4,36 @@ import 'package:provider/provider.dart';
 import '../../../core/services/focus_music_store.dart';
 import '../../../providers/focus_provider.dart';
 import '../../../providers/focus_room_provider.dart';
-import 'music_player_card.dart';
+import 'music_bar.dart';
 
 /// The room's music: shared state on the server, so everyone sees and hears the
-/// same thing. A YouTube link genuinely plays together, lined up on the
-/// server's clock; a Spotify link can only be a shared name.
+/// same thing. Setting a link, pausing and the playhead all go through the
+/// server and come back to every device, which is what makes it one room
+/// listening rather than several people listening to the same song.
 class RoomMusicStrip extends StatelessWidget {
   const RoomMusicStrip({super.key});
 
   @override
   Widget build(BuildContext context) {
     final room = context.watch<FocusRoomProvider>();
-    return MusicPlayerCard(
+    return MusicBar(
       music: room.music,
       error: room.musicError,
       onSet: (v) => room.setMusic(v),
+      // A room's pause is everybody's. There is no shared room timer to hang it
+      // off - each person's clock is their own - so the bar keeps its own
+      // pause here, and that one press reaches every device.
       onPausedChanged: room.setMusicPaused,
-      emptyHint: 'paste an audio or YouTube link for the room',
-      // Said plainly rather than buried in a help sheet. People WILL notice
-      // they are out of step with a friend, and being told up front beats
-      // discovering it and assuming it is broken.
-      handOffNote: 'everyone opens this in their own Spotify, so you will drift',
     );
   }
 }
 
-/// The solo session's copy: same card, same link handling, stored on the device
+/// The solo session's copy: same bar, same link handling, stored on the device
 /// because there is nobody to agree with.
 class SoloMusicStrip extends StatefulWidget {
-  const SoloMusicStrip({super.key});
+  const SoloMusicStrip({super.key, this.onScene = false});
+
+  final bool onScene;
 
   @override
   State<SoloMusicStrip> createState() => _SoloMusicStripState();
@@ -59,16 +60,14 @@ class _SoloMusicStripState extends State<SoloMusicStrip> {
   }
 
   @override
-  Widget build(BuildContext context) => MusicPlayerCard(
+  Widget build(BuildContext context) => MusicBar(
         music: _store.music,
         error: _store.error,
         onSet: (v) => _store.set(v),
-        // The music follows the timer: pausing to take a call should not leave
-        // the track playing on, and resuming should not need a second tap.
+        onScene: widget.onScene,
+        // The session's pause is the transport. Pausing to take a call should
+        // not leave the track playing, resuming should not need a second tap,
+        // and there is deliberately no second play button to disagree with it.
         sessionRunning: context.watch<FocusProvider>().isRunning,
-        // No room-wide pause in a solo session: the player's own controls are
-        // the whole story, and there is nobody to pause it for.
-        emptyHint: 'paste an audio or YouTube link to play while you work',
-        handOffNote: 'opens in your Spotify app',
       );
 }

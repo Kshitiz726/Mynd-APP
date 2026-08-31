@@ -115,6 +115,11 @@ class FocusActiveScreen extends StatelessWidget {
                     onScene: onScene,
                     matching: focus.bodyDoubling && focus.searchingPartner,
                   ),
+                  const SizedBox(height: AppSpacing.lg),
+                  // With the timer, not in a card of its own at the bottom.
+                  // The music is part of the session, and its pause is the
+                  // session's pause, so it belongs where the clock is.
+                  SoloMusicStrip(onScene: onScene),
                   const Spacer(),
                   const SizedBox(height: AppSpacing.lg),
                   // Switch the scene without leaving: drag the thumb across.
@@ -154,11 +159,6 @@ class FocusActiveScreen extends StatelessWidget {
                       ),
                     ],
                   ),
-                  // Between the timer controls and the secondary actions: reachable
-                  // without hunting, but below the thing the session is actually
-                  // about. Same widget the room uses, so the two cannot drift apart.
-                  const SizedBox(height: AppSpacing.md),
-                  const SoloMusicStrip(),
                   const SizedBox(height: AppSpacing.md),
                   _ActionButton(
                     label: 'park a thought',

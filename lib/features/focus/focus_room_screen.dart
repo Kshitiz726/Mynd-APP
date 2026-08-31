@@ -250,10 +250,10 @@ class _FocusRoomScreenState extends State<FocusRoomScreen> {
                       ],
                     ),
                   ),
-                  // Under the controls, not beside them. A YouTube link puts a
-                  // real player here, which is the largest thing on the screen
-                  // after the timer, so it sits below the controls rather than
-                  // above them: the session is what people came for.
+                  // One line under the controls: what the room is playing and
+                  // a pause that reaches everyone. There is no player to see -
+                  // the audio comes out of Mynd and the screen stays about the
+                  // session, which is what people came for.
                   const Padding(
                     padding: EdgeInsets.symmetric(horizontal: AppSpacing.screenH),
                     child: RoomMusicStrip(),
