@@ -83,3 +83,4 @@ beta_testers.txt
 # themselves a paid entitlement.
 webhooki_secret.txt
 *_secret.txt
+.build-config/
