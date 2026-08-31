@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../core/services/api_client.dart';
 import '../core/services/api_config.dart';
 import '../core/services/realtime_service.dart';
+import '../core/services/music_title.dart';
 import '../core/utils/music_link.dart';
 import '../models/room_music.dart';
 import '../core/services/voice_service.dart';
@@ -63,7 +64,7 @@ class FocusRoomProvider extends ChangeNotifier {
   /// Normalised here so a bad paste is refused against the text field
   /// immediately rather than travelling to the server and coming back. The
   /// server normalises again regardless; this is convenience, not the check.
-  void setMusic(String? raw, {String? title}) {
+  Future<void> setMusic(String? raw, {String? title}) async {
     final id = activeRoomId;
     if (id == null) return;
     if (raw == null) {
@@ -87,7 +88,11 @@ class FocusRoomProvider extends ChangeNotifier {
     }
     final uri = link.uri;
     musicError = null;
-    _rt.setMusic(id, uri, title: title);
+    // Looked up BEFORE broadcasting, unlike the solo store, because every
+    // set_music restamps the room's clock: patching the title in afterwards
+    // would be a second broadcast that restarted the track for everyone. One
+    // message, one start, and everybody gets the same name.
+    _rt.setMusic(id, uri, title: title ?? await fetchMusicTitle(link));
   }
 
   /// Pause or resume for everyone. The server owns the playhead arithmetic, so

@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../models/room_music.dart';
 import '../utils/music_link.dart';
+import 'music_title.dart';
 
 /// The music a solo focus session is playing.
 ///
@@ -49,6 +50,10 @@ class FocusMusicStore extends ChangeNotifier {
           startedAt: null,
         );
         notifyListeners();
+        // Anything saved before titles existed, or saved while offline, has
+        // no name yet. Filling it in on load means an existing listener is not
+        // stuck looking at "Video . vnHTrx..." until they happen to re-paste.
+        if (_music!.title == null) await _fillInTitle(uri);
       }
     } catch (e) {
       // A cache that will not load is not worth failing a focus session over.
@@ -57,6 +62,11 @@ class FocusMusicStore extends ChangeNotifier {
   }
 
   /// Set what this session plays. Pass null to clear.
+  ///
+  /// The name is looked up afterwards rather than before, so pressing "set it"
+  /// starts the music immediately: solo there is nobody to agree with, so a
+  /// label that arrives a moment late costs nothing, and waiting on a network
+  /// round trip to hear anything would cost a lot.
   Future<void> set(String? raw, {String? title}) async {
     if (raw == null) {
       _music = null;
@@ -83,6 +93,28 @@ class FocusMusicStore extends ChangeNotifier {
     );
     notifyListeners();
     await _persist(uri, title);
+    if (title == null) await _fillInTitle(uri);
+  }
+
+  /// Replace the id-based label with the track's real name once we know it.
+  ///
+  /// Guarded on the uri still being the current one: the lookup is slower than
+  /// somebody changing their mind, and stamping a stale title onto whatever is
+  /// playing now would be worse than no title at all.
+  Future<void> _fillInTitle(String uri) async {
+    final link = MusicLink.parse(uri);
+    if (link == null) return;
+    final name = await fetchMusicTitle(link);
+    if (name == null || _music?.uri != uri) return;
+    _music = RoomMusic(
+      uri: uri,
+      title: name,
+      changedBy: '',
+      changedAt: _music!.changedAt,
+      startedAt: null,
+    );
+    notifyListeners();
+    await _persist(uri, name);
   }
 
   Future<void> _persist(String? uri, String? title) async {

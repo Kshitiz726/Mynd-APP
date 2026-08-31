@@ -93,6 +93,12 @@ class _MusicBarState extends State<MusicBar> {
   YoutubeError _ytError = YoutubeError.none;
   Duration _duration = Duration.zero;
 
+  /// The name the player itself reports, used only when the lookup that runs
+  /// on paste came back with nothing (no signal at the time, say). Display
+  /// only: it is whatever this device's player says, so it is never written
+  /// back to a room where it would race with everyone else's.
+  String _ytTitle = '';
+
   /// The audio-only engine, used for direct stream URLs and device files.
   ///
   /// Separate from the YouTube controller rather than hidden behind one
@@ -223,6 +229,7 @@ class _MusicBarState extends State<MusicBar> {
       _commandedPlay = null;
       _ytError = YoutubeError.none;
       _duration = Duration.zero;
+      _ytTitle = '';
       return;
     }
 
@@ -235,6 +242,7 @@ class _MusicBarState extends State<MusicBar> {
     // a working track.
     _ytError = YoutubeError.none;
     _duration = Duration.zero;
+    _ytTitle = '';
 
     // Where the room already is, not the beginning. Someone joining twenty
     // minutes in hears what everybody else hears.
@@ -287,10 +295,13 @@ class _MusicBarState extends State<MusicBar> {
         // restarting on each of those would fight the seek.
         final justEnded = v.playerState == PlayerState.ended && !wasEnded;
         wasEnded = v.playerState == PlayerState.ended;
-        if (v.error != _ytError || v.metaData.duration != _duration) {
+        if (v.error != _ytError ||
+            v.metaData.duration != _duration ||
+            v.metaData.title != _ytTitle) {
           setState(() {
             _ytError = v.error;
             _duration = v.metaData.duration;
+            _ytTitle = v.metaData.title;
           });
         }
         if (justEnded) _loopAgain();
@@ -536,7 +547,7 @@ class _MusicBarState extends State<MusicBar> {
             const SizedBox(width: 8),
             Flexible(
               child: Text(
-                music?.displayLabel ?? 'add music',
+                _label(music),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
@@ -550,6 +561,19 @@ class _MusicBarState extends State<MusicBar> {
         ),
       ),
     );
+  }
+
+  /// What to call the track.
+  ///
+  /// The stored title first, because that is the one a room agrees on and the
+  /// one that survives a restart. The player's own is a fallback for when the
+  /// lookup failed, and the id-based label the last resort.
+  String _label(RoomMusic? music) {
+    if (music == null) return 'add music';
+    final stored = music.title;
+    if (stored != null && stored.isNotEmpty) return stored;
+    if (_ytTitle.isNotEmpty) return _ytTitle;
+    return music.displayLabel;
   }
 
   /// The one line worth saying under the pill, or nothing.
