@@ -17,11 +17,16 @@ import profileRouter from './routes/profile.js';
 import consentRouter from './routes/consent.js';
 import accountRouter from './routes/account.js';
 import coachRouter from './routes/coach.js';
-import { authRouter } from './auth.js';
+import { authRouter, requireAuth } from './auth.js';
 import { sessionsRouter } from './routes/sessions.js';
 import { roomsRouter } from './routes/rooms.js';
 import { bodyDoublingRouter } from './routes/bodydoubling.js';
 import { billingRouter, billingWebhookHandler } from './routes/billing.js';
+
+// Stamped once at import, so /version reports when this process came up. A
+// redeploy of an unchanged commit still moves this, which is the only way to
+// tell "deployed again" from "never deployed".
+const STARTED_AT = new Date().toISOString();
 
 const app = express();
 
@@ -50,6 +55,23 @@ app.use(express.json({ limit: '2mb' }));
 // off - a map of where to push. The same detail is still available to an
 // operator, just not to the internet: it goes to the startup log instead.
 app.get('/health', (_req, res) => res.json({ ok: true }));
+
+// Which revision is actually serving.
+//
+// Behind auth on purpose, and the reason is the same one that stripped
+// /health above: this repo is public, so publishing the exact commit to
+// anonymous callers hands anyone the precise source running in production -
+// a map straight to any unpatched dependency. An operator with a token can
+// have it; the internet cannot.
+//
+// Render sets RENDER_GIT_COMMIT itself, so this cannot drift from what was
+// deployed the way a hand-maintained version string does. Without it, "did
+// the deploy land?" was only answerable by guessing from behaviour, and
+// during the 1.0.0+5 release it was not answerable at all.
+app.get('/version', requireAuth, (_req, res) => res.json({
+  commit: (process.env.RENDER_GIT_COMMIT ?? 'local').slice(0, 7),
+  startedAt: STARTED_AT,
+}));
 
 // Dev-only token minting, mounted before the DB guard so it always resolves.
 if (!config.isProd) app.use('/api', devRoutes);
