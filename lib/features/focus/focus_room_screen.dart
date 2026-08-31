@@ -10,7 +10,7 @@ import '../../core/utils/om_icons.dart';
 import '../../core/utils/toast.dart';
 import '../../models/focus/room_participant.dart';
 import '../../providers/focus_room_provider.dart';
-import 'widgets/room_music_strip.dart';
+import 'widgets/focus_music.dart';
 import '../../widgets/om_avatar.dart';
 import '../../widgets/om_back_button.dart';
 import '../../widgets/om_tappable.dart';
@@ -250,9 +250,10 @@ class _FocusRoomScreenState extends State<FocusRoomScreen> {
                       ],
                     ),
                   ),
-                  // Under the controls, not beside them: the room's music is context,
-                  // not something anyone is here to operate, and it must not compete
-                  // with the timer for attention.
+                  // Under the controls, not beside them. A YouTube link puts a
+                  // real player here, which is the largest thing on the screen
+                  // after the timer, so it sits below the controls rather than
+                  // above them: the session is what people came for.
                   const Padding(
                     padding: EdgeInsets.symmetric(horizontal: AppSpacing.screenH),
                     child: RoomMusicStrip(),

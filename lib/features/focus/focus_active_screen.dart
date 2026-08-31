@@ -7,7 +7,7 @@ import '../../core/utils/haptics.dart';
 import '../../core/utils/om_icons.dart';
 import '../../models/focus_ambience.dart';
 import '../../providers/focus_provider.dart';
-import 'widgets/room_music_strip.dart';
+import 'widgets/focus_music.dart';
 import '../../providers/nav_provider.dart';
 import '../../providers/task_provider.dart';
 import '../../widgets/om_avatar.dart';
