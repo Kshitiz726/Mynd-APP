@@ -1,11 +1,20 @@
 <!--
-  The status bar icon for reminders.
+  The status bar icon for reminders: the Mynd mark, not a bell.
 
   Android masks notification icons to a single colour, so the launcher icon
   cannot do this job: handed a full-colour adaptive icon it flattens the whole
-  square, which is why reminders were arriving under an empty white box. This
-  is a plain white bell on transparency, which is the only thing that survives
-  the mask.
+  square, which is why reminders once arrived under an empty white box. Only a
+  white-on-transparent silhouette survives the mask.
+
+  The mark is monoline, so it is drawn as a STROKE rather than a filled
+  silhouette. Filling it would have closed up the teardrop in the middle at
+  24dp and left an unreadable blob; stroking keeps the counter open at the size
+  this is actually seen at.
+
+  The filename is deliberately unchanged. `ic_notification` is looked up by
+  string at runtime and is held against the release resource shrinker by
+  res/raw/keep.xml - renaming this file without editing that one produces a
+  release-only app that never renders its first frame.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
@@ -14,6 +23,10 @@
     android:viewportHeight="24"
     android:tint="#FFFFFFFF">
     <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M12,22c1.1,0 2,-0.9 2,-2h-4c0,1.1 0.9,2 2,2zM18,16v-5c0,-3.07 -1.64,-5.64 -4.5,-6.32L13.5,4c0,-0.83 -0.67,-1.5 -1.5,-1.5s-1.5,0.67 -1.5,1.5v0.68C7.63,5.36 6,7.92 6,11v5l-2,2v1h16v-1l-2,-2z"/>
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2.1"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M5.6,17.4 L5.6,11.6 C5.6,9.0 7.2,7.2 9.3,7.2 C11.2,7.2 12,9.0 12,11.4 C12,13.7 10.6,15.3 10.6,16.5 C10.6,17.4 11.2,18.0 12,18.0 C12.8,18.0 13.4,17.4 13.4,16.5 C13.4,15.3 12,13.7 12,11.4 C12,9.0 12.8,7.2 14.7,7.2 C16.8,7.2 18.4,9.0 18.4,11.6 L18.4,17.4"/>
 </vector>
