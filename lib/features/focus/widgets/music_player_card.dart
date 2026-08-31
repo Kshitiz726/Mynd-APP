@@ -238,6 +238,8 @@ class _MusicPlayerCardState extends State<MusicPlayerCard> {
       // A device file is read straight off disk; a stream is fetched. Same
       // engine either way, so everything downstream is identical.
       final path = link.filePath;
+      // The engine repeats it for us, so there is no gap and no state to keep.
+      await player.setReleaseMode(ap.ReleaseMode.loop);
       await player.setSource(
           path != null ? ap.DeviceFileSource(path) : ap.UrlSource(link.streamUrl!));
       if (at != null && at > Duration.zero) await player.seek(at);
@@ -336,11 +338,22 @@ class _MusicPlayerCardState extends State<MusicPlayerCard> {
           strictRelatedVideos: true,
           // youtube-nocookie.com: no cookie is set unless playback starts.
           privacyEnhancedMode: true,
+          // Repeat rather than fall silent. This flag is what wraps a
+          // playlist round to its first video; a single video is handled by
+          // _loopAgain below, because the IFrame API only honours loop for a
+          // lone video when it was given as a one-item playlist, which is not
+          // how loadVideoById works.
+          loop: true,
         ),
       );
       _sub = _yt!.stream.listen((v) {
         if (!mounted) return;
         final d = v.metaData.duration;
+        // Only the transition into ended, never the state sitting there: the
+        // stream re-emits whenever anything on the value changes, and
+        // restarting on each of those would fight the seek.
+        final justEnded =
+            v.playerState == PlayerState.ended && _state != PlayerState.ended;
         if (v.error != _ytError || v.playerState != _state || d != _duration) {
           setState(() {
             _ytError = v.error;
@@ -348,6 +361,7 @@ class _MusicPlayerCardState extends State<MusicPlayerCard> {
             _duration = d;
           });
         }
+        if (justEnded) _loopAgain();
       });
       _posSub = _yt!.videoStateStream.listen((v) {
         // Only when it moves a whole second: the player reports every 100ms,
@@ -386,6 +400,30 @@ class _MusicPlayerCardState extends State<MusicPlayerCard> {
     _startDriftCorrection();
   }
 
+  /// Play the finished track again from the top.
+  ///
+  /// A focus session outlasts any one song, and silence twenty minutes in is
+  /// worse than hearing the same track twice - so a track repeats until
+  /// somebody chooses a different one. Nothing has to stop the loop: setting a
+  /// new link comes through _sync with a new uri and loads over the top of it.
+  void _loopAgain() {
+    final yt = _yt;
+    if (yt == null || _refused) return;
+    // Whatever was holding the music silent still holds. A track cannot
+    // normally reach the end while paused, but a race between the room's stop
+    // and the last second of a track should not restart it.
+    if (!widget.sessionRunning || _pausedByHand) return;
+    if (widget.music?.paused ?? false) return;
+    // A playlist wraps on its own (loop is set on the player). Seeking to zero
+    // here would instead trap everyone on the last video forever.
+    if (widget.music?.link?.kind != 'video') return;
+    debugPrint('[focus-music] track ended, going round again');
+    _quietly(() async {
+      await yt.seekTo(seconds: 0, allowSeekAhead: true);
+      await yt.playVideo();
+    });
+  }
+
   /// Run a player command without letting its failure become an unhandled
   /// async error.
   ///
@@ -419,7 +457,14 @@ class _MusicPlayerCardState extends State<MusicPlayerCard> {
       if (music.link?.kind != 'video') return;
       try {
         final actual = await yt.currentTime;
-        final target = music.positionAt(DateTime.now()).inSeconds.toDouble();
+        // Wrapped by the track length, because the room's playhead keeps
+        // counting up across repeats. Without this, the first loop would put
+        // the target past the end of the track and every device would be
+        // yanked back to a position that does not exist.
+        final target =
+            loopedPosition(music.positionAt(DateTime.now()), _duration)
+                .inSeconds
+                .toDouble();
         if ((actual - target).abs() > 4) {
           await yt.seekTo(seconds: target, allowSeekAhead: true);
         }
