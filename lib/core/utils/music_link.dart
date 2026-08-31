@@ -20,7 +20,11 @@ import 'dart:convert';
 /// - [stream] is a direct audio URL: an mp3, an m4a, an HLS manifest, an
 ///   internet-radio endpoint. It is the only provider that plays as pure
 ///   audio, with no video surface anywhere, because it IS just audio.
-enum MusicProvider { spotify, youtube, stream }
+/// - [file] is an audio file on this device. Solo only, and deliberately never
+///   sent to a room: a local path is meaningless on someone else's phone and
+///   broadcasting one would leak the owner's filesystem layout - and often
+///   their name - to every participant.
+enum MusicProvider { spotify, youtube, stream, file }
 
 /// A link we recognised, broken into its parts.
 class MusicLink {
@@ -50,17 +54,29 @@ class MusicLink {
   /// source of audio. So a Spotify link can only ever be handed over.
   bool get playsInApp => provider != MusicProvider.spotify;
 
+  /// Whether this can be shared with a room. A device file cannot.
+  bool get shareable => provider != MusicProvider.file;
+
   /// Whether this plays with no video surface at all.
   ///
   /// Only a direct audio URL can. YouTube's API Terms require their embedded
   /// player to stay visible and unobscured, so a YouTube link always brings a
   /// picture with it however much we would rather it did not.
-  bool get audioOnly => provider == MusicProvider.stream;
+  bool get audioOnly =>
+      provider == MusicProvider.stream || provider == MusicProvider.file;
 
-  /// The playable URL for [MusicProvider.stream].
-  String? get streamUrl => provider == MusicProvider.stream
-      ? utf8.decode(base64Url.decode(base64Url.normalize(id)))
-      : null;
+  /// The playable URL for [MusicProvider.stream], or the local path for
+  /// [MusicProvider.file]. Both are base64url encoded in the canonical form so
+  /// the `{provider}:{kind}:{id}` shape survives colons and slashes.
+  String? get streamUrl => switch (provider) {
+        MusicProvider.stream || MusicProvider.file =>
+          utf8.decode(base64Url.decode(base64Url.normalize(id))),
+        _ => null,
+      };
+
+  /// Local path for [MusicProvider.file].
+  String? get filePath =>
+      provider == MusicProvider.file ? streamUrl : null;
 
   /// The https form, for handing to the OS.
   Uri get webUrl => switch (provider) {
@@ -70,6 +86,7 @@ class MusicLink {
             ? Uri.parse('https://www.youtube.com/playlist?list=$id')
             : Uri.parse('https://www.youtube.com/watch?v=$id'),
         MusicProvider.stream => Uri.parse(streamUrl!),
+        MusicProvider.file => Uri.file(streamUrl!),
       };
 
   /// Cover art for the disc, or null where the provider does not give us one
@@ -83,11 +100,12 @@ class MusicLink {
         _ => null,
       };
 
-  /// What to call this when there is no title. A stream's file name is the
-  /// only human-readable thing it carries.
+  /// What to call this when there is no title. A file name is the only
+  /// human-readable thing a stream or a local file carries.
   String? get fileLabel {
     final url = streamUrl;
     if (url == null) return null;
+    if (provider == MusicProvider.file) return url.split('/').last;
     final segs = Uri.tryParse(url)?.pathSegments.where((s) => s.isNotEmpty);
     if (segs == null || segs.isEmpty) return Uri.tryParse(url)?.host;
     return Uri.decodeComponent(segs.last);
@@ -105,6 +123,7 @@ class MusicLink {
           : null,
       'youtube' => _youtube(parts[1], parts[2]),
       'stream' => _stream(parts[1], parts[2]),
+      'file' => _file(parts[1], parts[2]),
       _ => null,
     };
   }
@@ -149,6 +168,34 @@ const _audioExt = {
   'mp3', 'm4a', 'aac', 'ogg', 'oga', 'opus', 'flac', 'wav', 'weba',
   'm3u8', 'pls',
 };
+
+/// Build a link for an audio file this device already holds.
+///
+/// Not reachable from [parseMusicLink]: there is no pasted text that should
+/// ever become a local path, and accepting one would be a way to point the
+/// player at an arbitrary file. It is constructed only from the file picker.
+MusicLink? musicLinkForFile(String path) {
+  final trimmed = path.trim();
+  if (trimmed.isEmpty) return null;
+  final name = trimmed.split('/').last.toLowerCase();
+  final dot = name.lastIndexOf('.');
+  if (dot < 0 || !_audioExt.contains(name.substring(dot + 1))) return null;
+  return MusicLink(
+    provider: MusicProvider.file,
+    kind: 'audio',
+    id: base64Url.encode(utf8.encode(trimmed)).replaceAll('=', ''),
+  );
+}
+
+MusicLink? _file(String kind, String id) {
+  if (kind != 'audio') return null;
+  try {
+    return musicLinkForFile(
+        utf8.decode(base64Url.decode(base64Url.normalize(id))));
+  } catch (_) {
+    return null;
+  }
+}
 
 MusicLink? _stream(String kind, String id) {
   if (kind != 'audio') return null;

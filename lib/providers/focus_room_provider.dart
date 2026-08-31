@@ -70,12 +70,22 @@ class FocusRoomProvider extends ChangeNotifier {
       _rt.setMusic(id, null);
       return;
     }
-    final uri = normaliseMusicUri(raw);
-    if (uri == null) {
+    final link = parseMusicLink(raw);
+    if (link == null) {
       musicError = 'paste an audio, YouTube or Spotify link';
       notifyListeners();
       return;
     }
+    // A file on this phone cannot play on anyone else's, and its path would
+    // carry the owner's filesystem layout - usually including their name -
+    // to every participant. Refused here, and the server does not understand
+    // the provider either, so neither side can leak it.
+    if (!link.shareable) {
+      musicError = 'a file on your device cannot be shared with a room';
+      notifyListeners();
+      return;
+    }
+    final uri = link.uri;
     musicError = null;
     _rt.setMusic(id, uri, title: title);
   }

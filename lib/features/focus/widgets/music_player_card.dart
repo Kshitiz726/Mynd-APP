@@ -1,7 +1,7 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:audioplayers/audioplayers.dart' as ap;
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -76,6 +76,9 @@ class MusicPlayerCard extends StatefulWidget {
   @override
   State<MusicPlayerCard> createState() => _MusicPlayerCardState();
 }
+
+/// The disc, and therefore the hidden player behind it, are this wide.
+const double _discSize = 188;
 
 class _MusicPlayerCardState extends State<MusicPlayerCard> {
   YoutubePlayerController? _yt;
@@ -207,7 +210,8 @@ class _MusicPlayerCardState extends State<MusicPlayerCard> {
   }
 
   /// Start (or re-point) the audio-only engine.
-  Future<void> _loadAudio(String url, {required bool play, Duration? at}) async {
+  Future<void> _loadAudio(MusicLink link,
+      {required bool play, Duration? at}) async {
     final player = _audio ??= ap.AudioPlayer();
     if (_audioSubs.isEmpty) {
       _audioSubs.addAll([
@@ -231,7 +235,11 @@ class _MusicPlayerCardState extends State<MusicPlayerCard> {
       await player.setAudioContext(ap.AudioContextConfig(
         focus: ap.AudioContextConfigFocus.mixWithOthers,
       ).build());
-      await player.setSourceUrl(url);
+      // A device file is read straight off disk; a stream is fetched. Same
+      // engine either way, so everything downstream is identical.
+      final path = link.filePath;
+      await player.setSource(
+          path != null ? ap.DeviceFileSource(path) : ap.UrlSource(link.streamUrl!));
       if (at != null && at > Duration.zero) await player.seek(at);
       if (play) {
         await player.resume();
@@ -240,7 +248,9 @@ class _MusicPlayerCardState extends State<MusicPlayerCard> {
     } catch (e) {
       debugPrint('[focus-music] audio load failed: $e');
       if (mounted) {
-        setState(() => _audioError = "that audio link would not play");
+        setState(() => _audioError = link.filePath != null
+            ? "that file would not play"
+            : "that audio link would not play");
       }
     }
   }
@@ -305,7 +315,7 @@ class _MusicPlayerCardState extends State<MusicPlayerCard> {
       // Seek only where there is a room clock to line up with. Solo has none,
       // and seeking to a room position that does not exist is how the audio
       // ended up starting past the end of the track.
-      _loadAudio(link.streamUrl!, play: shouldPlay, at: _isRoom ? at : null);
+      _loadAudio(link, play: shouldPlay, at: _isRoom ? at : null);
       _startDriftCorrection();
       return;
     }
@@ -460,10 +470,55 @@ class _MusicPlayerCardState extends State<MusicPlayerCard> {
             if (refused)
               _Refusal(reason: _refusalReason, url: music.webUrl)
             else
-              MusicDisc(
-                artworkUrl: music?.link?.artworkUrl,
-                playing: _showAsPlaying,
-                progress: _progress,
+              SizedBox(
+                width: _discSize,
+                height: _discSize,
+                child: Stack(
+                  // Clips the player out of sight. Not decoration: see below.
+                  clipBehavior: Clip.hardEdge,
+                  alignment: Alignment.center,
+                  children: [
+                    // The YouTube player, kept mounted and playing but moved
+                    // outside the clip so nothing of it is seen.
+                    //
+                    // Laid out at full size and merely displaced, rather than
+                    // sized to zero as the usual recipe suggests: iOS
+                    // throttles or suspends media in a webview with no area,
+                    // so a 0x0 player is a player that stops playing. Painting
+                    // an opaque layer over it does not work either - iOS
+                    // composites a WKWebView in the native hierarchy, above
+                    // Flutter's own content, so the cover was simply invisible.
+                    //
+                    // This is a deliberate departure from YouTube's API Terms,
+                    // which require the embedded player to stay visible and
+                    // unobscured. Anj asked for it explicitly and repeatedly,
+                    // knowing the consequence: App Review can reject the build
+                    // and YouTube can revoke API access. Confined to this one
+                    // block so it is the first thing to undo if either
+                    // happens.
+                    if (inApp && !audioOnly)
+                      Positioned(
+                        left: -_discSize * 4,
+                        top: 0,
+                        width: _discSize,
+                        height: _discSize,
+                        child: IgnorePointer(
+                          child: YoutubePlayer(
+                            controller: _yt!,
+                            aspectRatio: 1,
+                            enableFullScreenOnVerticalDrag: false,
+                            autoFullScreen: false,
+                          ),
+                        ),
+                      ),
+                    MusicDisc(
+                      artworkUrl: music?.link?.artworkUrl,
+                      playing: _showAsPlaying,
+                      progress: _progress,
+                      size: _discSize,
+                    ),
+                  ],
+                ),
               ),
             const SizedBox(height: AppSpacing.lg),
             Text(
@@ -510,55 +565,7 @@ class _MusicPlayerCardState extends State<MusicPlayerCard> {
         ),
       );
 
-    // The YouTube player itself, kept on screen on purpose.
-    //
-    // Their API Terms require the embedded player to be visible and not
-    // obscured, and set a 200x200 minimum. Shrinking it to nothing or parking
-    // it off-screen to fake an audio-only player is the specific thing that
-    // gets API access pulled, so the disc above is the hero and this stays
-    // where it can be seen.
-    // No webview for a direct audio URL: there is nothing to show, and
-    // nothing that has to be shown.
-    if (!inApp || refused || audioOnly) return OmCard(child: content);
-
-    return OmCard(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          content,
-          Text('playing from YouTube',
-              style: TextStyle(fontSize: 10.5, color: c.text2)),
-          const SizedBox(height: AppSpacing.sm),
-          LayoutBuilder(
-            builder: (ctx, box) {
-              // Full card width, so a 16:9 video fills the frame instead of
-              // sitting in black bars. Height is floored at the 200 minimum,
-              // which only bites on the narrowest phones - there it letterboxes
-              // a little rather than dropping under the limit.
-              final w = box.maxWidth;
-              final h = math.max(200.0, w * 9 / 16);
-              return ClipRRect(
-                borderRadius: const BorderRadius.vertical(
-                    bottom: Radius.circular(AppRadius.card)),
-                child: SizedBox(
-                  width: w,
-                  height: h,
-                  // Display-only: every control belongs to the card above.
-                  child: IgnorePointer(
-                    child: YoutubePlayer(
-                      controller: _yt!,
-                      aspectRatio: w / h,
-                      enableFullScreenOnVerticalDrag: false,
-                      autoFullScreen: false,
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-        ],
-      ),
-    );
+    return OmCard(child: content);
   }
 
   /// True when the card should look like it is playing.
@@ -733,6 +740,9 @@ class _MusicLinkSheet extends StatefulWidget {
 class _MusicLinkSheetState extends State<_MusicLinkSheet> {
   final _controller = TextEditingController();
 
+  /// Errors from picking, kept apart from the paste field's own error.
+  String? _pickError;
+
   /// Live feedback while typing, so a wrong paste is obvious before submitting.
   MusicLink? get _preview => parseMusicLink(_controller.text);
 
@@ -745,6 +755,25 @@ class _MusicLinkSheetState extends State<_MusicLinkSheet> {
   void _submit(String value) {
     widget.onSet(value);
     Navigator.of(context).pop();
+  }
+
+  Future<void> _pickFile() async {
+    Haptics.light();
+    try {
+      final picked = await FilePicker.pickFile(type: FileType.audio);
+      final path = picked?.path;
+      if (path == null) return; // cancelled
+      final link = musicLinkForFile(path);
+      if (link == null) {
+        if (mounted) setState(() => _pickError = "that file is not audio we can play");
+        return;
+      }
+      if (!mounted) return;
+      _submit(link.uri);
+    } catch (e) {
+      debugPrint('[focus-music] file pick failed: $e');
+      if (mounted) setState(() => _pickError = "couldn't open the file picker");
+    }
   }
 
   @override
@@ -764,9 +793,8 @@ class _MusicLinkSheetState extends State<_MusicLinkSheet> {
               style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 4),
           Text(
-            'a direct audio link (mp3, m4a, a radio stream) plays here as '
-            'audio, no video. a YouTube link plays here but has to show its '
-            'player. a Spotify link opens in Spotify.',
+            'an audio link or a file on this device plays here. a YouTube '
+            'link plays here too, sound only. a Spotify link opens in Spotify.',
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: AppSpacing.lg),
@@ -777,7 +805,7 @@ class _MusicLinkSheetState extends State<_MusicLinkSheet> {
             onChanged: (_) => setState(() {}),
             decoration: InputDecoration(
               hintText: 'paste an audio, YouTube or Spotify link',
-              errorText: widget.error,
+              errorText: widget.error ?? _pickError,
               filled: true,
               fillColor: c.surfaceAlt,
               border: OutlineInputBorder(
@@ -793,7 +821,9 @@ class _MusicLinkSheetState extends State<_MusicLinkSheet> {
               children: [
                 Icon(
                   switch (preview.provider) {
-                    MusicProvider.stream => LucideIcons.audioLines,
+                    MusicProvider.stream ||
+                    MusicProvider.file =>
+                      LucideIcons.audioLines,
                     MusicProvider.youtube => LucideIcons.play,
                     MusicProvider.spotify => LucideIcons.externalLink,
                   },
@@ -803,8 +833,10 @@ class _MusicLinkSheetState extends State<_MusicLinkSheet> {
                 const SizedBox(width: 6),
                 Text(
                   switch (preview.provider) {
-                    MusicProvider.stream => 'plays here as audio, no video',
-                    MusicProvider.youtube => 'plays here, with its player shown',
+                    MusicProvider.stream ||
+                    MusicProvider.file =>
+                      'plays here as audio, no video',
+                    MusicProvider.youtube => 'plays here as audio',
                     MusicProvider.spotify => 'opens in Spotify',
                   },
                   style: TextStyle(fontSize: 12, color: c.text2),
@@ -812,6 +844,30 @@ class _MusicLinkSheetState extends State<_MusicLinkSheet> {
               ],
             ),
           ],
+          const SizedBox(height: AppSpacing.md),
+          // The one source that always works: music this phone already holds.
+          // No link to find, no provider to satisfy, nothing to go wrong on a
+          // train with no signal.
+          OmTappable(
+            onTap: _pickFile,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 13),
+              decoration: BoxDecoration(
+                color: c.surfaceAlt,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(LucideIcons.folderOpen, size: 16, color: c.text2),
+                  const SizedBox(width: 8),
+                  Text('or choose a file on this device',
+                      style: TextStyle(fontSize: 13, color: c.text2)),
+                ],
+              ),
+            ),
+          ),
           const SizedBox(height: AppSpacing.lg),
           Row(
             children: [

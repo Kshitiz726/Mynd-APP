@@ -68,6 +68,9 @@ class RoomMusic {
     if (title != null && title!.isNotEmpty) return title!;
     final l = link;
     if (l == null) return uri;
+    // A file name beats "Audio . aHR0cH..." for anything carrying one.
+    final name = l.fileLabel;
+    if (name != null && name.isNotEmpty) return name;
     final kind = '${l.kind[0].toUpperCase()}${l.kind.substring(1)}';
     final id = l.id.length > 6 ? '${l.id.substring(0, 6)}…' : l.id;
     return '$kind · $id';

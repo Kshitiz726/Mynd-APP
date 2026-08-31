@@ -126,6 +126,46 @@ void main() {
     });
   });
 
+  group('a file on this device', () {
+    test('is audio-only, playable and NOT shareable', () {
+      final l = musicLinkForFile('/var/mobile/Containers/Data/song.mp3')!;
+      expect(l.provider, MusicProvider.file);
+      expect(l.audioOnly, isTrue);
+      expect(l.playsInApp, isTrue);
+      // The privacy rule: a local path must never reach a room.
+      expect(l.shareable, isFalse);
+      expect(l.filePath, '/var/mobile/Containers/Data/song.mp3');
+      expect(l.fileLabel, 'song.mp3');
+    });
+
+    test('round-trips through the canonical form', () {
+      final l = musicLinkForFile('/tmp/a b/c+d.m4a')!;
+      final back = MusicLink.parse(l.uri)!;
+      expect(back.filePath, '/tmp/a b/c+d.m4a');
+    });
+
+    test('only audio extensions', () {
+      expect(musicLinkForFile('/tmp/clip.mp4'), isNull);
+      expect(musicLinkForFile('/tmp/notes.txt'), isNull);
+      expect(musicLinkForFile('/tmp/noextension'), isNull);
+      expect(musicLinkForFile('   '), isNull);
+    });
+
+    // No pasted text should ever become a local path: that would be a way to
+    // point the player at an arbitrary file on the device.
+    test('cannot be produced by pasting text', () {
+      expect(parseMusicLink('/var/mobile/song.mp3'), isNull);
+      expect(parseMusicLink('file:///var/mobile/song.mp3'), isNull);
+      expect(parseMusicLink('/etc/passwd'), isNull);
+    });
+
+    test('everything else IS shareable', () {
+      expect(parseMusicLink('https://youtu.be/$videoId')!.shareable, isTrue);
+      expect(parseMusicLink('https://e.com/a.mp3')!.shareable, isTrue);
+      expect(parseMusicLink('spotify:track:$spotifyId')!.shareable, isTrue);
+    });
+  });
+
   group('rejects', () {
     final bad = {
       'another host': 'https://evil.example/playlist/$spotifyId',
