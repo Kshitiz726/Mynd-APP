@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:device_calendar/device_calendar.dart' as dc;
 import 'package:flutter/foundation.dart';
 
@@ -5,6 +7,7 @@ import '../core/services/calendar_service.dart';
 import '../core/utils/free_slots.dart';
 import '../models/energy_level.dart';
 import '../models/task.dart';
+import 'task_provider.dart';
 
 /// The app's side of the phone's calendar.
 ///
@@ -33,6 +36,14 @@ class CalendarProvider extends ChangeNotifier {
   bool _busyState = false;
   bool get busy => _busyState;
 
+  /// Whether the OS has already granted calendar access.
+  ///
+  /// Separate from [connected]: somebody can allow access and then turn sync
+  /// off, and the difference is what lets the card show a switch instead of
+  /// asking to connect all over again.
+  bool _hasAccess = false;
+  bool get hasAccess => _hasAccess;
+
   /// Busy blocks per day, so opening the same day twice does not re-read every
   /// calendar on the phone. Cleared whenever anything is written.
   final Map<String, List<Busy>> _cache = {};
@@ -40,7 +51,8 @@ class CalendarProvider extends ChangeNotifier {
   Future<void> load() async {
     _connected = await _service.enabled;
     _calendarId = await _service.writeCalendarId;
-    if (_connected) {
+    _hasAccess = await _service.hasPermission();
+    if (_hasAccess) {
       _writable = await _service.writableCalendars();
       _calendarName = _nameFor(_calendarId);
     }
@@ -65,6 +77,7 @@ class CalendarProvider extends ChangeNotifier {
     notifyListeners();
     try {
       final ok = await _service.requestPermission();
+      _hasAccess = ok;
       if (ok) _writable = await _service.writableCalendars();
       return ok;
     } finally {
@@ -105,6 +118,57 @@ class CalendarProvider extends ChangeNotifier {
 
   void invalidate() {
     _cache.clear();
+  }
+
+  // Keeping the calendar level with the timeline.
+
+  TaskProvider? _tasks;
+  Timer? _debounce;
+
+  /// Follow a TaskProvider and mirror every change out to the calendar.
+  ///
+  /// One listener rather than a call at each mutation site. Editing a block,
+  /// dragging it, ticking it off and deleting it all go through different
+  /// methods, and wiring each by hand means the one that gets added next year
+  /// is silently missing. Anything that changes the timeline ends up here.
+  void watch(TaskProvider tasks) {
+    if (identical(_tasks, tasks)) return;
+    _tasks?.removeListener(_onTasksChanged);
+    _tasks = tasks..addListener(_onTasksChanged);
+  }
+
+  void _onTasksChanged() {
+    if (!_connected) return;
+    // Debounced, because a drag notifies on every frame: pushing twenty events
+    // per frame would hammer EventKit and leave the calendar mid-drag.
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 900), _syncNow);
+  }
+
+  Future<void> _syncNow() async {
+    final t = _tasks;
+    if (t == null || !_connected) return;
+    await pushDay(t.daySchedule, t.selectedDate);
+    await _sweepDeleted(t);
+  }
+
+  /// Take events off the calendar for tasks that no longer exist.
+  ///
+  /// Judged against every task the app holds, not against the day being looked
+  /// at: a task simply moved to Thursday is still a task, and deleting its
+  /// event because it left today would be wrong in the way people notice.
+  Future<void> _sweepDeleted(TaskProvider tasks) async {
+    final alive = {for (final t in tasks.all) t.id};
+    for (final id in await _service.mappedTaskIds()) {
+      if (!alive.contains(id)) await _service.removeTask(id);
+    }
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _tasks?.removeListener(_onTasksChanged);
+    super.dispose();
   }
 
   /// Push every task placed on [day] out to the calendar.

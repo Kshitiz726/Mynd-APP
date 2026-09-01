@@ -232,7 +232,12 @@ class OurMyndApp extends StatelessWidget {
         // them, and read back into every coach reply.
         ChangeNotifierProvider(create: (_) => MemoryProvider()),
         ChangeNotifierProvider(create: (_) => MoodProvider()),
-        ChangeNotifierProvider(create: (_) => CalendarProvider()..load()),
+        // Follows the tasks, so every edit, drag, tick and delete reaches the
+        // calendar without each of those call sites having to remember.
+        ChangeNotifierProxyProvider<TaskProvider, CalendarProvider>(
+          create: (_) => CalendarProvider()..load(),
+          update: (_, tasks, prev) => (prev ?? CalendarProvider()..load())..watch(tasks),
+        ),
         // Bound to the mood rather than reading it at generation time, so a
         // line written for a rough day knows it is a rough day.
         ChangeNotifierProxyProvider<MoodProvider, MotivationProvider>(

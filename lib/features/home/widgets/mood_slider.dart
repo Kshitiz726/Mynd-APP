@@ -73,9 +73,12 @@ class _MoodSliderState extends State<MoodSlider> {
   Widget build(BuildContext context) {
     final c = context.omColors;
     final shown = _dragging ?? _stored(context);
-    final tint = shown == null
-        ? Color.lerp(c.text2, c.surfaceAlt, 0.5)!
-        : Color.lerp(c.accent, c.primary, shown.value)!;
+    // One colour for every level, not a ramp. Blending peach into periwinkle
+    // put a muddy mauve in the middle of the scale, which is both the ugliest
+    // point and the most common answer. The brand colour throughout keeps it
+    // calm, and the level is already said twice over: by how many segments are
+    // filled, and by the word next to them.
+    final tint = shown == null ? c.text2.withValues(alpha: 0.5) : c.primary;
 
     return Padding(
       padding: const EdgeInsets.only(top: AppSpacing.md),
@@ -158,7 +161,13 @@ class _MoodSliderState extends State<MoodSlider> {
   }
 }
 
-/// The rail, its filled portion, and the knob.
+/// Five segments that fill up to the level chosen.
+///
+/// A bar of steps rather than a rail with a knob. The knob was a shaded sphere
+/// with a glow, and next to flat cards it read as a control borrowed from
+/// another app: the eye went to the object instead of to the answer. Segments
+/// say the same thing with nothing to look at, and they show the scale is five
+/// wide without needing a legend.
 class _Track extends StatelessWidget {
   const _Track({required this.mood, required this.tint, required this.width});
 
@@ -166,109 +175,34 @@ class _Track extends StatelessWidget {
   final Color tint;
   final double width;
 
-  static const _rail = 12.0;
-  static const _knob = 28.0;
-
   @override
   Widget build(BuildContext context) {
     final c = context.omColors;
-    // The centre of the mood's own slot, so the knob sits over the stretch of
-    // track that selects it rather than at an edge shared with its neighbour.
-    final t = mood == null ? null : (Mood.values.indexOf(mood!) + 0.5) / 5;
+    final level = mood == null ? -1 : Mood.values.indexOf(mood!);
 
     return SizedBox(
-      height: _knob + 8,
+      height: 30,
       width: width,
-      child: Stack(
-        alignment: Alignment.centerLeft,
+      child: Row(
         children: [
-          // The rail.
-          Container(
-            height: _rail,
-            decoration: BoxDecoration(
-              color: c.text2.withValues(alpha: context.isDark ? 0.22 : 0.13),
-              borderRadius: BorderRadius.circular(_rail),
-            ),
-          ),
-          // Five notches, so the range reads as five answers rather than a
-          // continuum somebody has to be precise about.
-          Row(
-            children: [
-              for (var i = 0; i < 5; i++)
-                Expanded(
-                  child: Center(
-                    child: Container(
-                      width: 3,
-                      height: 3,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: c.text2.withValues(alpha: 0.35),
-                      ),
-                    ),
-                  ),
+          for (var i = 0; i < 5; i++) ...[
+            if (i > 0) const SizedBox(width: 5),
+            Expanded(
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 170),
+                curve: Curves.easeOutCubic,
+                // The filled segments rise slightly towards the chosen one, so
+                // the level reads at a glance without any number on it.
+                height: i <= level ? 14.0 + i : 10,
+                decoration: BoxDecoration(
+                  color: i <= level
+                      ? tint
+                      : c.text2.withValues(alpha: context.isDark ? 0.20 : 0.12),
+                  borderRadius: BorderRadius.circular(7),
                 ),
-            ],
-          ),
-          if (t != null) ...[
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              curve: Curves.easeOutCubic,
-              height: _rail,
-              width: (width * t).clamp(_knob, width),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Color.lerp(c.accent, tint, 0.35)!,
-                    tint,
-                  ],
-                ),
-                borderRadius: BorderRadius.circular(_rail),
               ),
             ),
-            AnimatedPositioned(
-              duration: const Duration(milliseconds: 180),
-              curve: Curves.easeOutCubic,
-              left: (width * t - _knob / 2).clamp(0.0, width - _knob),
-              child: _Knob(tint: tint, size: _knob),
-            ),
           ],
-        ],
-      ),
-    );
-  }
-}
-
-/// The knob, lit from the same off-centre point as the mood orbs so the two
-/// read as the same material rather than two designers' work.
-class _Knob extends StatelessWidget {
-  const _Knob({required this.tint, required this.size});
-
-  final Color tint;
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: RadialGradient(
-          center: const Alignment(-0.35, -0.4),
-          radius: 0.95,
-          colors: [
-            Color.lerp(tint, Colors.white, 0.72)!,
-            tint,
-            Color.lerp(tint, const Color(0xFF1B1033), 0.24)!,
-          ],
-          stops: const [0, 0.55, 1],
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: tint.withValues(alpha: 0.42),
-            blurRadius: 12,
-            offset: const Offset(0, 3),
-          ),
         ],
       ),
     );

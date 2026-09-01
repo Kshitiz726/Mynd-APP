@@ -270,6 +270,9 @@ class CalendarService {
   static DateTime _local(DateTime t) =>
       DateTime.fromMillisecondsSinceEpoch(t.millisecondsSinceEpoch);
 
+  /// The task ids that currently have an event on the calendar.
+  Future<Iterable<String>> mappedTaskIds() async => (await _eventMap()).keys.toList();
+
   /// Task id to calendar event id.
   Future<Map<String, String>> _eventMap() async {
     try {
