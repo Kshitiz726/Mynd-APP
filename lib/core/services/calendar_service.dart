@@ -142,11 +142,7 @@ class CalendarService {
           if (e.eventId != null && mine.contains(e.eventId)) continue;
           final s = e.start, en = e.end;
           if (s == null || en == null || !en.isAfter(s)) continue;
-          out.add(Busy(
-            DateTime(s.year, s.month, s.day, s.hour, s.minute),
-            DateTime(en.year, en.month, en.day, en.hour, en.minute),
-            title: e.title,
-          ));
+          out.add(Busy(_local(s), _local(en), title: e.title));
         }
       }
       return mergeBusy(out);
@@ -188,8 +184,8 @@ class CalendarService {
           out.add(CalendarEvent(
             id: eid,
             title: (e.title ?? 'Event').trim(),
-            start: DateTime(s.year, s.month, s.day, s.hour, s.minute),
-            end: DateTime(en.year, en.month, en.day, en.hour, en.minute),
+            start: _local(s),
+            end: _local(en),
           ));
         }
       }
@@ -262,6 +258,17 @@ class CalendarService {
       debugPrint('[calendar] delete failed: $e');
     }
   }
+
+  /// A calendar time as a plain local DateTime.
+  ///
+  /// The plugin hands back TZDateTime, and reading its year/hour/minute fields
+  /// directly gives the wall clock in ITS zone, not the phone's. That is
+  /// invisible in UTC and exactly one hour wrong in British summer time, which
+  /// is how a 4pm meeting was mirrored in as 3pm: the planner then protected
+  /// the wrong hour and left the real meeting exposed. Going through the epoch
+  /// converts properly whatever zone the event carries.
+  static DateTime _local(DateTime t) =>
+      DateTime.fromMillisecondsSinceEpoch(t.millisecondsSinceEpoch);
 
   /// Task id to calendar event id.
   Future<Map<String, String>> _eventMap() async {

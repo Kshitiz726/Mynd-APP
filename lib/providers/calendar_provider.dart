@@ -148,6 +148,11 @@ class CalendarProvider extends ChangeNotifier {
   /// comfortable lie about when it is.
   Future<List<Task>> importDay(DateTime day) async {
     final events = await _service.incomingOn(day);
+    // Counted out loud. Zero imported events and a calendar the app cannot
+    // read look identical from the outside, and the difference is the whole
+    // feature.
+    debugPrint('[calendar] ${events.length} event(s) to mirror in for '
+        '${day.year}-${day.month}-${day.day}');
     return [
       for (final e in events)
         Task(
