@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../core/services/state_sync.dart';
 import '../models/community/chat_models.dart';
 import '../models/energy_level.dart';
+import '../core/utils/free_slots.dart';
 import '../models/task.dart';
 import 'alerts_provider.dart';
 
@@ -141,6 +142,24 @@ class TaskProvider extends ChangeNotifier {
 
   BacklogFilter get filter => _filter;
   List<Task> get all => List.unmodifiable(_tasks);
+
+  /// Fold the phone's own events into [day]'s timeline.
+  ///
+  /// Replaces rather than appends: an event moved or cancelled in the calendar
+  /// has to stop showing here, and appending would leave a ghost block at the
+  /// old time that nothing in the app could ever remove.
+  ///
+  /// Nothing is persisted. The calendar is the truth for these, so they are
+  /// re-read each time the day is opened rather than kept in the app's own
+  /// store where they could drift out of date.
+  void mergeCalendar(List<Task> imported, DateTime day) {
+    _tasks.removeWhere((t) =>
+        t.id.startsWith(Task.calendarPrefix) &&
+        t.startTime != null &&
+        _isSameDay(t.startTime!, day));
+    _tasks.addAll(imported);
+    notifyListeners();
+  }
 
   int get totalToday => _tasks.where((t) => !t.isChunk && !t.isAnchor).length;
   int get doneCount => _tasks.where((t) => !t.isChunk && !t.isAnchor && t.done).length;
@@ -388,6 +407,7 @@ class TaskProvider extends ChangeNotifier {
     AlertsProvider alerts,
     String ringtone, {
     DateTime? day,
+    List<Busy> busy = const [],
   }) {
     final now = DateTime.now();
     final target = day ?? now;
@@ -456,23 +476,33 @@ class TaskProvider extends ChangeNotifier {
     var noRoom = 0;
     for (final t in items) {
       final dur = t.duration ??= const Duration(hours: 1);
-      if (cursor.add(dur).isAfter(windDown)) {
+      // Around what is already in the calendar, not through it. [busy] is
+      // empty when nothing is connected, in which case this places at the
+      // cursor and behaves exactly as it did before.
+      final slot = earliestFit(
+        from: cursor,
+        length: dur,
+        notAfter: windDown,
+        busy: busy,
+      );
+      if (slot == null) {
         // Back to the backlog, same as an overflowing manual repack. Skipping
         // rather than stopping, because a shorter task later in the list may
-        // still fit in what is left of the evening.
+        // still fit in what is left of the evening, or in a gap between
+        // meetings this one was too long for.
         t.scheduled = false;
         t.startTime = null;
         noRoom++;
         continue;
       }
-      t.startTime = cursor;
+      t.startTime = slot;
       t.scheduled = true;
       placed++;
       alerts.addLocalReminder(AppNotification(
         id: 'rem-${t.id}', kind: 'reminder', read: false,
-        payload: {'title': t.title, 'time': DateFormat.jm().format(cursor)},
+        payload: {'title': t.title, 'time': DateFormat.jm().format(slot)},
       ));
-      cursor = cursor.add(dur);
+      cursor = slot.add(dur);
     }
 
     // Sleep / wind-down bookend.

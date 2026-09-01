@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/alerts_provider.dart';
+import '../../providers/calendar_provider.dart';
 
 import '../../core/constants/app_spacing.dart';
 import '../../core/theme/app_colors.dart';
@@ -261,12 +262,20 @@ class SleepScheduleBarX extends StatelessWidget {
             // to plan on it.
             onTap: !context.watch<TaskProvider>().canPlan(context.watch<TaskProvider>().selectedDate)
                 ? null
-                : () {
+                : () async {
               final tasks = context.read<TaskProvider>();
+              final cal = context.read<CalendarProvider>();
               // Surface the goal step belonging to *this* day before packing,
               // so planning a future day schedules that day's step rather than
               // today's.
               context.read<GoalProvider>().showDay(tasks.selectedDate);
+              // Read the calendar BEFORE placing anything. Packing first and
+              // checking after would mean the timeline briefly showed work on
+              // top of a meeting, and whichever version somebody happened to
+              // look at is the one they would believe. Empty when nothing is
+              // connected, which packs exactly as it always did.
+              final busy = await cal.busyOn(tasks.selectedDate);
+              if (!context.mounted) return;
               final r = tasks.autoScheduleDay(
                 settings.wakeUpTime,
                 settings.sleepTime,
@@ -274,6 +283,7 @@ class SleepScheduleBarX extends StatelessWidget {
                 settings.selectedRingtone,
                 // Plan the day being looked at, not always today.
                 day: tasks.selectedDate,
+                busy: busy,
               );
               // Nothing fitting before bedtime looks identical to a button that
               // did not work, so say which it was.
@@ -281,10 +291,17 @@ class SleepScheduleBarX extends StatelessWidget {
                 Toast.show(
                   context,
                   r.placed == 0
-                      ? 'no room left before bed - try tomorrow'
-                      : '${r.noRoom} left over - past your bedtime',
+                      ? busy.isEmpty
+                          ? 'no room left before bed - try tomorrow'
+                          : 'your calendar is full today'
+                      : '${r.noRoom} left over - no gap big enough',
                 );
               }
+              // Push after placing, so the calendar shows what the timeline
+              // shows. Failures here are quiet by design: a task that did not
+              // reach the calendar is still planned, and twenty toasts for one
+              // refusing calendar helps nobody.
+              await cal.pushDay(tasks.daySchedule, tasks.selectedDate);
             },
             feedback: OmTapFeedback.medium,
             pressedScale: 0.95,

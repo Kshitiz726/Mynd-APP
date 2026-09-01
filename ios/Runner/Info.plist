@@ -46,6 +46,10 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Mynd reads your calendar so it never schedules work on top of a meeting, and writes the blocks you plan here back to the calendar you choose.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Mynd reads your calendar so it never schedules work on top of a meeting, and writes the blocks you plan here back to the calendar you choose.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>OurMynd uses the camera for video in focus rooms.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
