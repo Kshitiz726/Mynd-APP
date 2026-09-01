@@ -23,4 +23,5 @@ abstract final class AppRoutes {
   /// Focus and coach are started from the nav bar's (+), not browsed to.
   static const String focus = '/focus';
   static const String coach = '/coach';
+  static const String motivation = '/motivation';
 }

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../features/focus/focus_active_screen.dart';
 import '../../features/notes/notes_screen.dart';
+import '../../features/motivation/motivation_onboarding_screen.dart';
 import '../../features/paywall/paywall_screen.dart';
 import '../../features/profile/profile_screen.dart';
 import '../../features/reminders/reminders_screen.dart';
@@ -23,6 +24,7 @@ abstract final class AppRouter {
       AppRoutes.login => (_) => const LoginScreen(),
       AppRoutes.profile => (_) => const ProfileScreen(),
       AppRoutes.paywall => (_) => const PaywallScreen(),
+      AppRoutes.motivation => (_) => const MotivationOnboardingScreen(),
       AppRoutes.notes => (_) => const NotesScreen(),
       AppRoutes.reminders => (_) => const RemindersScreen(),
       // Wrapped, like every other pushed screen: it paints no background of

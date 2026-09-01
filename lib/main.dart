@@ -28,6 +28,7 @@ import 'providers/goal_provider.dart';
 import 'providers/habit_provider.dart';
 import 'providers/health_consent_provider.dart';
 import 'providers/memory_provider.dart';
+import 'providers/motivation_provider.dart';
 import 'providers/mood_provider.dart';
 import 'providers/nav_provider.dart';
 import 'providers/premium_provider.dart';
@@ -230,6 +231,12 @@ class OurMyndApp extends StatelessWidget {
         // them, and read back into every coach reply.
         ChangeNotifierProvider(create: (_) => MemoryProvider()),
         ChangeNotifierProvider(create: (_) => MoodProvider()),
+        // Bound to the mood rather than reading it at generation time, so a
+        // line written for a rough day knows it is a rough day.
+        ChangeNotifierProxyProvider<MoodProvider, MotivationProvider>(
+          create: (_) => MotivationProvider(),
+          update: (_, mood, prev) => (prev ?? MotivationProvider())..bindMood(mood),
+        ),
         // Consecutive days you showed up. Listens for the two things that
         // count rather than polling them, and reconciles a check-in that
         // happened before this provider existed (a cold start later the same

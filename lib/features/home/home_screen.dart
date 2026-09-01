@@ -8,7 +8,6 @@ import '../../core/utils/om_icons.dart';
 import '../../core/utils/toast.dart';
 import '../../models/task.dart';
 import '../../providers/goal_provider.dart';
-import '../../providers/mood_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../providers/task_provider.dart';
 import '../../widgets/om_chip.dart';
@@ -19,6 +18,8 @@ import 'widgets/mynd_hero.dart';
 import 'widgets/home_banners.dart';
 import 'widgets/home_dashboard.dart';
 import 'widgets/mood_bar.dart';
+import 'widgets/mood_slider.dart';
+import 'widgets/motivation_card.dart';
 import 'widgets/progress_bars.dart';
 import 'widgets/task_tile.dart';
 
@@ -44,28 +45,15 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  /// The check-in is asked once, on the first open of the day. [_asked] guards
-  /// against re-prompting when Home rebuilds, and the provider's own
-  /// [MoodProvider.needsCheckIn] guards against asking again tomorrow morning
-  /// if they already logged one.
-  bool _asked = false;
-
-  void _maybeAskMood(BuildContext context) {
-    if (_asked) return;
-    final mood = context.read<MoodProvider>();
-    if (!mood.needsCheckIn) return;
-    _asked = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) showMoodCheckIn(context);
-    });
-  }
+  // The check-in used to open as a modal sheet on the first launch of every
+  // day. It is now the MoodSlider under the orb instead: asking the question
+  // before somebody has reached the app interrupts whatever they opened it to
+  // do, and on the days worth noticing it is the most likely thing to be
+  // swiped away. Present and answerable in one drag beats asked and dismissed.
 
   @override
   Widget build(BuildContext context) {
     final c = context.omColors;
-    // Watched, so the prompt fires as soon as stored moods have loaded.
-    context.watch<MoodProvider>();
-    _maybeAskMood(context);
 
     return Stack(
       children: [
@@ -118,6 +106,10 @@ class _HomeScreenState extends State<HomeScreen> {
             const LowStimBanner(),
             const HomeTopBar(),
             const MyndHero(),
+            // Directly under the orb, where the eye already is on opening the
+            // app, and before anything the app has to report about you.
+            const MoodSlider(),
+            const MotivationCard(),
             const SizedBox(height: AppSpacing.xl),
 
             // What is in your head, first. Everything below this is the app
