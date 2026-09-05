@@ -118,9 +118,23 @@ class RealtimeService {
   /// that genuinely cannot be repaired.
   bool _reauthing = false;
 
+  /// The token a refresh has already been spent on.
+  ///
+  /// The concurrency guard above is not enough on its own, and the difference
+  /// only shows up in the case that matters: a refresh token the server has
+  /// finished with. Then every reconnection attempt fails, each one arrives
+  /// after the previous refresh has returned, and the app posts to /auth/refresh
+  /// on every socket retry for as long as it is open. Attempting once per token
+  /// - not once per failure - is what makes this terminate. A refresh that
+  /// works changes the token, which re-arms this for the next expiry.
+  String? _reauthedFor;
+
   Future<void> _reauth() async {
     if (_reauthing) return;
+    final token = ApiConfig.instance.authToken;
+    if (_reauthedFor == token) return;
     _reauthing = true;
+    _reauthedFor = token;
     try {
       if (!await ApiClient.instance.refreshSession()) return;
       // connect() rebuilds whenever the live socket's token is not the current
