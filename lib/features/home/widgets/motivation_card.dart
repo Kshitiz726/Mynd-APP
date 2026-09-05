@@ -7,7 +7,9 @@ import '../../../core/routes/app_routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../providers/motivation_provider.dart';
+import '../../../providers/settings_provider.dart';
 import '../../../widgets/om_tappable.dart';
+import '../../../widgets/shimmer_swipe.dart';
 import '../../motivation/motivation_card_view.dart';
 
 /// Today's line, on the way past.
@@ -22,10 +24,12 @@ class MotivationCard extends StatefulWidget {
   State<MotivationCard> createState() => _MotivationCardState();
 }
 
-class _MotivationCardState extends State<MotivationCard> {
+class _MotivationCardState extends State<MotivationCard>
+    with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // After the first frame, because refresh can reach for a location and the
     // OS prompt would otherwise land on a half-built screen.
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -37,11 +41,40 @@ class _MotivationCardState extends State<MotivationCard> {
   }
 
   @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Coming back to the app is the most reliable moment there is to have
+    // something current to say: time has passed, and usually so has the day.
+    // The provider decides whether anything has actually moved, so this costs
+    // nothing when it has not.
+    if (state == AppLifecycleState.resumed && mounted) {
+      context.read<MotivationProvider>().onResumed();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final c = context.omColors;
     final m = context.watch<MotivationProvider>();
     final line = m.latest;
     final setUp = m.settings.onboarded;
+
+    // A rewrite is in flight, or one is a beat away. Showing the previous line
+    // while a new one is being written is the worse option: it is the sentence
+    // the change was meant to replace, so the card reads as having ignored
+    // what just happened, which is the exact complaint the rewriting was added
+    // to fix.
+    //
+    // `working`, not `busy`: `busy` only covers the write itself, which starts
+    // 1200ms after the mood moves and can be over in a blink when the bank
+    // answers. That left the loading state technically correct and never once
+    // visible.
+    if (m.working && setUp) return const _LoadingCard();
 
     return Padding(
       padding: const EdgeInsets.only(top: AppSpacing.md),
@@ -86,12 +119,17 @@ class _MotivationCardState extends State<MotivationCard> {
                 child: line == null
                     ? ColoredBox(color: c.surfaceAlt)
                     : Image.network(
-                        motivationImageUrl(line.at, width: 300, height: 300),
+                        motivationImageUrl(line, width: 300, height: 300),
                         fit: BoxFit.cover,
                         loadingBuilder: (context, child, progress) =>
                             progress == null
                                 ? child
-                                : ColoredBox(color: c.surfaceAlt),
+                                : ShimmerSwipe(
+                                    enabled: !context
+                                        .read<SettingsProvider>()
+                                        .reduceMotion,
+                                    child: ColoredBox(color: c.surfaceAlt),
+                                  ),
                         errorBuilder: (_, __, ___) =>
                             ColoredBox(color: c.primaryTint),
                       ),
@@ -111,10 +149,13 @@ class _MotivationCardState extends State<MotivationCard> {
                           Expanded(
                             child: Text(
                               setUp && line != null
-                                  ? (line.place == null
-                                      ? 'today'
-                                      : 'today, in ${line.place}')
+                                  ? (line.author ?? 'today')
                                   : 'daily motivation',
+                              // The name goes here rather than under the words:
+                              // the card is 96px and a third line would either
+                              // crowd the quotation or cost it a line of its
+                              // own. Only ever a name that came with the quote,
+                              // never one inferred.
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
@@ -152,4 +193,88 @@ class _MotivationCardState extends State<MotivationCard> {
       ),
     );
   }
+}
+
+/// The card while its line is being written.
+///
+/// Deliberately the same 96px shape, the same border and the same image strip
+/// on the left as the real card, so the swap is a fill rather than a jump. A
+/// spinner in place of the card would move everything below it twice.
+class _LoadingCard extends StatelessWidget {
+  const _LoadingCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.omColors;
+    final still = context.watch<SettingsProvider>().reduceMotion;
+    final block = c.text2.withValues(alpha: context.isDark ? 0.22 : 0.16);
+
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.md),
+      // A white band over a white card is nothing at all, which is most of why
+      // this state went unseen even on the occasions it was on screen long
+      // enough to notice. The whole card sits on surfaceAlt while it loads so
+      // there is something for the highlight to travel over.
+      child: ShimmerSwipe(
+        enabled: !still,
+        strength: context.isDark ? 0.22 : 0.85,
+        period: const Duration(milliseconds: 1400),
+        child: Container(
+          height: 96,
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(AppRadius.card),
+            border: Border.all(color: c.border),
+            color: c.surfaceAlt,
+          ),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 96,
+                height: 96,
+                child: ColoredBox(color: block),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 14, 12, 14),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Standing in for the "today" label and the two lines of
+                      // the sentence, at the widths they actually occupy, so
+                      // the shape of what is coming is already on screen.
+                      _Bar(width: 54, height: 9, color: block),
+                      const SizedBox(height: 10),
+                      _Bar(width: double.infinity, height: 11, color: block),
+                      const SizedBox(height: 7),
+                      _Bar(width: 168, height: 11, color: block),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Bar extends StatelessWidget {
+  const _Bar({required this.width, required this.height, required this.color});
+
+  final double width;
+  final double height;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: width,
+        height: height,
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(height / 2),
+        ),
+      );
 }

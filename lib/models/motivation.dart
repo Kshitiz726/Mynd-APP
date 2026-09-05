@@ -127,11 +127,79 @@ class MotivationLine {
     this.category,
     this.place,
     this.source,
+    this.fromMemory = false,
+    this.imageUrl,
+    this.author,
   });
 
   final String text;
   final DateTime at;
   final MotivationCategory? category;
+
+  /// Who said it, for a quotation taken from the web.
+  ///
+  /// Null for a line the app wrote itself, and the card reads that difference:
+  /// putting a name under a sentence nobody said would be inventing an
+  /// attribution, which is worse than showing none.
+  final String? author;
+
+  /// Whether this was written from what the app knows about them rather than
+  /// from the category bank. It changes what the card is allowed to claim: a
+  /// line drawn from their own week can say so, and a generic one must not.
+  final bool fromMemory;
+
+  /// The photograph behind this line, searched on the web when it was written.
+  ///
+  /// Stored with the line rather than derived from it, so the picture is the
+  /// one that was actually chosen for these words and a rewrite gets a new one.
+  /// Null when the search found nothing, which the card handles by falling back
+  /// to a seeded random photo rather than showing a hole.
+  final String? imageUrl;
+
+  /// A copy with some fields replaced, omitted ones carried over.
+  ///
+  /// Exists because rebuilding this by hand lost a field: attaching the
+  /// photograph reconstructed every line through the constructor, and when
+  /// [author] was added the quotations arrived on screen unattributed. A
+  /// hand-written copy is a list that has to be updated every time this class
+  /// grows, and it will not be.
+  MotivationLine copyWith({
+    String? text,
+    DateTime? at,
+    MotivationCategory? category,
+    String? place,
+    String? source,
+    bool? fromMemory,
+    String? imageUrl,
+    String? author,
+  }) =>
+      MotivationLine(
+        text: text ?? this.text,
+        at: at ?? this.at,
+        category: category ?? this.category,
+        place: place ?? this.place,
+        source: source ?? this.source,
+        fromMemory: fromMemory ?? this.fromMemory,
+        imageUrl: imageUrl ?? this.imageUrl,
+        author: author ?? this.author,
+      );
+
+  /// A stable seed for the fallback picture.
+  ///
+  /// Taken from the words, not the date. Seeding on the day meant a line
+  /// rewritten because the mood changed kept the old photograph, so the card
+  /// looked identical to the one that was there a moment ago and the rewrite
+  /// read as nothing having happened. Same words, same picture; new words, new
+  /// picture.
+  String get imageSeed {
+    // FNV-1a, spelled out, because String.hashCode is not promised to be the
+    // same value in the next run and this one ends up in a URL.
+    var h = 0x811c9dc5;
+    for (final unit in text.codeUnits) {
+      h = ((h ^ unit) * 0x01000193) & 0xffffffff;
+    }
+    return h.toRadixString(36);
+  }
 
   /// The town or city the news came from, when there was one.
   final String? place;
@@ -145,6 +213,9 @@ class MotivationLine {
         if (category != null) 'category': category!.name,
         if (place != null) 'place': place,
         if (source != null) 'source': source,
+        if (fromMemory) 'fromMemory': true,
+        if (imageUrl != null) 'imageUrl': imageUrl,
+        if (author != null) 'author': author,
       };
 
   factory MotivationLine.fromJson(Map<String, dynamic> j) => MotivationLine(
@@ -153,5 +224,8 @@ class MotivationLine {
         category: MotivationCategory.byName(j['category'] as String? ?? ''),
         place: j['place'] as String?,
         source: j['source'] as String?,
+        fromMemory: j['fromMemory'] == true,
+        imageUrl: j['imageUrl'] as String?,
+        author: j['author'] as String?,
       );
 }
