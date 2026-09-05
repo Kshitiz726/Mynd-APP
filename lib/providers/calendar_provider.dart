@@ -135,12 +135,37 @@ class CalendarProvider extends ChangeNotifier {
     if (identical(_tasks, tasks)) return;
     _tasks?.removeListener(_onTasksChanged);
     _tasks = tasks..addListener(_onTasksChanged);
+    // Seeded now rather than on the first change, or the very first deletion
+    // after launch would be the one that got away: it would look like a task
+    // that had never existed instead of one that just left.
+    _knownIds = {for (final t in tasks.all) t.id};
   }
 
+  /// Every task id the app held last time it looked, so the next change can be
+  /// read as "these ones went" rather than "something moved".
+  Set<String> _knownIds = const {};
+
   void _onTasksChanged() {
+    final t = _tasks;
+    if (t == null) return;
+    final live = {for (final task in t.all) task.id};
+    final gone = _knownIds.difference(live);
+    _knownIds = live;
     if (!_connected) return;
-    // Debounced, because a drag notifies on every frame: pushing twenty events
-    // per frame would hammer EventKit and leave the calendar mid-drag.
+
+    // A deletion does not wait for the debounce, and this is the whole point of
+    // keeping the id set. The debounce exists for drags, which notify on every
+    // frame; deleting happens once, and the block has already gone from the
+    // screen by the time we get here. Anything it waits for is a window where
+    // the app says the block is gone and the calendar still shows it, which is
+    // exactly the disagreement people notice and stop trusting.
+    if (gone.isNotEmpty) {
+      _cache.clear();
+      unawaited(_service.removeTasks(gone));
+    }
+
+    // Moves and edits still coalesce: pushing twenty events per frame would
+    // hammer EventKit and leave the calendar mid-drag.
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 900), _syncNow);
   }
@@ -149,20 +174,49 @@ class CalendarProvider extends ChangeNotifier {
     final t = _tasks;
     if (t == null || !_connected) return;
     await pushDay(t.daySchedule, t.selectedDate);
-    await _sweepDeleted(t);
+    await _sweepStale(t);
   }
 
-  /// Take events off the calendar for tasks that no longer exist.
+  /// Take events off the calendar for anything that should no longer have one.
   ///
-  /// Judged against every task the app holds, not against the day being looked
-  /// at: a task simply moved to Thursday is still a task, and deleting its
-  /// event because it left today would be wrong in the way people notice.
-  Future<void> _sweepDeleted(TaskProvider tasks) async {
-    final alive = {for (final t in tasks.all) t.id};
-    for (final id in await _service.mappedTaskIds()) {
-      if (!alive.contains(id)) await _service.removeTask(id);
-    }
+  /// Deleting is not the only way a block stops being an appointment. Sending
+  /// it back to the backlog strips its time, and ticking it off means it has
+  /// already happened; neither is written by [pushDay], so before this the
+  /// event simply stayed where it was and the calendar kept showing a 3pm block
+  /// the app had stopped believing in.
+  ///
+  /// The rule is one line: the calendar holds exactly the tasks [pushDay] would
+  /// write. Anything mapped that no longer qualifies goes.
+  Future<void> _sweepStale(TaskProvider tasks) async {
+    final keep = {
+      for (final t in tasks.all)
+        if (_wantsEvent(t)) t.id,
+    };
+    final stale = [
+      for (final id in await _service.mappedTaskIds())
+        if (!keep.contains(id)) id,
+    ];
+    if (stale.isNotEmpty) await _service.removeTasks(stale);
   }
+
+  /// The single rule, exposed for tests. A drift between what gets written and
+  /// what gets swept is either a ghost event or a missing one, and neither is
+  /// visible until somebody looks at their real calendar.
+  @visibleForTesting
+  static bool wantsEvent(Task t) => _wantsEvent(t);
+
+  /// Whether this task belongs on the calendar at all.
+  ///
+  /// Deliberately says nothing about which day. A block moved to Thursday is
+  /// still an appointment, and judging it against the day on screen would
+  /// delete its event for the crime of not being today.
+  static bool _wantsEvent(Task t) =>
+      !t.isAnchor &&
+      !t.isChunk &&
+      !t.done &&
+      !t.id.startsWith(importedPrefix) &&
+      t.startTime != null &&
+      t.endTime != null;
 
   @override
   void dispose() {
@@ -180,17 +234,17 @@ class CalendarProvider extends ChangeNotifier {
     if (!_connected) return 0;
     var pushed = 0;
     for (final t in tasks) {
-      if (t.isAnchor || t.isChunk || t.done) continue;
-      if (t.id.startsWith(importedPrefix)) continue; // came FROM the calendar
-      final start = t.startTime;
-      if (start == null || !_sameDay(start, day)) continue;
-      final end = t.endTime;
-      if (end == null) continue;
+      // One rule, shared with the sweep. Two copies of "does this belong on the
+      // calendar" drift apart, and every way they can disagree is either a
+      // ghost event or a missing one.
+      if (!_wantsEvent(t)) continue;
+      final start = t.startTime!;
+      if (!_sameDay(start, day)) continue;
       final id = await _service.pushTask(
         taskId: t.id,
         title: t.title,
         start: start,
-        end: end,
+        end: t.endTime!,
       );
       if (id != null) pushed++;
     }

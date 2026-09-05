@@ -23,6 +23,17 @@ class CalendarService {
 
   final _plugin = dc.DeviceCalendarPlugin();
 
+  /// The connection and the id map, held in memory after the first read.
+  ///
+  /// Not an optimisation. Deleting one task used to cost three SharedPreferences
+  /// round trips before the event was touched, and every one of them is a
+  /// platform channel hop: the block vanished from the timeline and stayed on
+  /// the calendar long enough to look broken. These are the only writer, so the
+  /// cache cannot go stale behind our back.
+  Map<String, String>? _map;
+  bool? _enabledCache;
+  String? _calIdCache;
+
   static const _kWriteCalendar = 'om_calendar_write_id';
   static const _kEnabled = 'om_calendar_enabled';
 
@@ -75,24 +86,30 @@ class CalendarService {
   // The connection itself.
 
   Future<bool> get enabled async {
+    final hit = _enabledCache;
+    if (hit != null) return hit;
     try {
       final p = await SharedPreferences.getInstance();
-      return p.getBool(_kEnabled) ?? false;
+      return _enabledCache = p.getBool(_kEnabled) ?? false;
     } catch (_) {
       return false;
     }
   }
 
   Future<String?> get writeCalendarId async {
+    final hit = _calIdCache;
+    if (hit != null) return hit;
     try {
       final p = await SharedPreferences.getInstance();
-      return p.getString(_kWriteCalendar);
+      return _calIdCache = p.getString(_kWriteCalendar);
     } catch (_) {
       return null;
     }
   }
 
   Future<void> connect(String calendarId) async {
+    _calIdCache = calendarId;
+    _enabledCache = true;
     final p = await SharedPreferences.getInstance();
     await p.setString(_kWriteCalendar, calendarId);
     await p.setBool(_kEnabled, true);
@@ -103,6 +120,7 @@ class CalendarService {
   /// The mapping is kept on purpose: reconnecting later should update the
   /// events already out there rather than duplicating every one of them.
   Future<void> disconnect() async {
+    _enabledCache = false;
     final p = await SharedPreferences.getInstance();
     await p.setBool(_kEnabled, false);
   }
@@ -246,14 +264,31 @@ class CalendarService {
   }
 
   /// Take a task's event back off the calendar.
-  Future<void> removeTask(String taskId) async {
+  ///
+  /// The event goes first and the bookkeeping second. Persisting the map before
+  /// the delete would put a disk write between somebody swiping a block away and
+  /// it leaving their calendar; the other order costs nothing if the app dies in
+  /// between, because the worst case is a stale id that deletes an event which
+  /// is already gone.
+  Future<void> removeTask(String taskId) => removeTasks([taskId]);
+
+  /// Several at once, persisting the map a single time.
+  ///
+  /// Deleting a task takes its chunk blocks with it, so "one deletion" is
+  /// routinely three or four events, and doing the bookkeeping per event is how
+  /// a single swipe turned into a visible pause.
+  Future<void> removeTasks(Iterable<String> taskIds) async {
     try {
       final map = await _eventMap();
-      final eventId = map.remove(taskId);
-      if (eventId == null) return;
       final calId = await writeCalendarId;
-      if (calId != null) await _plugin.deleteEvent(calId, eventId);
-      await _saveEventMap(map);
+      var changed = false;
+      for (final taskId in taskIds) {
+        final eventId = map.remove(taskId);
+        if (eventId == null) continue;
+        changed = true;
+        if (calId != null) await _plugin.deleteEvent(calId, eventId);
+      }
+      if (changed) await _saveEventMap(map);
     } catch (e) {
       debugPrint('[calendar] delete failed: $e');
     }
@@ -275,6 +310,8 @@ class CalendarService {
 
   /// Task id to calendar event id.
   Future<Map<String, String>> _eventMap() async {
+    final hit = _map;
+    if (hit != null) return hit;
     try {
       final p = await SharedPreferences.getInstance();
       final raw = p.getStringList(_kEventMap) ?? const [];
@@ -286,14 +323,15 @@ class CalendarService {
         if (i <= 0) continue;
         out[entry.substring(0, i)] = entry.substring(i + 1);
       }
-      return out;
+      return _map = out;
     } catch (e) {
       debugPrint('[calendar] map read failed: $e');
-      return {};
+      return _map = {};
     }
   }
 
   Future<void> _saveEventMap(Map<String, String> m) async {
+    _map = m;
     try {
       final p = await SharedPreferences.getInstance();
       await p.setStringList(
