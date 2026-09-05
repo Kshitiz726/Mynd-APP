@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 
+import 'api_client.dart';
 import 'api_config.dart';
 
 /// Single Socket.IO connection shared by Community + Focus features.
@@ -74,12 +75,63 @@ class RealtimeService {
     s.onConnectError((e) {
       debugPrint('[rt] connect_error: $e');
       s.auth = {'token': ApiConfig.instance.authToken}; // re-auth on next attempt
+      // The server refused the handshake, and retrying with the same token is
+      // not going to change its mind. Access tokens last thirty minutes and the
+      // handshake verifies one, so this is what an ordinary expiry looks like
+      // down here: reconnection attempts forever, ensureConnected timing out,
+      // and body doubling reporting "no connection to the focus server" to
+      // somebody whose session is perfectly valid and whose network is fine.
+      // Trying again by hand could not fix it either, because nothing on this
+      // path ever asked for a new token.
+      if (_looksUnauthorized(e)) unawaited(_reauth());
     });
     s.onError((e) => debugPrint('[rt] error: $e'));
 
     debugPrint('[rt] connecting to ${ApiConfig.instance.baseUrl} '
         '(token=${ApiConfig.instance.authToken != null ? 'set' : 'NULL'})');
     s.connect();
+  }
+
+  /// Socket.IO hands the error through as a string, a map or an exception
+  /// depending on where it failed, so this reads the rendered form rather than
+  /// trying to type-match all three.
+  ///
+  /// The string it is looking for is not a guess: the server's handshake
+  /// middleware rejects with `new Error('unauthorized')`, verified against the
+  /// live server. If that wording ever changes, the refresh below stops firing
+  /// and an expired token goes back to looking like a dead network - so the
+  /// test pins it.
+  @visibleForTesting
+  static bool looksUnauthorized(Object? e) => _looksUnauthorized(e);
+
+  static bool _looksUnauthorized(Object? e) {
+    final t = '$e'.toLowerCase();
+    return t.contains('unauthorized') || t.contains('401');
+  }
+
+  /// One refresh, however many connect_error callbacks arrive.
+  ///
+  /// Reconnection attempts are frequent, and each failed one fires this. Without
+  /// the guard a dead token would launch a refresh per attempt, and because
+  /// refreshing rotates the token, the losers of that race would install one the
+  /// server had already replaced - turning a recoverable expiry into a session
+  /// that genuinely cannot be repaired.
+  bool _reauthing = false;
+
+  Future<void> _reauth() async {
+    if (_reauthing) return;
+    _reauthing = true;
+    try {
+      if (!await ApiClient.instance.refreshSession()) return;
+      // connect() rebuilds whenever the live socket's token is not the current
+      // one, which it now is not. Scheduled rather than called inline: this runs
+      // inside the socket's own error callback, and connect() disposes that
+      // socket.
+      await Future<void>.delayed(Duration.zero);
+      connect();
+    } finally {
+      _reauthing = false;
+    }
   }
 
   void _flushWaiters() {
@@ -92,7 +144,17 @@ class RealtimeService {
   /// Resolves true once the socket is live. Bounded so a caller never hangs
   /// forever on a socket that can't connect - it returns the current state
   /// after [timeout] and lets the caller surface a failure instead.
-  Future<bool> ensureConnected({Duration timeout = const Duration(seconds: 8)}) async {
+  ///
+  /// Twenty five seconds rather than eight, because the server sleeps. Render's
+  /// free tier spins the service down after fifteen minutes idle and takes tens
+  /// of seconds to wake, so the first connection of a session routinely could
+  /// not finish inside the old budget - and the caller reported a connection
+  /// failure for a server that was merely still getting up. An expired token
+  /// no longer costs the whole budget either: that path refreshes and rebuilds
+  /// rather than retrying until the clock runs out.
+  Future<bool> ensureConnected({
+    Duration timeout = const Duration(seconds: 25),
+  }) async {
     connect();
     if (connected) return true;
     final c = Completer<void>();
