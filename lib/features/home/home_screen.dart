@@ -18,10 +18,8 @@ import '../../widgets/om_tappable.dart';
 import 'widgets/mynd_hero.dart';
 import 'widgets/home_banners.dart';
 import 'widgets/home_dashboard.dart';
-import 'widgets/mood_bar.dart';
-import 'widgets/mood_slider.dart';
+import 'widgets/mood_picker.dart';
 import 'widgets/motivation_card.dart';
-import 'widgets/progress_bars.dart';
 import 'widgets/task_tile.dart';
 
 /// The "Today" dashboard - the app's home base.
@@ -47,7 +45,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // The check-in used to open as a modal sheet on the first launch of every
-  // day. It is now the MoodSlider under the orb instead: asking the question
+  // day. It is now the MoodPicker on the page instead: asking the question
   // before somebody has reached the app interrupts whatever they opened it to
   // do, and on the days worth noticing it is the most likely thing to be
   // swiped away. Present and answerable in one drag beats asked and dismissed.
@@ -107,24 +105,25 @@ class _HomeScreenState extends State<HomeScreen> {
             const LowStimBanner(),
             const HomeTopBar(),
             const MyndHero(),
-            // Directly under the orb, where the eye already is on opening the
-            // app, and before anything the app has to report about you.
-            const MoodSlider(),
-            const MotivationCard(),
-            const SizedBox(height: AppSpacing.xl),
-
-            // What is in your head, first. Everything below this is the app
-            // reporting on you; this is the one thing that only you can put
-            // there, and it is worth nothing if you have to scroll past three
-            // cards to reach it while holding the thought.
-            const BrainDumpCard(),
-
+            // The one thing to do, first: it is the only item on this screen
+            // that somebody can act on without deciding anything.
             const OmSectionHeader('do this now'),
             const QuickActions(),
 
+            // Then the day's line, still on the first screen.
+            const MotivationCard(),
+
+            // The check-in, which takes one tap and can wait until the two
+            // things above have been read.
+            const MoodPicker(),
+
             const SizedBox(height: AppSpacing.md),
-            const ProgressBars(),
-            const MoodBar(),
+
+            // The "today" bars and the fortnight mood strip used to sit here.
+            // Both restated something already on this screen - the day's
+            // progress is in the card at the top, and today's mood is the
+            // check-in - so they were a second, quieter answer to a question
+            // already answered above.
 
             const OmSectionHeader('your goals'),
             const GoalAchievementCard(),

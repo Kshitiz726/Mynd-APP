@@ -2,26 +2,38 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/haptics.dart';
+import '../../../core/utils/om_icons.dart';
 import '../../../providers/nav_provider.dart';
 import '../../../widgets/om_glass.dart';
 import '../../../widgets/om_tappable.dart';
 
 /// The floating bottom navigation bar - a liquid-glass capsule.
 ///
-/// Four equal-width destinations, the selected one marked by a translucent
-/// "lens" that glides between slots rather than appearing in place, which is
-/// what makes the movement read as liquid. There is no centre (+) any more:
-/// focus and the coach are destinations of their own, so every slot is a plain
-/// tab and the lens travel is a clean linear glide across four.
+/// Four destinations either side of a centre (+), the selected one marked by a
+/// translucent "lens" that glides between slots rather than appearing in place,
+/// which is what makes the movement read as liquid.
+///
+/// The centre used to be a fifth destination and was taken out, correctly:
+/// focus and the coach are places you go, and a place you go belongs in a tab.
+/// This (+) is not a destination. It is the app's one "put something in" verb -
+/// a brain dump or a new goal - which is exactly the sort of thing that should
+/// be reachable from every screen and owned by no screen. It sits in the middle
+/// because that is the easiest point on the bar to hit with either thumb, and
+/// the lens skips over it, because there is nothing there to select.
 class OmNavBar extends StatelessWidget {
   const OmNavBar({
     super.key,
     required this.current,
     required this.onSelect,
+    this.onAdd,
   });
 
   final AppTab current;
   final ValueChanged<AppTab> onSelect;
+
+  /// Opens the add sheet. Null leaves the middle as plain glass, which is what
+  /// the coach's sign-in gate wants: there is nothing to add to yet.
+  final VoidCallback? onAdd;
 
   @override
   Widget build(BuildContext context) {
@@ -69,19 +81,22 @@ class OmNavBar extends StatelessWidget {
                 ),
               ),
               child: SizedBox(
-                // A touch taller now there are four roomy slots and no centre
-                // button crowding the middle - the bar reads as a substantial
-                // pane of glass rather than a thin strip.
+                // Tall enough that the bar reads as a substantial pane of glass
+                // rather than a thin strip, and that the centre button has room
+                // to sit inside it instead of hanging off the top edge - the
+                // glass clips its own blur, so anything overflowing is cut off.
                 height: 72,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 7),
                   child: LayoutBuilder(
                     builder: (context, constraints) {
                       const tabs = AppTab.values;
-                      // Four equal slots, one per destination. No (+) reserving
-                      // the middle, so the lens index is just the tab's own.
-                      final slot = constraints.maxWidth / tabs.length;
-                      final index = tabs.indexOf(current);
+                      // Five slots: two tabs, the (+), two tabs. The centre one
+                      // is not a destination, so a tab's slot is its own index
+                      // shifted past the middle once it is on the right of it.
+                      final centre = tabs.length ~/ 2;
+                      final slot = constraints.maxWidth / (tabs.length + 1);
+                      int slotOf(int i) => i < centre ? i : i + 1;
 
                       return Stack(
                         children: [
@@ -89,7 +104,7 @@ class OmNavBar extends StatelessWidget {
                           AnimatedPositioned(
                             duration: const Duration(milliseconds: 380),
                             curve: Curves.easeOutCubic,
-                            left: slot * index,
+                            left: slot * slotOf(tabs.indexOf(current)),
                             top: 0,
                             bottom: 0,
                             width: slot,
@@ -97,7 +112,12 @@ class OmNavBar extends StatelessWidget {
                           ),
                           Row(
                             children: [
-                              for (var i = 0; i < tabs.length; i++)
+                              for (var i = 0; i < tabs.length; i++) ...[
+                                if (i == centre)
+                                  SizedBox(
+                                    width: slot,
+                                    child: _AddButton(onTap: onAdd),
+                                  ),
                                 SizedBox(
                                   width: slot,
                                   child: _NavItem(
@@ -110,6 +130,7 @@ class OmNavBar extends StatelessWidget {
                                     },
                                   ),
                                 ),
+                              ],
                             ],
                           ),
                         ],
@@ -119,6 +140,61 @@ class OmNavBar extends StatelessWidget {
                 ),
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The (+) in the middle of the bar.
+///
+/// Quiet on purpose. The first version was a two-hue gradient with a specular
+/// highlight and a coloured glow, which is the language of a floating action
+/// button on somebody else's app: it out-shouted every other thing on a bar
+/// whose whole idea is restraint, and it made the middle of the screen the
+/// loudest point in the interface.
+///
+/// One flat brand colour, one soft shadow. It is still the only filled shape on
+/// the bar, which is all the prominence a single accent needs when everything
+/// around it is frosted glass.
+class _AddButton extends StatelessWidget {
+  const _AddButton({required this.onTap});
+
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.omColors;
+    if (onTap == null) return const SizedBox.shrink();
+
+    return Semantics(
+      button: true,
+      label: 'add something',
+      child: OmTappable(
+        onTap: onTap,
+        feedback: OmTapFeedback.none, // the sheet fires its own
+        pressedScale: 0.9,
+        child: Center(
+          child: Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: c.primary,
+              boxShadow: [
+                // Depth, not glow: the same soft drop the lens carries, in the
+                // page's shadow colour rather than in brand purple.
+                BoxShadow(
+                  color: c.shadow.withValues(
+                    alpha: context.isDark ? 0.34 : 0.16,
+                  ),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Icon(OmIcons.byName('plus'), color: Colors.white, size: 23),
           ),
         ),
       ),

@@ -30,6 +30,7 @@ import '../home/home_screen.dart';
 import '../../widgets/focus_invite_listener.dart';
 import 'widgets/live_focus_pill.dart';
 import 'widgets/om_nav_bar.dart';
+import '../home/widgets/quick_add_sheet.dart';
 
 /// The root authenticated shell: a persistent bottom nav over an [IndexedStack].
 class AppShell extends StatefulWidget {
@@ -192,6 +193,7 @@ class _AppShellState extends State<AppShell> {
                   : OmNavBar(
                       current: nav.tab,
                       onSelect: nav.select,
+                      onAdd: () => showQuickAddSheet(context),
                     ),
           ),
         ),
