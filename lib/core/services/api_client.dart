@@ -31,7 +31,7 @@ class ApiClient {
   Future<Map<String, dynamic>> _send(Future<http.Response> Function() send) async {
     var res = await send();
     if (res.statusCode == 401 && _cfg.refreshToken != null) {
-      if (await _refreshSession()) {
+      if (await refreshSession()) {
         res = await send();
       }
     }
@@ -78,7 +78,14 @@ class ApiClient {
 
   /// Trade the refresh token for a new pair. Returns false if the session is
   /// genuinely finished and the user has to sign in again.
-  Future<bool> _refreshSession() {
+  ///
+  /// Public because [GroqService] has to share it. That service talks to the
+  /// same backend with the same session but its own http.Client, so without
+  /// this it had no way to recover from a 401 - and sharing the single-flight
+  /// future matters more than the visibility: a brain dump and a screenful of
+  /// ApiClient requests expiring together must produce one refresh, not two
+  /// racing ones where the loser installs a rotated, already-dead token.
+  Future<bool> refreshSession() {
     return _refreshing ??= () async {
       try {
         final refresh = _cfg.refreshToken;

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
+import 'api_client.dart';
 import 'api_config.dart';
 
 /// All communication with the Groq REST API lives here.
@@ -61,6 +62,29 @@ class GroqService {
 
   final _client = http.Client();
 
+
+  /// Send, and if the session had just expired, refresh once and send again.
+  ///
+  /// Access tokens last thirty minutes, so a 401 here is the ordinary end of a
+  /// token's life rather than a sign that anything is wrong. [ApiClient] has
+  /// always handled that by refreshing and replaying; this service did not,
+  /// because it has its own http.Client and never went through that path. The
+  /// result was a split personality: open the app after half an hour and the
+  /// feed, the rooms and the profile all quietly refreshed and worked, while
+  /// Brain Dump, the voice capture, the goal planner and the motivation card
+  /// answered "your session expired" to somebody whose session was fine.
+  ///
+  /// [send] is a closure rather than a prepared request because it has to run
+  /// twice, picking up the NEW auth header the second time.
+  Future<http.Response> _withRefresh(
+    Future<http.Response> Function() send,
+  ) async {
+    final res = await send();
+    if (res.statusCode != 401) return res;
+    if (!await ApiClient.instance.refreshSession()) return res;
+    return send();
+  }
+
   // ─── Streaming ────────────────────────────────────────────────────────────
 
   /// Streams token-by-token chunks from Groq.
@@ -70,19 +94,30 @@ class GroqService {
   Stream<String> streamCompletion(
     List<Map<String, String>> messages,
   ) async* {
-    final request = http.Request('POST', _endpoint);
-    request.headers.addAll(_headers);
-    request.body = jsonEncode({
-      'model': _chatModel,
-      'reasoning_effort': _reasoningEffort,
-      'messages': messages,
-      'temperature': 0.85,
-      'top_p': 0.95,
-      'max_tokens': _chatMaxTokens,
-      'stream': true,
-    });
+    // Built per attempt rather than once: a Request cannot be sent twice, and
+    // the retry has to pick up the refreshed auth header anyway.
+    http.Request build() => http.Request('POST', _endpoint)
+      ..headers.addAll(_headers)
+      ..body = jsonEncode({
+        'model': _chatModel,
+        'reasoning_effort': _reasoningEffort,
+        'messages': messages,
+        'temperature': 0.85,
+        'top_p': 0.95,
+        'max_tokens': _chatMaxTokens,
+        'stream': true,
+      });
 
-    final response = await _client.send(request);
+    var response = await _client.send(build());
+    // Same expired-token replay as every other call here. Draining the stream
+    // first because a 401 body is small and the connection has to be finished
+    // with before the retry goes out.
+    if (response.statusCode == 401) {
+      await response.stream.drain<void>();
+      if (await ApiClient.instance.refreshSession()) {
+        response = await _client.send(build());
+      }
+    }
 
     if (response.statusCode != 200) {
       final body = await response.stream.bytesToString();
@@ -137,15 +172,16 @@ class GroqService {
     // Base64 in a JSON body rather than multipart: it is the transport the
     // avatar upload already uses, and it keeps the proxy route simple. The
     // server attaches the provider key and forwards it.
-    final response = await _client
-        .post(
-      _transcribeEndpoint,
-      headers: _headers,
-      body: jsonEncode({
-        'audio': base64Encode(bytes),
-        'mime': 'audio/m4a',
-        'model': model,
-      }),
+    final response = await _withRefresh(
+      () => _client.post(
+        _transcribeEndpoint,
+        headers: _headers,
+        body: jsonEncode({
+          'audio': base64Encode(bytes),
+          'mime': 'audio/m4a',
+          'model': model,
+        }),
+      ),
     )
         // Generous, because this uploads the whole clip, but bounded: without
         // it the voice sheet sits on "breaking it down" with nothing left to
@@ -215,12 +251,13 @@ class GroqService {
     // came back, and the card sat on its skeleton for as long as the app was
     // open. Failing here is recoverable - the caller falls back to the local
     // bank and shows words. Hanging here is not.
-    final response = await _client
-        .post(
-          _motivationEndpoint,
-          headers: _headers,
-          body: jsonEncode({'messages': messages, 'temperature': temperature}),
-        )
+    final response = await _withRefresh(
+      () => _client.post(
+        _motivationEndpoint,
+        headers: _headers,
+        body: jsonEncode({'messages': messages, 'temperature': temperature}),
+      ),
+    )
         .timeout(
           const Duration(seconds: 20),
           onTimeout: () => throw const GroqException(
@@ -264,11 +301,12 @@ class GroqService {
     List<Map<String, String>> messages, {
     String task = 'extract',
   }) async {
-    final response = await _client
-        .post(
-      ApiConfig.instance.rest('/api/coach/extract'),
-      headers: _headers,
-      body: jsonEncode({'task': task, 'messages': messages}),
+    final response = await _withRefresh(
+      () => _client.post(
+        ApiConfig.instance.rest('/api/coach/extract'),
+        headers: _headers,
+        body: jsonEncode({'task': task, 'messages': messages}),
+      ),
     )
         .timeout(
       const Duration(seconds: 60),
@@ -312,18 +350,19 @@ class GroqService {
   /// the five-a-day cap was rationing housekeeping instead of chat. Anything
   /// that is not a person talking to the coach belongs on [extract].
   Future<String> complete(List<Map<String, String>> messages) async {
-    final response = await _client
-        .post(
-      _endpoint,
-      headers: _headers,
-      body: jsonEncode({
-        'model': _summaryModel,
-        'reasoning_effort': _reasoningEffort,
-        'messages': messages,
-        'temperature': 0.3, // low for factual summaries
-        'max_tokens': _summaryMaxTokens,
-        'stream': false,
-      }),
+    final response = await _withRefresh(
+      () => _client.post(
+        _endpoint,
+        headers: _headers,
+        body: jsonEncode({
+          'model': _summaryModel,
+          'reasoning_effort': _reasoningEffort,
+          'messages': messages,
+          'temperature': 0.3, // low for factual summaries
+          'max_tokens': _summaryMaxTokens,
+          'stream': false,
+        }),
+      ),
     )
         // A request with no bound is a UI that can hang forever. This one held
         // the memory refresh open, and the refresh held Home's busy flag, so a
