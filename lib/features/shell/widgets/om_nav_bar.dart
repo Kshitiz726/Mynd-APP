@@ -25,15 +25,21 @@ class OmNavBar extends StatelessWidget {
     super.key,
     required this.current,
     required this.onSelect,
-    this.onAdd,
+    required this.onAdd,
   });
 
   final AppTab current;
   final ValueChanged<AppTab> onSelect;
 
-  /// Opens the add sheet. Null leaves the middle as plain glass, which is what
-  /// the coach's sign-in gate wants: there is nothing to add to yet.
-  final VoidCallback? onAdd;
+  /// Opens the add sheet.
+  ///
+  /// Required, and that is the fix rather than an opinion about API style. It
+  /// was optional, the coach tab built the bar without it, and the button then
+  /// rendered as nothing - leaving a hole in the middle of the bar on that one
+  /// screen. A control that is on every other tab does not get to quietly
+  /// vanish on one of them; if some future screen genuinely wants a bar with no
+  /// (+), it should say so by building a different bar.
+  final VoidCallback onAdd;
 
   @override
   Widget build(BuildContext context) {
@@ -161,12 +167,11 @@ class OmNavBar extends StatelessWidget {
 class _AddButton extends StatelessWidget {
   const _AddButton({required this.onTap});
 
-  final VoidCallback? onTap;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final c = context.omColors;
-    if (onTap == null) return const SizedBox.shrink();
 
     return Semantics(
       button: true,
