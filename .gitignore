@@ -84,3 +84,14 @@ beta_testers.txt
 webhooki_secret.txt
 *_secret.txt
 .build-config/
+
+# Scratch notes, pasted logs and one-off SQL that accumulate in the repo root
+# while debugging. Several of them (code.txt, way.txt, RUN_ME_IN_SUPABASE.sql,
+# "update_version 3.txt") carry real keys or connection strings in plaintext,
+# and key.txt is named for exactly what it holds. None of it is source, so it
+# is ignored as a class rather than one file at a time - a single `git add -A`
+# was all that stood between these and a public history.
+/*.txt
+/*.sql
+/*.webp
+server/testnote_txt
