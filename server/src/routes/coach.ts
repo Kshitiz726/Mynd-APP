@@ -269,6 +269,119 @@ r.post('/coach/completions', requireAuth, async (req, res, next) => {
 });
 
 /**
+ * The day's motivation lines.
+ *
+ * Metered separately from the conversation, and that separation is the whole
+ * reason this route exists. Motivation used to go through /coach/completions,
+ * which meant a feature the user never asked for spent the five daily messages
+ * they DID ask for: two mood changes and the coach was refusing to talk. Worse,
+ * it failed silently into a small written bank, so the app appeared to be
+ * ignoring the mood entirely rather than to be out of budget.
+ *
+ * Its own generous cap rather than no cap: this is still our key paying for
+ * somebody else's tokens, and an unmetered completions endpoint behind a
+ * session token is a free LLM proxy for anyone who reads the app's traffic.
+ * The model and the token ceiling are fixed here rather than taken from the
+ * client for the same reason.
+ */
+const FREE_MOTIVATION_LIMIT = 30;
+
+const MOTIVATION_MODEL = 'openai/gpt-oss-20b';
+
+const MotivationRequest = z.object({
+  messages: z
+    .array(
+      z.object({
+        role: z.enum(['system', 'user']),
+        content: z.string().max(8_000),
+      }),
+    )
+    .min(1)
+    .max(4),
+  // The client asks for spread, not for a different model. Bounded well below
+  // the API's ceiling: past about 1.3 the lines stop being sentences.
+  temperature: z.number().min(0).max(1.3).optional(),
+});
+
+async function motivationUsageToday(userId: string, day: string): Promise<number> {
+  if (!config.hasDb) return 0;
+  const row = await db.oneOrNone(
+    `select count from motivation_usage where user_id = $1 and day = $2`,
+    [userId, day],
+  );
+  return row?.count ?? 0;
+}
+
+r.post('/coach/motivation', requireAuth, async (req, res, next) => {
+  try {
+    if (!config.groqApiKey) {
+      return res.status(503).json({ error: 'not configured on the server' });
+    }
+    const parsed = MotivationRequest.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'bad request', detail: parsed.error.issues[0]?.message });
+    }
+
+    const day = dayKey(req.headers['x-timezone'] as string | undefined);
+    const sub = await billingStore.get(req.user.id);
+    const premium = isPremium(sub);
+
+    if (config.hasDb) {
+      try {
+        if (!premium) {
+          const used = await motivationUsageToday(req.user.id, day);
+          if (used >= FREE_MOTIVATION_LIMIT) {
+            // Deliberately NOT the coach's 402 code. The app falls back to its
+            // written lines here and says nothing; running out of motivation is
+            // not a reason to put a paywall in front of somebody.
+            return res.status(429).json({ error: 'enough for today', code: 'motivation_limit' });
+          }
+        }
+        await db.none(
+          `insert into motivation_usage (user_id, day, count) values ($1, $2, 1)
+           on conflict (user_id, day) do update set count = motivation_usage.count + 1`,
+          [req.user.id, day],
+        );
+      } catch (err) {
+        // Almost certainly a deploy that landed without its migration. Refuse
+        // rather than carry on unmetered: an uncapped completions endpoint
+        // behind a session token is a free LLM proxy, and that is a worse
+        // failure than a day of written lines. 429 because the app already
+        // treats it as "use the bank" and says nothing to the user.
+        console.error('[motivation] meter unavailable, refusing', err);
+        return res.status(429).json({ error: 'unavailable', code: 'motivation_meter' });
+      }
+    }
+
+    const upstream = await fetch(GROQ_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${config.groqApiKey}`,
+      },
+      body: JSON.stringify({
+        model: MOTIVATION_MODEL,
+        reasoning_effort: 'low',
+        messages: parsed.data.messages,
+        temperature: parsed.data.temperature ?? 1.05,
+        // Enough for a dozen one-line sentences and nothing else.
+        max_tokens: 700,
+      }),
+      signal: AbortSignal.timeout(60_000),
+    });
+
+    if (!upstream.ok) {
+      const detail = await upstream.text().catch(() => '');
+      console.error('[motivation] upstream error', upstream.status, detail.slice(0, 300));
+      return res.status(502).json({ error: 'could not write those right now' });
+    }
+    res.json(await upstream.json());
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
  * Speech to text, same reasoning: the key stays here.
  *
  * Audio arrives base64 in JSON rather than multipart, matching how the avatar
@@ -278,6 +391,81 @@ const TranscribeRequest = z.object({
   audio: z.string().max(20_000_000), // ~15MB of audio as base64
   mime: z.string().max(100).optional(),
   model: z.string().optional(),
+});
+
+/**
+ * Extraction: a brain dump, or a spoken one, turned into task titles.
+ *
+ * Deliberately NOT metered, and that is the point of it having its own route.
+ * It used to go through /coach/completions, which meant emptying your head into
+ * the app spent one of the five free coaching messages a day - so the feature
+ * people reach for when they are overwhelmed was rationed, and it failed with
+ * "daily free message limit reached", which is a sentence about a chat quota
+ * appearing on a screen that has nothing to do with chat.
+ *
+ * The cap exists for conversation, where each turn is a person talking to a
+ * model. This is not conversation: it is one short, bounded transformation of
+ * text the user has already typed or spoken, and it is the app's own plumbing.
+ *
+ * Unmetered is not unbounded. The client does not choose the model, the effort,
+ * or the token ceiling here - the server does, so an unmetered route cannot be
+ * turned into a general purpose proxy for our key - the input is capped, and
+ * /api/coach already sits behind writeLimiter at 60 a minute per user.
+ */
+const ExtractRequest = z.object({
+  messages: z
+    .array(
+      z.object({
+        role: z.enum(['system', 'user']),
+        content: z.string().max(12_000),
+      }),
+    )
+    .min(1)
+    .max(4),
+});
+
+r.post('/coach/extract', requireAuth, async (req, res, next) => {
+  try {
+    if (!config.groqApiKey) {
+      return res.status(503).json({ error: 'coach is not configured on the server' });
+    }
+
+    const parsed = ExtractRequest.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'bad request', detail: parsed.error.issues[0]?.message });
+    }
+
+    const upstream = await fetch(GROQ_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${config.groqApiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'openai/gpt-oss-20b',
+        reasoning_effort: 'low',
+        messages: parsed.data.messages,
+        // Low, because the answer is a list of titles and nothing else.
+        temperature: 0.2,
+        // Room for a long dump. The old path shared the summary ceiling of 300,
+        // which silently truncated the JSON on a big brain dump and surfaced as
+        // "failed to process" rather than as a missing task.
+        max_tokens: 1500,
+        stream: false,
+      }),
+      signal: AbortSignal.timeout(60_000),
+    });
+
+    if (!upstream.ok) {
+      const detail = await upstream.text().catch(() => '');
+      console.error('[coach] extract failed', upstream.status, detail.slice(0, 200));
+      return res.status(502).json({ error: 'could not read that' });
+    }
+
+    res.json(await upstream.json());
+  } catch (err) {
+    next(err);
+  }
 });
 
 r.post('/coach/transcribe', requireAuth, async (req, res, next) => {

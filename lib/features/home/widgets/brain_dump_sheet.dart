@@ -26,7 +26,7 @@ void showBrainDumpSheet(BuildContext context) {
 /// Shared by the typed [BrainDumpSheet] and the voice capture flow so speaking
 /// a dump and typing one break down into the exact same scheduled tasks.
 Future<int> processBrainDumpText(String text, TaskProvider tp) async {
-  final response = await GroqService.instance.complete([
+  final response = await GroqService.instance.extract([
     {
       'role': 'system',
       'content':
