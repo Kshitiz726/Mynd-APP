@@ -1,12 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
 import '../../core/routes/app_router.dart';
 import '../../core/theme/app_colors.dart';
-import '../../providers/settings_provider.dart';
-import '../../widgets/fluid_orb.dart';
 
 /// The way in.
 ///
@@ -15,10 +12,10 @@ import '../../widgets/fluid_orb.dart';
 /// an animated thing everywhere else in the app, so the one moment it was
 /// guaranteed to be still was the moment it was introducing itself.
 ///
-/// This shows the real thing instead - the same shader-drawn orb the rest of
-/// the app uses, so the logo you are introduced to is the logo you then live
-/// with. It paints on the first frame it is asked to, with nothing to preload
-/// and no decoder to wake up, so there is never a blank hole to cover.
+/// This shows the app icon instead: the same mark that sits on the home
+/// screen, so the tap that started the app is visibly continued rather than
+/// answered with something else. It is precached before the first frame that
+/// needs it, so there is never a blank hole to cover.
 ///
 /// It holds for a deliberate beat even when the app was ready immediately,
 /// because a splash that flashes past reads as a stutter rather than an
@@ -58,11 +55,11 @@ class _SplashScreenState extends State<SplashScreen> {
   static const _floor = Duration(milliseconds: 900);
   static const _fadeOut = Duration(milliseconds: 420);
 
-  bool _leaving = false;
+  /// Hero size for the mark. Matches what the orb occupied, so the entrance
+  /// keeps the same weight on screen.
+  static const double _logoSize = 200;
 
-  /// Reduce-motion gets the orb holding still, and the same beat. The point of
-  /// the setting is that nothing moves, not that nothing happens.
-  bool _moving = true;
+  bool _leaving = false;
 
   @override
   void initState() {
@@ -70,14 +67,26 @@ class _SplashScreenState extends State<SplashScreen> {
     _run();
   }
 
+  bool _precached = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Decode the icon before it is painted. The orb this replaced was a shader
+    // and needed nothing; an image does, and a splash screen is the one place
+    // where a single blank frame is most visible - it is the whole content.
+    if (!_precached) {
+      _precached = true;
+      precacheImage(const AssetImage('assets/branding/app_icon.png'), context);
+    }
+  }
+
   Future<void> _run() async {
     debugPrint('[splash] start, next=${widget.next} bootAt=${widget.bootAt}');
-    _moving = !context.read<SettingsProvider>().reduceMotion;
 
-    // Whatever is left of the budget after boot. There is nothing to preload -
-    // the orb is a shader, ready on the frame it is first painted, which is
-    // the whole reason it replaced a video that had to be decoded first - so
-    // this is purely about how long the entrance should last.
+    // Whatever is left of the budget after boot. The icon is precached in
+    // didChangeDependencies, so this is purely about how long the entrance
+    // should last rather than about waiting for anything to be ready.
     final spent = DateTime.now().difference(widget.bootAt);
     final left = _total - spent;
     debugPrint('[splash] spent=${spent.inMilliseconds}ms '
@@ -144,10 +153,32 @@ class _SplashScreenState extends State<SplashScreen> {
               // Leaves *towards* the viewer, which reads as the app opening
               // rather than the logo being dismissed.
               scale: _leaving ? 1.08 : 1,
-              // The same orb the app uses everywhere else, at hero size. No
-              // preload, no decoder, and no still-frame stand-in to cross-fade
-              // from: it paints on the first frame it is asked to.
-              child: FluidOrb(size: 200, playing: _moving),
+              // The app icon itself, at hero size.
+              //
+              // This was the shader orb, which is the right mark *inside* the
+              // app but the wrong one here: the launch screen's job is to
+              // continue the tap that started it, and what the user tapped was
+              // the icon on their home screen. Showing something else at that
+              // moment reads as a different app opening.
+              //
+              // The icon is a rounded square, so it is masked to match the
+              // platform's own app-icon shape rather than sitting as a hard
+              // square on the wash. Precached in didChangeDependencies, so it
+              // is decoded before the first frame that needs it and there is
+              // no blank beat where the mark should be.
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(_logoSize * 0.2237),
+                child: Image.asset(
+                  'assets/branding/app_icon.png',
+                  width: _logoSize,
+                  height: _logoSize,
+                  // The source is 1024px and this draws at 200; letting the
+                  // engine decode straight to the size it will paint saves
+                  // decoding a megapixel to throw most of it away.
+                  cacheWidth: (_logoSize * MediaQuery.devicePixelRatioOf(context)).round(),
+                  filterQuality: FilterQuality.medium,
+                ),
+              ),
             ),
           ),
         ],

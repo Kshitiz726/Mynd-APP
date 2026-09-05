@@ -1,0 +1,293 @@
+import 'dart:async';
+
+import 'package:device_calendar/device_calendar.dart' as dc;
+import 'package:flutter/foundation.dart';
+
+import '../core/services/calendar_service.dart';
+import '../core/utils/free_slots.dart';
+import '../models/energy_level.dart';
+import '../models/task.dart';
+import 'task_provider.dart';
+
+/// The app's side of the phone's calendar.
+///
+/// Holds the connection, caches what a day is already booked with, and moves
+/// events in both directions. The arithmetic that decides where something fits
+/// lives in free_slots.dart, with tests: a wrong answer there is a task laid on
+/// top of a meeting, and that is the whole point of this feature.
+class CalendarProvider extends ChangeNotifier {
+  final _service = CalendarService.instance;
+
+  bool _connected = false;
+  bool get connected => _connected;
+
+  String? _calendarId;
+  String? get calendarId => _calendarId;
+
+  String? _calendarName;
+
+  /// The name of the calendar being written to, for saying so in the UI. A
+  /// connection nobody can see the destination of is one people distrust.
+  String? get calendarName => _calendarName;
+
+  List<dc.Calendar> _writable = const [];
+  List<dc.Calendar> get writable => _writable;
+
+  bool _busyState = false;
+  bool get busy => _busyState;
+
+  /// Whether the OS has already granted calendar access.
+  ///
+  /// Separate from [connected]: somebody can allow access and then turn sync
+  /// off, and the difference is what lets the card show a switch instead of
+  /// asking to connect all over again.
+  bool _hasAccess = false;
+  bool get hasAccess => _hasAccess;
+
+  /// Busy blocks per day, so opening the same day twice does not re-read every
+  /// calendar on the phone. Cleared whenever anything is written.
+  final Map<String, List<Busy>> _cache = {};
+
+  Future<void> load() async {
+    _connected = await _service.enabled;
+    _calendarId = await _service.writeCalendarId;
+    _hasAccess = await _service.hasPermission();
+    if (_hasAccess) {
+      _writable = await _service.writableCalendars();
+      _calendarName = _nameFor(_calendarId);
+    }
+    notifyListeners();
+  }
+
+  String? _nameFor(String? id) {
+    if (id == null) return null;
+    for (final c in _writable) {
+      if (c.id == id) return c.name;
+    }
+    return null;
+  }
+
+  /// Ask for access and list the calendars that can be written to.
+  ///
+  /// Returns false when permission was refused, so the caller can say so
+  /// rather than showing an empty list that looks like a phone with no
+  /// calendars on it.
+  Future<bool> requestAccess() async {
+    _busyState = true;
+    notifyListeners();
+    try {
+      final ok = await _service.requestPermission();
+      _hasAccess = ok;
+      if (ok) _writable = await _service.writableCalendars();
+      return ok;
+    } finally {
+      _busyState = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> connect(String calendarId) async {
+    await _service.connect(calendarId);
+    _connected = true;
+    _calendarId = calendarId;
+    _calendarName = _nameFor(calendarId);
+    _cache.clear();
+    notifyListeners();
+  }
+
+  Future<void> disconnect() async {
+    await _service.disconnect();
+    _connected = false;
+    _cache.clear();
+    notifyListeners();
+  }
+
+  /// What is already booked on [day].
+  ///
+  /// Read even when the connection is off, as long as permission was granted:
+  /// somebody who has allowed the app to see their calendar wants their
+  /// meetings respected whether or not they also want tasks written back.
+  Future<List<Busy>> busyOn(DateTime day) async {
+    final key = _key(day);
+    final hit = _cache[key];
+    if (hit != null) return hit;
+    final blocks = await _service.busyOn(day);
+    _cache[key] = blocks;
+    return blocks;
+  }
+
+  void invalidate() {
+    _cache.clear();
+  }
+
+  // Keeping the calendar level with the timeline.
+
+  TaskProvider? _tasks;
+  Timer? _debounce;
+
+  /// Follow a TaskProvider and mirror every change out to the calendar.
+  ///
+  /// One listener rather than a call at each mutation site. Editing a block,
+  /// dragging it, ticking it off and deleting it all go through different
+  /// methods, and wiring each by hand means the one that gets added next year
+  /// is silently missing. Anything that changes the timeline ends up here.
+  void watch(TaskProvider tasks) {
+    if (identical(_tasks, tasks)) return;
+    _tasks?.removeListener(_onTasksChanged);
+    _tasks = tasks..addListener(_onTasksChanged);
+    // Seeded now rather than on the first change, or the very first deletion
+    // after launch would be the one that got away: it would look like a task
+    // that had never existed instead of one that just left.
+    _knownIds = {for (final t in tasks.all) t.id};
+  }
+
+  /// Every task id the app held last time it looked, so the next change can be
+  /// read as "these ones went" rather than "something moved".
+  Set<String> _knownIds = const {};
+
+  void _onTasksChanged() {
+    final t = _tasks;
+    if (t == null) return;
+    final live = {for (final task in t.all) task.id};
+    final gone = _knownIds.difference(live);
+    _knownIds = live;
+    if (!_connected) return;
+
+    // A deletion does not wait for the debounce, and this is the whole point of
+    // keeping the id set. The debounce exists for drags, which notify on every
+    // frame; deleting happens once, and the block has already gone from the
+    // screen by the time we get here. Anything it waits for is a window where
+    // the app says the block is gone and the calendar still shows it, which is
+    // exactly the disagreement people notice and stop trusting.
+    if (gone.isNotEmpty) {
+      _cache.clear();
+      unawaited(_service.removeTasks(gone));
+    }
+
+    // Moves and edits still coalesce: pushing twenty events per frame would
+    // hammer EventKit and leave the calendar mid-drag.
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 900), _syncNow);
+  }
+
+  Future<void> _syncNow() async {
+    final t = _tasks;
+    if (t == null || !_connected) return;
+    await pushDay(t.daySchedule, t.selectedDate);
+    await _sweepStale(t);
+  }
+
+  /// Take events off the calendar for anything that should no longer have one.
+  ///
+  /// Deleting is not the only way a block stops being an appointment. Sending
+  /// it back to the backlog strips its time, and ticking it off means it has
+  /// already happened; neither is written by [pushDay], so before this the
+  /// event simply stayed where it was and the calendar kept showing a 3pm block
+  /// the app had stopped believing in.
+  ///
+  /// The rule is one line: the calendar holds exactly the tasks [pushDay] would
+  /// write. Anything mapped that no longer qualifies goes.
+  Future<void> _sweepStale(TaskProvider tasks) async {
+    final keep = {
+      for (final t in tasks.all)
+        if (_wantsEvent(t)) t.id,
+    };
+    final stale = [
+      for (final id in await _service.mappedTaskIds())
+        if (!keep.contains(id)) id,
+    ];
+    if (stale.isNotEmpty) await _service.removeTasks(stale);
+  }
+
+  /// The single rule, exposed for tests. A drift between what gets written and
+  /// what gets swept is either a ghost event or a missing one, and neither is
+  /// visible until somebody looks at their real calendar.
+  @visibleForTesting
+  static bool wantsEvent(Task t) => _wantsEvent(t);
+
+  /// Whether this task belongs on the calendar at all.
+  ///
+  /// Deliberately says nothing about which day. A block moved to Thursday is
+  /// still an appointment, and judging it against the day on screen would
+  /// delete its event for the crime of not being today.
+  static bool _wantsEvent(Task t) =>
+      !t.isAnchor &&
+      !t.isChunk &&
+      !t.done &&
+      !t.id.startsWith(importedPrefix) &&
+      t.startTime != null &&
+      t.endTime != null;
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _tasks?.removeListener(_onTasksChanged);
+    super.dispose();
+  }
+
+  /// Push every task placed on [day] out to the calendar.
+  ///
+  /// Anchors and chunks are skipped. A wake-up routine and a wind-down are the
+  /// app's own furniture rather than appointments, and filling somebody's
+  /// calendar with them is how a sync feature gets turned off on day one.
+  Future<int> pushDay(List<Task> tasks, DateTime day) async {
+    if (!_connected) return 0;
+    var pushed = 0;
+    for (final t in tasks) {
+      // One rule, shared with the sweep. Two copies of "does this belong on the
+      // calendar" drift apart, and every way they can disagree is either a
+      // ghost event or a missing one.
+      if (!_wantsEvent(t)) continue;
+      final start = t.startTime!;
+      if (!_sameDay(start, day)) continue;
+      final id = await _service.pushTask(
+        taskId: t.id,
+        title: t.title,
+        start: start,
+        end: t.endTime!,
+      );
+      if (id != null) pushed++;
+    }
+    if (pushed > 0) _cache.clear();
+    return pushed;
+  }
+
+  /// Take a task's event back off the calendar, for when it is deleted here.
+  Future<void> remove(String taskId) => _service.removeTask(taskId);
+
+  /// Ids of imported events carry this, so nothing pushes them back out and
+  /// creates a loop of the app and the calendar copying one event forever.
+  static const importedPrefix = Task.calendarPrefix;
+
+  /// The phone's own events for [day], as timeline blocks.
+  ///
+  /// Marked as anchors because they are not the app's to move: a repack that
+  /// slides somebody's dentist appointment an hour later has told them a
+  /// comfortable lie about when it is.
+  Future<List<Task>> importDay(DateTime day) async {
+    final events = await _service.incomingOn(day);
+    // Counted out loud. Zero imported events and a calendar the app cannot
+    // read look identical from the outside, and the difference is the whole
+    // feature.
+    debugPrint('[calendar] ${events.length} event(s) to mirror in for '
+        '${day.year}-${day.month}-${day.day}');
+    return [
+      for (final e in events)
+        Task(
+          id: '$importedPrefix${e.id}',
+          title: e.title,
+          time: 'Calendar',
+          energy: EnergyLevel.low,
+          isAnchor: true,
+        )
+          ..scheduled = true
+          ..startTime = e.start
+          ..duration = e.length,
+    ];
+  }
+
+  static bool _sameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
+  static String _key(DateTime d) => '${d.year}-${d.month}-${d.day}';
+}

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/constants/app_spacing.dart';
+import '../../core/constants/legal.dart';
 import '../../core/routes/app_routes.dart';
 import '../../core/services/api_client.dart';
 import '../../core/services/google_auth.dart';
@@ -12,12 +13,15 @@ import '../../core/utils/haptics.dart';
 
 import '../../core/utils/toast.dart';
 import '../../providers/nav_provider.dart';
+import '../../providers/health_consent_provider.dart';
 import '../../providers/premium_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../widgets/om_switch.dart';
 import '../../widgets/om_tappable.dart';
 import '../memory/memory_screen.dart';
 import 'about_screen.dart';
+import 'account_data_screen.dart';
+import 'health_data_screen.dart';
 import 'profile_identity.dart';
 
 /// Settings.
@@ -201,6 +205,42 @@ class ProfileScreen extends StatelessWidget {
                 label: 'Reduce motion',
                 value: settings.reduceMotion,
                 onChanged: (_) => settings.toggleReduceMotion(),
+                last: true,
+              ),
+            ]),
+            const SizedBox(height: AppSpacing.lg),
+
+            // Its own group rather than a row inside "Account". The privacy
+            // policy says this consent is asked for separately and can be
+            // withdrawn here, and burying it between the plan and the logout
+            // button would be technically true and practically not findable.
+            const _GroupLabel('Privacy'),
+            _Group(children: [
+              _ConsentRow(
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(builder: (_) => const HealthDataScreen()),
+                ),
+              ),
+              _Row(
+                icon: Icons.policy_outlined,
+                label: 'Privacy policy',
+                onTap: () => Legal.openPrivacy(context),
+              ),
+              _Row(
+                icon: Icons.gavel_rounded,
+                label: 'Terms',
+                onTap: () => Legal.openTerms(context),
+              ),
+              // Export and deletion. Both endpoints existed with no way to
+              // reach them, which is the same as not having them: these are
+              // rights the user exercises, and App Store review requires the
+              // deletion route to be in the app.
+              _Row(
+                icon: Icons.download_outlined,
+                label: 'Your data',
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(builder: (_) => const AccountDataScreen()),
+                ),
                 last: true,
               ),
             ]),
@@ -404,6 +444,67 @@ class _PlanCard extends StatelessWidget {
             ),
             Icon(Icons.chevron_right_rounded,
                 color: Colors.white.withValues(alpha: 0.9), size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The health-data consent row.
+///
+/// Carries its current state as a subtitle rather than being a plain label with
+/// a chevron. "Health data ›" tells you nothing you would act on; whether it is
+/// on, and since when, is the entire reason someone opens Settings looking for
+/// it, and putting it here means the common case needs no tap at all.
+class _ConsentRow extends StatelessWidget {
+  const _ConsentRow({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.omColors;
+    final consent = context.watch<HealthConsentProvider>();
+    final granted = consent.granted;
+    final at = consent.decidedAt?.toLocal();
+
+    final state = granted ? 'On' : (consent.needsDecision ? 'Not set' : 'Off');
+    final since = at == null ? null : '${at.day}/${at.month}/${at.year}';
+
+    return OmTappable(
+      onTap: () {
+        Haptics.light();
+        onTap();
+      },
+      feedback: OmTapFeedback.none,
+      pressedScale: 0.99,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: c.border.withValues(alpha: 0.5))),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.favorite_border_rounded, size: 20, color: c.text),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Health data',
+                      style: Theme.of(context).textTheme.bodyLarge),
+                  const SizedBox(height: 2),
+                  Text(
+                    since == null ? state : '$state · since $since',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: granted ? c.success : c.text2,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, size: 20, color: c.text2),
           ],
         ),
       ),

@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/chat_message.dart';
+import '../core/services/api_client.dart';
 import '../core/services/api_config.dart';
 import '../core/services/coach_context_builder.dart';
 import '../core/services/coach_memory_service.dart';
@@ -15,6 +16,8 @@ import '../core/services/puter_service.dart';
 import 'energy_provider.dart';
 import 'focus_provider.dart';
 import 'habit_provider.dart';
+import 'health_consent_provider.dart';
+import 'mood_provider.dart';
 import 'settings_provider.dart';
 import 'task_provider.dart';
 
@@ -40,8 +43,10 @@ class CoachProvider extends ChangeNotifier {
     required HabitProvider habits,
     required FocusProvider focus,
     required SettingsProvider settings,
+    MoodProvider? mood,
     String userName = '',
   })  : _energy = energy,
+        _mood = mood,
         _tasks = tasks,
         _habits = habits,
         _focus = focus,
@@ -53,6 +58,10 @@ class CoachProvider extends ChangeNotifier {
   // ─── Dependencies ─────────────────────────────────────────────────────────
 
   final EnergyProvider _energy;
+
+  /// The daily check-in. Held rather than passed per turn because it is the one
+  /// piece of context the user sets by hand, and every reply has to see it.
+  final MoodProvider? _mood;
   final TaskProvider _tasks;
   final HabitProvider _habits;
   final FocusProvider _focus;
@@ -100,6 +109,42 @@ class CoachProvider extends ChangeNotifier {
 
   final _contextBuilder = CoachContextBuilder.instance;
   final _promptBuilder = CoachPromptBuilder.instance;
+
+  /// True when the server has refused this turn because today's free-tier
+  /// budget is spent. Drives the paywall, and is cleared by an upgrade or by
+  /// the next local midnight.
+  bool _limitReached = false;
+  bool get limitReached => _limitReached;
+
+  /// How many turns are left today, as the *server* counts them. Null means
+  /// unlimited (premium) or not yet known.
+  int? _remainingToday;
+  int? get remainingToday => _remainingToday;
+
+  /// Ask the server where this account stands, without spending a turn.
+  ///
+  /// Called when the coach screen opens so the composer shows the right state
+  /// immediately rather than after the user hits a wall.
+  Future<void> refreshQuota() async {
+    if (ApiConfig.instance.authToken == null) return;
+    try {
+      final j = await ApiClient.instance.coachQuota();
+      final premium = j['premium'] == true;
+      _remainingToday = premium ? null : (j['remaining'] as int?);
+      _limitReached = !premium && (_remainingToday ?? 1) <= 0;
+      notifyListeners();
+    } catch (_) {
+      // A quota we cannot read must not lock the composer: the turn itself is
+      // still checked server side, so the worst case is one refused send with
+      // a clear message rather than a coach that looks broken while offline.
+    }
+  }
+
+  /// Whether health-related information may be sent to, or kept by, the coach.
+  ///
+  /// Everything downstream of this is one of two things: context the model is
+  /// given, or memory written from what was said. Both are gated on it.
+  bool get _healthConsent => HealthConsentProvider.instance.granted;
 
   // ─── State ────────────────────────────────────────────────────────────────
 
@@ -332,8 +377,16 @@ class CoachProvider extends ChangeNotifier {
   }
 
   /// Fold the conversation so far into the long-term memo, in the background.
+  ///
+  /// Gated on consent. What this writes is a summary of what someone told a
+  /// mental-health coach, which is health-related information however plainly
+  /// it is phrased, and the policy's promise covers storing it as much as
+  /// sending it. Without consent the conversation still happens and is still
+  /// there to scroll back through - it simply is not distilled into a durable
+  /// profile of the person.
   Future<void> _condense() async {
     _sinceCondense = 0;
+    if (!_healthConsent) return;
     final turns = _messages
         .where((m) => !m.isStreaming && m.id != 'welcome')
         .map((m) => m.toGroqMessage())
@@ -377,6 +430,35 @@ class CoachProvider extends ChangeNotifier {
     _isLoading = true;
     notifyListeners();
 
+    // Claim a turn before generating.
+    //
+    // The reply itself is produced by Puter inside the WebView, on the user's
+    // own account, so it never reaches our server and cannot be metered by
+    // watching the traffic. The entitlement is therefore checked separately,
+    // and it is checked *here* rather than in the UI because the counter this
+    // replaced lived in SharedPreferences and reset with app data.
+    try {
+      final turn = await ApiClient.instance.spendCoachTurn();
+      _remainingToday = turn.premium ? null : turn.remaining;
+      _limitReached = false;
+    } on CoachTurnRefused {
+      // Out of turns. Roll back the optimistic UI and let the screen offer the
+      // paywall instead of leaving a placeholder that never fills in.
+      _messages.remove(assistantMsg);
+      _messages.remove(userMsg);
+      _limitReached = true;
+      _remainingToday = 0;
+      _isLoading = false;
+      notifyListeners();
+      _turnDone?.complete('');
+      _turnDone = null;
+      return;
+    } catch (_) {
+      // Server unreachable. Allowed through: refusing to coach someone because
+      // the meter is down is worse than the occasional uncounted turn, and the
+      // count is reconciled on the next successful call.
+    }
+
     try {
       // Build context + prompt.
       final context = _contextBuilder.build(
@@ -386,6 +468,11 @@ class CoachProvider extends ChangeNotifier {
         focus: _focus,
         settings: _settings,
         userName: _name,
+        // Read per turn, not cached at construction. The coach provider lives
+        // for the whole app session, so a consent withdrawn in Settings has to
+        // take effect on the very next message rather than at the next launch.
+        healthConsent: _healthConsent,
+        mood: _mood,
         userMemory: _userMemory,
       );
 
@@ -483,7 +570,14 @@ class CoachProvider extends ChangeNotifier {
   // ─── Brain dump ───────────────────────────────────────────────────────────
 
   /// Persists a brain dump so the coach can reference it in future sessions.
+  ///
+  /// The persisting is what consent gates, and only that. A brain dump is
+  /// usually whatever is weighing on someone, so keeping it as material for
+  /// future coaching is health-related processing; writing it down for
+  /// yourself is not. Callers that store the thought in the user's own notes
+  /// or backlog are unaffected - this is the one path that feeds the coach.
   Future<void> logBrainDump(String text) async {
+    if (!_healthConsent) return;
     await _memory.addBrainDump(text);
   }
 

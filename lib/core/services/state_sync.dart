@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../providers/health_consent_provider.dart';
 import 'api_client.dart';
 import 'api_config.dart';
 
@@ -33,6 +34,19 @@ class StateSync {
   static final Map<String, Object> _pending = {};
 
   static bool get _signedIn => ApiConfig.instance.authToken != null;
+
+  /// The documents that carry health-related information, and so may only
+  /// leave the device with consent. Mirrors HEALTH_STATE_KEYS in
+  /// server/src/routes/consent.ts - the server refuses these writes outright,
+  /// and this is here so the app does not spend the round trip finding out.
+  ///
+  /// Only these two. The backlog, goals, habits and the rest sync regardless,
+  /// because withdrawing consent is promised not to cost access to the app.
+  static const _healthKeys = {'mood', 'memory'};
+
+  /// May [key] be mirrored to the account right now?
+  static bool _mayPush(String key) =>
+      !_healthKeys.contains(key) || HealthConsentProvider.instance.granted;
 
   /// The newest copy of [key], or null to keep whatever is local.
   ///
@@ -67,6 +81,15 @@ class StateSync {
   /// requests.
   static void push(String key, Object value) {
     if (!_signedIn) return;
+    // Without consent a health document stays on the phone. Dropped rather
+    // than queued: holding it to send later would be keeping health data
+    // pending upload from someone who declined, which is the thing being
+    // avoided, only less visibly.
+    if (!_mayPush(key)) {
+      _pending.remove(key);
+      _debounce.remove(key)?.cancel();
+      return;
+    }
     _pending[key] = value;
     _debounce[key]?.cancel();
     _debounce[key] = Timer(const Duration(seconds: 3), () => _flush(key));
@@ -86,6 +109,10 @@ class StateSync {
     final value = _pending.remove(key);
     _debounce.remove(key);
     if (value == null || !_signedIn) return;
+    // Re-checked here as well as in push(): consent can be withdrawn during
+    // the three seconds a write sits in the debounce, and the last thing a
+    // withdrawal should do is let one more upload through behind it.
+    if (!_mayPush(key)) return;
     try {
       await ApiClient.instance.putState(key, value);
       final p = await SharedPreferences.getInstance();

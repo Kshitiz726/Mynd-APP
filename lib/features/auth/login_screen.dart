@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import '../../core/constants/legal.dart';
-import '../../core/routes/app_routes.dart';
 import '../../core/services/api_client.dart';
 import '../../core/services/google_auth.dart';
 // Desktop-only real Google OAuth (loopback). Web/mobile pull in the stub.
@@ -15,8 +14,8 @@ import '../../core/services/desktop_google_auth_stub.dart'
 import '../../core/services/realtime_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/haptics.dart';
-import '../../widgets/fluid_orb.dart';
 import '../../widgets/om_tappable.dart';
+import '../onboarding/onboarding_gate.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -29,6 +28,10 @@ class _LoginScreenState extends State<LoginScreen>
     with SingleTickerProviderStateMixin {
   bool _loading = false;
   bool _showAuth = false;
+
+  /// Smaller than the splash's 200 - this shares the screen with the auth
+  /// buttons rather than being the only thing on it.
+  static const double _logoSize = 132;
   late final AnimationController _intro;
 
   /// Recognisers are long-lived objects that have to be disposed, so they are
@@ -42,6 +45,20 @@ class _LoginScreenState extends State<LoginScreen>
       String.fromEnvironment('GOOGLE_DESKTOP_CLIENT_ID');
 
   bool get _googleNativeSupported => GoogleAuth.supported;
+
+  bool _precached = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Reaching this screen through the splash leaves the image already
+    // decoded, but signing out pushes it directly - and the intro animation
+    // starts whether or not the asset is ready.
+    if (!_precached) {
+      _precached = true;
+      precacheImage(const AssetImage('assets/branding/app_icon.png'), context);
+    }
+  }
 
   @override
   void initState() {
@@ -91,7 +108,7 @@ class _LoginScreenState extends State<LoginScreen>
       await ApiClient.instance
           .authWithGoogle(handle: 'test_$n', displayName: 'Test User $n');
       RealtimeService.instance.connect();
-      if (mounted) Navigator.of(context).pushReplacementNamed(AppRoutes.shell);
+      if (mounted) OnboardingGate.enter(context);
     } catch (e) {
       if (mounted)
         ScaffoldMessenger.of(context)
@@ -139,7 +156,7 @@ class _LoginScreenState extends State<LoginScreen>
       RealtimeService.instance.connect();
 
       if (mounted) {
-        Navigator.of(context).pushReplacementNamed(AppRoutes.shell);
+        OnboardingGate.enter(context);
       }
     } on SignInWithAppleAuthorizationException catch (e) {
       // Backing out of the sheet is a choice, not a failure worth reporting.
@@ -216,7 +233,7 @@ class _LoginScreenState extends State<LoginScreen>
       RealtimeService.instance.connect();
 
       if (mounted) {
-        Navigator.of(context).pushReplacementNamed(AppRoutes.shell);
+        OnboardingGate.enter(context);
       }
     } catch (e) {
       if (mounted) {
@@ -266,11 +283,27 @@ class _LoginScreenState extends State<LoginScreen>
                   child: FadeTransition(
                     opacity: CurvedAnimation(
                         parent: _intro, curve: const Interval(0.0, 0.35)),
-                    // The same living orb the splash, home and coach use, so the
-                    // first face you meet is the one you keep. Gently alive here
-                    // rather than held still - this is a welcome, not a resting
-                    // home screen.
-                    child: const FluidOrb(size: 132),
+                    // The app icon, continuing the splash rather than
+                    // replacing it: the mark you tapped on the home screen is
+                    // still the mark in front of you while you sign in. Masked
+                    // to the same squircle the icon has on the home screen, so
+                    // it does not read as a stray square on the wash. The
+                    // entrance is carried by the scale and fade around it now,
+                    // which is why this no longer needs to be a live shader.
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(_logoSize * 0.2237),
+                      child: Image.asset(
+                        'assets/branding/app_icon.png',
+                        width: _logoSize,
+                        height: _logoSize,
+                        // The source is 1024px square. Without this it decodes
+                        // at full size and throws most of it away.
+                        cacheWidth: (_logoSize *
+                                MediaQuery.devicePixelRatioOf(context))
+                            .round(),
+                        filterQuality: FilterQuality.medium,
+                      ),
+                    ),
                   ),
                 ),
               ],

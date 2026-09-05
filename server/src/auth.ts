@@ -78,7 +78,11 @@ async function appleKeys(forceRefresh = false): Promise<AppleJwk[]> {
   const fresh = appleKeyCache && Date.now() - appleKeyCache.fetchedAt < 60 * 60 * 1000;
   if (fresh && !forceRefresh) return appleKeyCache!.keys;
 
-  const resp = await fetch(APPLE_KEYS_URL);
+  // Timed out explicitly. Node's fetch has no default timeout, so a hung
+  // connection to Apple would hold a request - and its database connection -
+  // open indefinitely; enough of them and the pool is gone. Every sign-in goes
+  // through here, so this is the outbound call most worth bounding.
+  const resp = await fetch(APPLE_KEYS_URL, { signal: AbortSignal.timeout(5_000) });
   if (!resp.ok) throw new Error(`Apple JWKS fetch failed: ${resp.status}`);
   const body = (await resp.json()) as { keys: AppleJwk[] };
   appleKeyCache = { keys: body.keys ?? [], fetchedAt: Date.now() };
@@ -166,13 +170,69 @@ async function issueSessionForEmail(
     );
   }
   u = publicUser(u);
+  res.json({ ...(await issueTokens(u)), user: u });
+}
 
+// ── Access and refresh tokens ───────────────────────────────────────────────
+//
+// This used to be one 30-day bearer token with no way to end it early. Two
+// separate problems: a token captured from a device backup stayed valid for a
+// month, and signing out only forgot the local copy, so "sign me out" was a
+// statement about this phone rather than about the session.
+//
+// Split into a short access token and a long refresh token, both carrying the
+// account's `token_version`. Bumping that column invalidates everything already
+// issued, in one statement, with no deny-list to maintain or expire.
+
+/** Long enough not to interrupt a coaching conversation, short enough to matter. */
+const ACCESS_TTL = '30m';
+
+/** The refresh token's life, and so the real "stay signed in" window. */
+const REFRESH_TTL = '30d';
+
+export interface TokenPair {
+  token: string;
+  refreshToken: string;
+  expiresIn: number;
+}
+
+/** Current revocation counter for an account. */
+async function tokenVersion(userId: string): Promise<number> {
+  if (!config.hasDb) return 0;
+  const row = await db.oneOrNone(`select token_version from users where id = $1`, [userId]);
+  return row?.token_version ?? 0;
+}
+
+/**
+ * Mint a fresh pair. `typ` separates the two so a refresh token cannot be
+ * presented as an access token: they are signed with the same secret, and
+ * without this claim the long-lived one would open every authenticated route
+ * and the split would buy nothing.
+ */
+async function issueTokens(u: { id: string; display_name: string; handle: string; avatar_color: string | null }): Promise<TokenPair> {
+  const ver = await tokenVersion(u.id);
   const token = jwt.sign(
-    { sub: u.id, name: u.display_name, handle: u.handle, color: u.avatar_color },
+    { sub: u.id, name: u.display_name, handle: u.handle, color: u.avatar_color, ver, typ: 'access' },
     config.jwtSecret,
-    { expiresIn: '30d', issuer: config.jwtIssuer },
+    { expiresIn: ACCESS_TTL, issuer: config.jwtIssuer },
   );
-  res.json({ token, user: u });
+  const refreshToken = jwt.sign(
+    { sub: u.id, ver, typ: 'refresh' },
+    config.jwtSecret,
+    { expiresIn: REFRESH_TTL, issuer: config.jwtIssuer },
+  );
+  return { token, refreshToken, expiresIn: 30 * 60 };
+}
+
+/**
+ * Invalidate every token this account currently holds.
+ *
+ * Called on sign-out and on account deletion. Idempotent, and cheap: one
+ * increment, no rows to scan.
+ */
+export async function revokeAllTokens(userId: string): Promise<void> {
+  if (!config.hasDb) return;
+  await db.none(`update users set token_version = token_version + 1 where id = $1`, [userId]);
 }
 
 export interface AuthUser {
@@ -197,12 +257,26 @@ declare global {
 export async function verifyJwt(token?: string): Promise<AuthUser> {
   if (!token) throw new Error('missing token');
   const raw = token.startsWith('Bearer ') ? token.slice(7) : token;
-  const decoded = jwt.verify(raw, config.jwtSecret) as {
+  // `issuer` is now asserted here too. It was set when signing and never
+  // checked, so a token minted by anything else sharing the secret would have
+  // been accepted on its signature alone.
+  const decoded = jwt.verify(raw, config.jwtSecret, { issuer: config.jwtIssuer }) as {
     sub: string;
     name?: string;
     handle?: string;
     color?: string;
+    ver?: number;
+    typ?: string;
   };
+
+  // A refresh token is not an access token. Without this check the 30-day
+  // credential would authenticate every route and splitting them would have
+  // achieved nothing. Tokens minted before this change carry no `typ` and are
+  // still accepted, so existing sessions are not force-signed-out by the
+  // deploy; remove the `!== undefined` allowance once they have aged out.
+  if (decoded.typ !== undefined && decoded.typ !== 'access') {
+    throw new Error('not an access token');
+  }
 
   // Dev mode (no DB): trust the signed claims and synthesize the user, so the
   // realtime layer is fully exercisable without a database.
@@ -218,10 +292,19 @@ export async function verifyJwt(token?: string): Promise<AuthUser> {
   }
 
   const u = await db.oneOrNone(
-    `select id, handle, display_name, initial, avatar_color from users where id = $1`,
+    `select id, handle, display_name, initial, avatar_color, token_version
+       from users where id = $1`,
     [decoded.sub],
   );
   if (!u) throw new Error('user not found');
+
+  // The revocation check. A token whose version is behind the account's was
+  // issued before the last sign-out or deletion, and is refused however valid
+  // its signature and expiry still are.
+  if (decoded.ver !== undefined && decoded.ver !== u.token_version) {
+    throw new Error('token revoked');
+  }
+
   return {
     id: u.id,
     handle: u.handle,
@@ -335,6 +418,7 @@ authRouter.post('/auth/google/desktop', async (req, res) => {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams(form),
+      signal: AbortSignal.timeout(10_000),
     });
     const j = (await r.json()) as { id_token?: string; error?: string };
     if (!r.ok || !j.id_token) {
@@ -363,7 +447,75 @@ authRouter.post('/auth/google/desktop', async (req, res) => {
   }
 });
 
+
+/**
+ * Trade a refresh token for a new pair.
+ *
+ * Rotating: the old refresh token is not reusable, because the pair is minted
+ * against the account's current `token_version` and the caller is handed a
+ * fresh one each time. A stolen refresh token is therefore only useful until
+ * the legitimate device next refreshes or signs out.
+ */
+authRouter.post('/auth/refresh', async (req, res) => {
+  const presented = String(req.body?.refreshToken ?? '');
+  if (!presented) return res.status(400).json({ error: 'missing refreshToken' });
+
+  try {
+    const decoded = jwt.verify(presented, config.jwtSecret, {
+      issuer: config.jwtIssuer,
+    }) as { sub: string; ver?: number; typ?: string };
+
+    // An access token must not buy a new session. Without this the 30-minute
+    // credential could be rolled forward forever and would be as good as the
+    // 30-day one.
+    if (decoded.typ !== 'refresh') {
+      return res.status(401).json({ error: 'not a refresh token' });
+    }
+
+    const u = await db.oneOrNone(
+      `select id, handle, display_name, avatar_color, token_version from users where id = $1`,
+      [decoded.sub],
+    );
+    if (!u) return res.status(401).json({ error: 'unknown account' });
+    if (decoded.ver !== undefined && decoded.ver !== u.token_version) {
+      return res.status(401).json({ error: 'token revoked' });
+    }
+
+    res.json(await issueTokens(u));
+  } catch {
+    // Deliberately uniform: expired, forged and revoked all answer the same,
+    // so the endpoint cannot be used to probe which accounts exist.
+    res.status(401).json({ error: 'invalid refresh token' });
+  }
+});
+
+/**
+ * Sign out everywhere. Ends every session this account holds, not just the
+ * caller's, which is the behaviour someone reaching for "sign out" on a lost
+ * phone actually needs.
+ */
+authRouter.post('/auth/logout', requireAuth, async (req, res) => {
+  try {
+    await revokeAllTokens(req.user.id);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('logout failed:', e);
+    res.status(500).json({ error: 'internal server error' });
+  }
+});
+
 authRouter.post('/auth/google-mock', async (req, res) => {
+  // Dev only. This mints a full session from nothing but a handle - no
+  // credential, no token, no proof of anything - so in production it is an
+  // account takeover for any address an attacker can guess. It was reachable
+  // on the live server because only devRoutes is gated by !isProd, and this
+  // sits on authRouter, which mounts unconditionally.
+  //
+  // It only failed there by accident: issueTokens reads users.token_version,
+  // which did not exist yet, so it 500'd instead of handing out a session.
+  // Running the migration would have quietly turned it into a working bypass.
+  if (config.isProd) return res.status(404).json({ error: 'not found' });
+
   const { handle } = req.body;
   if (!handle) return res.status(400).json({ error: 'missing handle' });
 
@@ -378,12 +530,9 @@ authRouter.post('/auth/google-mock', async (req, res) => {
       );
     }
 
-    const token = jwt.sign(
-      { sub: u.id, name: u.display_name, handle: u.handle, color: u.avatar_color },
-      config.jwtSecret,
-      { expiresIn: '30d' }
-    );
-    res.json({ token, user: publicUser(u) });
+    // Same issuance as every real path, so the dev route cannot hand out a
+    // long-lived token that the production rules would never mint.
+    res.json({ ...(await issueTokens(u)), user: publicUser(u) });
   } catch (e) {
     console.error('Google mock auth error:', e);
     res.status(500).json({ error: 'internal server error' });

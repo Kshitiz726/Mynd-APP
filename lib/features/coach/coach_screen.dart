@@ -9,6 +9,7 @@ import '../../core/utils/haptics.dart';
 import '../../core/utils/om_icons.dart';
 import '../../models/chat_message.dart';
 import '../../providers/coach_provider.dart';
+import '../../providers/health_consent_provider.dart';
 import '../../providers/memory_provider.dart';
 import '../../providers/nav_provider.dart';
 import '../../providers/premium_provider.dart';
@@ -16,6 +17,7 @@ import '../../widgets/fluid_orb.dart';
 import '../../widgets/om_back_button.dart';
 import '../../widgets/om_glass.dart';
 import '../../widgets/om_tappable.dart';
+import '../onboarding/health_consent_screen.dart';
 import 'coach_history_screen.dart';
 import 'puter_gate.dart';
 
@@ -54,7 +56,12 @@ class _CoachScreenState extends State<CoachScreen> {
     // yesterday afternoon is disorienting, and the old chat is not lost, it is
     // one tap below on the same screen.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) context.read<CoachProvider>().startNewChat();
+      if (!mounted) return;
+      final coach = context.read<CoachProvider>();
+      coach.startNewChat();
+      // Ask the server how many turns are left before the user finds out by
+      // hitting the wall.
+      coach.refreshQuota();
     });
   }
 
@@ -89,6 +96,27 @@ class _CoachScreenState extends State<CoachScreen> {
   Widget build(BuildContext context) {
     final c = context.omColors;
 
+    // "Before any coach conversation" is enforced here rather than at the
+    // places that navigate to the coach, because the coach is a tab inside an
+    // IndexedStack: it is built whether or not anyone routed to it, and three
+    // separate entry points reach it. Gating the screen itself is the only
+    // version of this that cannot be walked around by a fourth.
+    //
+    // Watched, so answering rebuilds straight into the chat. Someone who
+    // declines is *not* sent back here - the coach below simply runs without
+    // the health-related half of its context. See CoachContextBuilder.build.
+    //
+    // `mustAsk`, not `needsDecision`: the question is only put in front of
+    // someone when the server has confirmed there is no answer on file. If the
+    // server cannot be reached - or is running a build that predates this
+    // endpoint - the coach opens as normal with health context off, rather
+    // than showing a consent screen whose answer cannot be recorded and taking
+    // the whole feature, Puter sign-in included, down with it.
+    final consent = context.watch<HealthConsentProvider>();
+    if (consent.mustAsk) {
+      return HealthConsentScreen(onDecided: (_) {});
+    }
+
     // Every reply is written with the user's memory in hand: who they are,
     // what they are working towards, what they parked, what they have been
     // saying. Watched rather than read once, so an edit takes effect on the
@@ -117,8 +145,14 @@ class _CoachScreenState extends State<CoachScreen> {
       builder: (context, coach, _) {
         // Free tier: after the daily message budget the composer locks behind
         // the paywall. Premium unlocks it entirely.
-        final locked =
-            !isPremium && coach.messagesSentToday >= kFreeCoachMessageLimit;
+        //
+        // The server's answer wins where we have one. The device counter is
+        // kept as a fallback for the offline case, but it is no longer the
+        // thing that decides - it could be reset by clearing app data, which
+        // made the cap advisory. See CoachProvider.refreshQuota.
+        final locked = !isPremium &&
+            (coach.limitReached ||
+                coach.messagesSentToday >= kFreeCoachMessageLimit);
         // Auto-scroll whenever a new token arrives.
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (coach.isStreaming) _scrollToEnd();

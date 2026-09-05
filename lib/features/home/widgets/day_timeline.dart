@@ -48,6 +48,17 @@ class DayTimeline extends StatelessWidget {
     // and no drag can shift their times.
     final wake = scheduled.where((t) => t.id == 'wake_anchor').firstOrNull;
     final sleep = scheduled.where((t) => t.id == 'sleep_anchor').firstOrNull;
+    // Blocks mirrored in from the phone's calendar. Pinned like wake and sleep
+    // because they are not this app's to move: a drag that slid somebody's
+    // dentist appointment an hour later would be telling them a comfortable
+    // lie about when it is.
+    //
+    // They were previously filtered out along with every other anchor and
+    // never drawn at all, so an imported meeting was in the data, respected by
+    // the planner, and invisible.
+    final fromCalendar = scheduled
+        .where((t) => t.id.startsWith(Task.calendarPrefix))
+        .toList();
     final movable = scheduled.where((t) => !t.isAnchor).toList();
 
     final now = DateTime.now();
@@ -70,6 +81,27 @@ class DayTimeline extends StatelessWidget {
           const SizedBox(height: AppSpacing.sm),
         ],
         if (wake != null) _TimelineBlock(task: wake, pinned: true),
+        // Grouped and labelled rather than interleaved with the reorderable
+        // list. Slotting a fixed block between two draggable ones would mean
+        // the list's own indices no longer matched what is on screen, and a
+        // reorder would move the wrong task. Labelled so the grouping cannot
+        // be misread as the real order of the day.
+        if (fromCalendar.isNotEmpty) ...[
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.sm, top: 2),
+            child: Text(
+              'from your calendar',
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.3,
+                color: context.omColors.text2,
+              ),
+            ),
+          ),
+          for (final e in fromCalendar) _TimelineBlock(task: e, pinned: true),
+          const SizedBox(height: AppSpacing.sm),
+        ],
         ReorderableListView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),

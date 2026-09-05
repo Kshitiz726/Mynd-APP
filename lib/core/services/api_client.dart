@@ -19,29 +19,46 @@ class ApiClient {
   final _client = http.Client();
   ApiConfig get _cfg => ApiConfig.instance;
 
-  Future<Map<String, dynamic>> _get(String path) async {
-    final res = await _client.get(_cfg.rest(path), headers: _cfg.authHeaders);
+  /// Every request goes through here.
+  ///
+  /// Access tokens now last 30 minutes rather than 30 days, so a 401 is the
+  /// normal, expected end of a token's life rather than a sign that the session
+  /// is over. It is handled once, here: refresh, then replay the request. Only
+  /// if the refresh itself fails does the user get sent back to sign-in.
+  ///
+  /// [send] is a closure rather than a prepared Request because it has to be
+  /// runnable twice, with the *new* auth header the second time.
+  Future<Map<String, dynamic>> _send(Future<http.Response> Function() send) async {
+    var res = await send();
+    if (res.statusCode == 401 && _cfg.refreshToken != null) {
+      if (await _refreshSession()) {
+        res = await send();
+      }
+    }
     return _decode(res);
   }
 
-  Future<Map<String, dynamic>> _post(String path, Map<String, dynamic> body) async {
-    final res =
-        await _client.post(_cfg.rest(path), headers: _cfg.authHeaders, body: jsonEncode(body));
-    return _decode(res);
-  }
+  Future<Map<String, dynamic>> _get(String path) =>
+      _send(() => _client.get(_cfg.rest(path), headers: _cfg.authHeaders));
+
+  Future<Map<String, dynamic>> _post(String path, Map<String, dynamic> body) => _send(
+        () => _client.post(_cfg.rest(path), headers: _cfg.authHeaders, body: jsonEncode(body)),
+      );
 
   Future<Map<String, dynamic>> get(String path) => _get(path);
   Future<Map<String, dynamic>> post(String path, Map<String, dynamic> body) => _post(path, body);
 
-  Future<Map<String, dynamic>> put(String path, Map<String, dynamic> body) async {
-    final res = await _client.put(_cfg.rest(path), headers: _cfg.authHeaders, body: jsonEncode(body));
-    return _decode(res);
-  }
+  Future<Map<String, dynamic>> put(String path, Map<String, dynamic> body) => _send(
+        () => _client.put(_cfg.rest(path), headers: _cfg.authHeaders, body: jsonEncode(body)),
+      );
 
-  Future<Map<String, dynamic>> delete(String path) async {
-    final res = await _client.delete(_cfg.rest(path), headers: _cfg.authHeaders);
-    return _decode(res);
-  }
+  Future<Map<String, dynamic>> delete(String path, [Map<String, dynamic>? body]) => _send(
+        () => _client.delete(
+          _cfg.rest(path),
+          headers: _cfg.authHeaders,
+          body: body == null ? null : jsonEncode(body),
+        ),
+      );
 
   /// Called once when the server rejects our session, so the app can send the
   /// user back to the login screen. Set in main().
@@ -50,6 +67,44 @@ class ApiClient {
   /// Guards against a burst of 401s (every provider refreshing at once) tearing
   /// the session down repeatedly and firing the callback for each one.
   bool _expiring = false;
+
+  /// In-flight refresh, shared by every request that hits a 401 at once.
+  ///
+  /// Without this, a screen that fires six requests on open would run six
+  /// refreshes, five of which race and lose - and since refresh rotates the
+  /// token, the losers would install a stale one and fail again. One refresh,
+  /// everybody awaits it.
+  Future<bool>? _refreshing;
+
+  /// Trade the refresh token for a new pair. Returns false if the session is
+  /// genuinely finished and the user has to sign in again.
+  Future<bool> _refreshSession() {
+    return _refreshing ??= () async {
+      try {
+        final refresh = _cfg.refreshToken;
+        if (refresh == null) return false;
+        // Deliberately a bare client call, not _post: going through the normal
+        // path would attach the dead access token and could recurse straight
+        // back into this method on another 401.
+        final res = await _client.post(
+          _cfg.rest('/api/auth/refresh'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'refreshToken': refresh}),
+        );
+        if (res.statusCode >= 400) return false;
+        final j = jsonDecode(res.body) as Map<String, dynamic>;
+        _cfg
+          ..authToken = j['token'] as String?
+          ..refreshToken = j['refreshToken'] as String?;
+        await SessionStore.save();
+        return _cfg.authToken != null;
+      } catch (_) {
+        return false;
+      } finally {
+        _refreshing = null;
+      }
+    }();
+  }
 
   Map<String, dynamic> _decode(http.Response res) {
     if (res.statusCode >= 400) {
@@ -66,7 +121,7 @@ class ApiClient {
         _expiring = true;
         // Fire and forget: callers are mid-request and should still get their
         // exception, they just should not also be left signed in.
-        signOut().whenComplete(() {
+        signOut(revokeRemotely: false).whenComplete(() {
           _expiring = false;
           onSessionExpired?.call();
         });
@@ -126,6 +181,7 @@ class ApiClient {
 
     _cfg
       ..authToken = j['token'] as String
+      ..refreshToken = j['refreshToken'] as String?
       ..userId = userId
       ..displayName = user['display_name'] as String?
       ..handle = user['handle'] as String?;
@@ -140,11 +196,27 @@ class ApiClient {
     if (switched) AccountScope.onSwitched?.call();
   }
 
-  /// Clear the in-memory + on-disk session. Used by sign out.
-  Future<void> signOut() async {
+  /// Clear the session, locally and on the server.
+  ///
+  /// The server call is what actually ends the session: it bumps the account's
+  /// token version, so every token already issued stops working. Clearing only
+  /// the device copy - which is all this used to do - left a 30-day credential
+  /// valid for anyone who had already taken one.
+  ///
+  /// Best-effort, and deliberately so: a user signing out on a dead network
+  /// must still get signed out on this device.
+  Future<void> signOut({bool revokeRemotely = true}) async {
+    if (revokeRemotely && _cfg.authToken != null) {
+      try {
+        await _post('/api/auth/logout', {});
+      } catch (_) {
+        // Nothing to do about it here; the local clear below still happens.
+      }
+    }
     await SessionStore.clear();
     _cfg
       ..authToken = null
+      ..refreshToken = null
       ..userId = null
       ..displayName = null
       ..handle = null;
@@ -288,6 +360,60 @@ class ApiClient {
 
   Future<void> removeAvatar() => delete('/api/me/avatar');
 
+  // ── Coach entitlement ──
+  /// Where this account stands today, without spending a turn.
+  Future<Map<String, dynamic>> coachQuota() =>
+      _get('/api/coach/quota?tz=${Uri.encodeComponent(DateTime.now().timeZoneName)}');
+
+  /// Claim one coaching turn. Throws [CoachTurnRefused] when today's free-tier
+  /// budget is spent.
+  ///
+  /// The coach reply itself is generated on the device by Puter, so this is the
+  /// only point at which the server can enforce the cap - which is exactly why
+  /// it exists rather than the count being kept locally.
+  Future<({bool premium, int? remaining})> spendCoachTurn() async {
+    try {
+      final j = await _post('/api/coach/turn', {});
+      return (premium: j['premium'] == true, remaining: j['remaining'] as int?);
+    } on ApiException catch (e) {
+      if (e.statusCode == 402) throw const CoachTurnRefused();
+      rethrow;
+    }
+  }
+
+  // ── Account: erasure and portability ──
+  /// Permanently delete this account. [confirm] must equal the user's own
+  /// display name; the server rejects anything else, so this cannot be reached
+  /// by a mis-tap.
+  Future<void> deleteAccount({required String confirm}) async {
+    await delete('/api/me', {'confirm': confirm});
+    await signOut(revokeRemotely: false); // the account is gone; nothing to revoke
+  }
+
+  /// Everything stored about this account, as one JSON document.
+  Future<Map<String, dynamic>> exportMyData() => _get('/api/me/export');
+
+  // ── Health-data consent ──
+  /// The account's current answer, and whether it needs asking again because
+  /// the policy has moved on since it was given.
+  Future<Map<String, dynamic>> fetchHealthConsent() => _get('/api/consent/health');
+
+  /// Record a decision. [source] is 'onboarding' or 'settings'; the policy
+  /// version is the server's, not ours, so the app cannot claim someone agreed
+  /// to wording that was never on their screen.
+  Future<Map<String, dynamic>> setHealthConsent({
+    required bool granted,
+    required String source,
+  }) =>
+      _post('/api/consent/health', {'granted': granted, 'source': source});
+
+  /// Erase the health-related documents already stored for this account.
+  /// Returns how many were removed.
+  Future<int> deleteHealthData() async {
+    final j = await delete('/api/consent/health/data');
+    return j['deletedDocuments'] as int? ?? 0;
+  }
+
   // ── Per-account state (the backlog and friends follow the account) ──
   /// The document parked under [key], with when it was last written, so the
   /// caller can tell whether the server's copy or the phone's is the newer one.
@@ -395,6 +521,15 @@ class ApiClient {
 
   Future<void> markRead(String conversationId) async =>
       _post('/api/conversations/$conversationId/read', {});
+}
+
+/// Today's free coaching turns are spent. The UI answers this with the
+/// paywall; anything else would be a silent failure on a feature the user is
+/// entitled to be told about.
+class CoachTurnRefused implements Exception {
+  const CoachTurnRefused();
+  @override
+  String toString() => 'CoachTurnRefused';
 }
 
 class ApiException implements Exception {

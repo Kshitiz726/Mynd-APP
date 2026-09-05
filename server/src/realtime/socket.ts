@@ -4,6 +4,12 @@ import { pubClient, subClient } from '../redis.js';
 import { verifyJwt, type AuthUser } from '../auth.js';
 import { AccessToken } from 'livekit-server-sdk';
 import { config } from '../config.js';
+import { normaliseMusicUri } from './music_link.js';
+
+/// Last set_music per socket, for the spam ceiling in the handler below.
+/// Keyed by socket id and cleaned up on disconnect, so it cannot grow without
+/// bound the way a per-user map would across reconnects.
+const musicRateLimit = new Map<string, number>();
 import { makePresence } from './presence.js';
 import { toggleReaction, type ReactionKind } from '../services/reactions.js';
 import { persistMessage, isMember, otherMemberIds, type MessageKind, type MediaMeta } from '../services/chat.js';
@@ -30,6 +36,44 @@ export function attachRealtime(io: Server) {
   io.on('connection', (socket) => {
     const user: AuthUser = socket.data.user;
     socket.data.rooms = new Set<string>();
+
+    // ── Per-socket event budget ──
+    //
+    // Nothing throttled socket events, so a single client could emit chat
+    // messages or presence patches in a tight loop and every other member of
+    // the room would receive all of them - a flood amplified by the server, at
+    // no cost to the sender. The HTTP rate limiters do not help here: this
+    // traffic never touches Express.
+    //
+    // A sliding window over the whole socket rather than per event name, so
+    // rotating between event types cannot multiply the budget. The ceiling is
+    // far above real use (a timer tick and a heartbeat are seconds apart, and
+    // a fast typist sends a message every second or two) and far below what a
+    // loop produces.
+    let windowStart = Date.now();
+    let eventsInWindow = 0;
+    const WINDOW_MS = 10_000;
+    const MAX_EVENTS = 120;
+
+    socket.use((_packet, next) => {
+      const now = Date.now();
+      if (now - windowStart > WINDOW_MS) {
+        windowStart = now;
+        eventsInWindow = 0;
+      }
+      if (++eventsInWindow > MAX_EVENTS) {
+        console.warn('[socket] event flood, disconnecting', {
+          userId: user.id.slice(0, 8),
+          events: eventsInWindow,
+        });
+        // Disconnect rather than silently drop: a client this far over budget
+        // is either broken or hostile, and in both cases the useful signal is
+        // that it has to reconnect and start again.
+        socket.disconnect(true);
+        return;
+      }
+      next();
+    });
     socket.join(`user:${user.id}`); // personal room for DMs + notifications
     socket.join('lobby'); // receives room-list updates (new public rooms, counts)
 
@@ -73,10 +117,18 @@ export function attachRealtime(io: Server) {
         socket.emit('voice_unavailable', { roomId, reason: 'LiveKit not configured' });
         return;
       }
+      // 15 minutes, not the 4 hours this used to mint.
+      //
+      // The grant is already scoped to one room and one identity, so the TTL is
+      // about how long a leaked token stays useful - and a token good for four
+      // hours is good for the entire focus session and most of the evening
+      // after it. The client asks again on reconnect (voice_join is re-emitted
+      // on every join), and LiveKit keeps an established connection alive past
+      // token expiry, so a short life costs a re-request rather than a drop.
       const at = new AccessToken(config.livekit.apiKey, config.livekit.apiSecret, {
         identity: user.id,
         name: user.displayName,
-        ttl: '4h',
+        ttl: '15m',
       });
       at.addGrant({
         roomJoin: true,
@@ -158,6 +210,113 @@ export function attachRealtime(io: Server) {
       await presence.setRoomAmbience(roomId, ambience);
       io.to(`room:${roomId}`).emit('ambience_changed', { roomId, ambience, changedBy: user.id });
     });
+
+    // ── Room music (shared state; each device plays its own copy) ──
+    //
+    // Anyone in the room can change it, which is what "they can change the
+    // music" asks for. Ownership would be a check right here if that changes.
+    socket.on('set_music', async ({ roomId, uri, title }: {
+      roomId: string; uri: unknown; title?: unknown;
+    }) => {
+      if (typeof roomId !== 'string' || !roomId) return;
+
+      // Members only. Without this, anyone holding a socket could push a track
+      // into a room they are not in, to people who cannot see them.
+      if (!socket.rooms.has(`room:${roomId}`)) return;
+
+      // Spam ceiling. One change every two seconds is far more than anyone
+      // choosing music needs, and it stops a script fanning hundreds of events
+      // out to every participant.
+      const now = Date.now();
+      const last = musicRateLimit.get(socket.id) ?? 0;
+      if (now - last < 2000) return;
+      musicRateLimit.set(socket.id, now);
+
+      // Stopping is a real request, not a malformed one.
+      if (uri === null) {
+        await presence.setRoomMusic(roomId, null);
+        io.to(`room:${roomId}`).emit('music_changed', { roomId, music: null, changedBy: user.id });
+        return;
+      }
+
+      // The client's string is never trusted: this is broadcast to everyone in
+      // the room, so an unvalidated value is a way to put arbitrary text - or a
+      // link somewhere else entirely - onto other people's screens.
+      const canonical = normaliseMusicUri(uri);
+      if (!canonical) {
+        socket.emit('music_rejected', {
+          roomId,
+          reason: 'paste a YouTube or Spotify link',
+        });
+        return;
+      }
+
+      await presence.setRoomMusic(roomId, {
+        uri: canonical,
+        // Cosmetic and attacker-controlled, so it is stripped of control
+        // characters and capped.
+        title: typeof title === 'string'
+          ? title.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 120) || null
+          : null,
+        changedBy: user.id,
+        changedAt: now,
+        // The room's shared playhead starts now, on the server's clock. Every
+        // client seeks to `now - startedAt`, so someone joining in ten minutes
+        // hears what the room hears rather than starting the track over.
+        startedAt: now,
+        paused: false,
+        positionMs: 0,
+      });
+      const music = await presence.roomMusic(roomId);
+      io.to(`room:${roomId}`).emit('music_changed', { roomId, music, changedBy: user.id });
+    });
+
+    /// Pause or resume for the whole room.
+    ///
+    /// Split from `set_music` because it is a different intent with different
+    /// arithmetic: pausing freezes the playhead into `positionMs`, resuming
+    /// rebuilds `startedAt` from it. Doing that here rather than on the client
+    /// keeps one clock in charge - if each device computed its own resume
+    /// point, they would fan out by however far their clocks disagree.
+    socket.on('set_music_playback', async ({ roomId, paused }: {
+      roomId: string; paused: unknown;
+    }) => {
+      if (typeof roomId !== 'string' || !roomId) return;
+      if (typeof paused !== 'boolean') return;
+      if (!socket.rooms.has(`room:${roomId}`)) return;
+
+      const now = Date.now();
+      const last = musicRateLimit.get(socket.id) ?? 0;
+      if (now - last < 2000) return;
+      musicRateLimit.set(socket.id, now);
+
+      const current = await presence.roomMusic(roomId);
+      // Nothing playing means there is nothing to pause; silently ignoring it
+      // beats inventing a track.
+      if (!current) return;
+      if (current.paused === paused) return;
+
+      const next = paused
+        ? {
+            ...current,
+            paused: true,
+            positionMs: current.startedAt ? Math.max(0, now - current.startedAt) : 0,
+            startedAt: null,
+          }
+        : {
+            ...current,
+            paused: false,
+            startedAt: now - (current.positionMs ?? 0),
+          };
+
+      await presence.setRoomMusic(roomId, next);
+      io.to(`room:${roomId}`).emit('music_changed', {
+        roomId,
+        music: next,
+        changedBy: user.id,
+      });
+    });
+
 
     // ════════════ FEED REACTIONS (live) ════════════
     socket.on('new_reaction', async ({ postId, kind }: { postId: string; kind: ReactionKind }) => {
@@ -246,6 +405,8 @@ export function attachRealtime(io: Server) {
 
     // ════════════ DISCONNECT ════════════
     socket.on('disconnect', async () => {
+      // Or the rate-limit map grows by one entry per connection, forever.
+      musicRateLimit.delete(socket.id);
       await presence.handleDisconnect(socket.id, user.id, [...socket.data.rooms]);
     });
   });

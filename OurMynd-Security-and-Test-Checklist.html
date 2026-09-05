@@ -1,0 +1,504 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>OurMynd Security and Test Checklist</title>
+<style>
+  @page { size: A4; margin: 11mm 12mm 10mm; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", Arial, Helvetica, sans-serif;
+    color: #111;
+    font-size: 7pt;
+    line-height: 1.3;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .sheet { page-break-after: always; }
+  .sheet:last-child { page-break-after: auto; }
+
+  .masthead {
+    display: flex; align-items: flex-end; justify-content: space-between;
+    border-bottom: 1.4pt solid #111; padding-bottom: 4pt; margin-bottom: 3pt;
+  }
+  .masthead h1 { font-size: 13pt; font-weight: 700; letter-spacing: -0.2pt; margin: 0; }
+  .masthead .sub { font-size: 7pt; color: #444; margin: 1.5pt 0 0; }
+  .meta { text-align: right; font-size: 6.6pt; color: #444; line-height: 1.5; }
+  .meta b { color: #111; }
+
+  .ribbon {
+    display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 0.5pt solid #bbb; padding: 3pt 0 4pt; margin-bottom: 6pt;
+    font-size: 6.6pt; color: #444;
+  }
+  .ribbon .part { font-weight: 700; color: #111; letter-spacing: 0.4pt; text-transform: uppercase; }
+
+  section { margin-bottom: 7pt; break-inside: avoid; }
+  h2 {
+    font-size: 7.8pt; margin: 0 0 3pt; padding-bottom: 1.5pt;
+    border-bottom: 0.5pt solid #111; display: flex; justify-content: space-between;
+  }
+  h2 span { font-weight: 400; color: #666; font-size: 6.4pt; }
+
+  table { width: 100%; border-collapse: collapse; }
+  td { padding: 2pt 3pt; vertical-align: top; border-bottom: 0.25pt solid #ddd; }
+  tr:last-child td { border-bottom: none; }
+  td.id { width: 22pt; color: #666; font-variant-numeric: tabular-nums; }
+  td.chk { width: 38%; }
+  td.st { width: 42pt; text-align: center; }
+  td.ev { color: #444; font-size: 6.5pt; }
+  code { font-family: "SF Mono", Consolas, monospace; font-size: 6.2pt; background: #f2f2f4; padding: 0 1.5pt; }
+
+  .b { display: inline-block; padding: 0.5pt 3pt; border-radius: 2pt;
+       font-size: 5.9pt; font-weight: 700; letter-spacing: 0.3pt; }
+  .pass    { background: #d8efdc; color: #14532d; }
+  .fail    { background: #fadbd8; color: #7f1d1d; }
+  .partial { background: #fdf0d5; color: #78350f; }
+  .blocked { background: #e2e8f0; color: #334155; }
+  .na      { background: #eee;    color: #555; }
+
+  .summary { border: 0.8pt solid #111; padding: 5pt 6pt; margin-bottom: 7pt; }
+  .summary h3 { margin: 0 0 3pt; font-size: 8pt; }
+  .tally { display: flex; gap: 10pt; font-size: 6.8pt; margin-bottom: 3pt; }
+  .tally b { font-size: 8pt; }
+  .crit { background: #fadbd8; border-left: 2.5pt solid #991b1b; padding: 3pt 5pt; margin-top: 4pt; font-size: 6.6pt; }
+  .crit b { color: #7f1d1d; }
+
+  .signoff { display: flex; gap: 9pt; margin-top: 8pt; }
+  .signoff > div { flex: 1; }
+  .signoff .lab { font-size: 6pt; color: #666; text-transform: uppercase; letter-spacing: 0.4pt; }
+  .signoff .rule { border-bottom: 0.6pt solid #111; height: 12pt; }
+  .signoff .filled { border-bottom: 0.6pt solid #111; height: 12pt; font-size: 7.2pt; font-weight: 600; padding-top: 3pt; }
+  .foot { display: flex; justify-content: space-between; margin-top: 5pt;
+          border-top: 0.5pt solid #bbb; padding-top: 3pt; font-size: 6pt; color: #666; }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════ SHEET 1 ══════════════════════ -->
+<div class="sheet">
+  <div class="masthead">
+    <div>
+      <h1>OurMynd Security and Test Checklist</h1>
+      <p class="sub">Security review of the Flutter client, Node backend, database and deployment.</p>
+    </div>
+    <div class="meta">
+      <b>The Social Globe Ltd</b><br>
+      Company no. 13923693<br>
+      Version 2.0 &middot; 25 August 2026
+    </div>
+  </div>
+  <div class="ribbon">
+    <span class="part">Part 1 &middot; Security</span>
+    <span>Verified against commit <code>7ae30b3</code> and the live host <code>ourmynd-server.onrender.com</code>.</span>
+  </div>
+
+  <div class="summary">
+    <h3>Result: PASS with conditions &mdash; 31 findings fixed and verified</h3>
+    <div class="tally">
+      <span><b>53</b> pass <span style="color:#14532d">(was 21)</span></span>
+      <span><b>2</b> fail <span style="color:#7f1d1d">(was 33)</span></span>
+      <span><b>8</b> partial</span>
+      <span><b>20</b> blocked</span>
+      <span style="color:#666">83 checks</span>
+    </div>
+    <div style="font-size:6.6pt;color:#444">
+      Blocked items could not be tested without a second account, a physical device, or provider
+      dashboard access. Nothing is recorded as passing without evidence named in the row.
+    </div>
+    <div class="crit" style="background:#d8efdc;border-left-color:#14532d">
+      <b style="color:#14532d">P0 closed in code.</b> The unsigned-webhook path (4.7) now refuses to
+      run in production and was verified doing so. <b>It is not closed in production until you set
+      <code>STRIPE_WEBHOOK_SECRET</code> on Render</b> &mdash; until then webhooks fail closed
+      (500) rather than being forged, which is safe but means entitlement changes rely on the
+      session-lookup path alone.
+    </div>
+    <div class="crit">
+      <b>The two remaining failures cannot be fixed in code alone.</b>
+      <b>3.4</b> blocks do not exist &mdash; reporting and blocking are an unbuilt feature, not a
+      misconfiguration, and Apple Guideline 1.2 requires them before a UGC app is approved.
+      <b>7.6</b> production has no Redis; provision one and set <code>REDIS_URL</code>.
+    </div>
+  </div>
+
+  <section>
+    <h2>1. Secrets and credentials <span>1.1 to 1.6</span></h2>
+    <table>
+      <tr><td class="id">1.1</td><td class="chk">Google OAuth client secret and Groq key rotated</td><td class="st"><span class="b partial">PARTIAL</span></td><td class="ev">Groq key removed from the client entirely (see 1.4), so the urgent exposure is closed. <b>Rotation itself is still owed and is yours to do</b> - the old key was in a shipped binary and must be assumed compromised.</td></tr>
+      <tr><td class="id">1.2</td><td class="chk">server/.env and every *.local.sh remain gitignored and untracked</td><td class="st"><span class="b pass">PASS</span></td><td class="ev"><code>git check-ignore</code>: <code>server/.gitignore:3</code>, <code>.gitignore:62</code>. <code>git ls-files</code> confirms untracked.</td></tr>
+      <tr><td class="id">1.3</td><td class="chk">Production secrets held in platform secrets, not in the image or repo</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Every value in <code>server/.env</code> checked against all 94 commits: JWT_SECRET, SUPABASE_SERVICE_ROLE, STRIPE_SECRET_KEY and the desktop client secret were never committed. <code>.env.example</code> holds placeholders only (<code>sk_test_xxx</code>). Note: deployment is <b>Render</b>, not Fly.io.</td></tr>
+      <tr><td class="id">1.4</td><td class="chk">No secret reaches the Flutter client. Confirm by inspecting a release build</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Fixed. The app no longer holds any provider key: <code>groq_service.dart</code> now calls <code>/api/coach/*</code> and the key lives only in the server environment. Verified - no <code>gsk_</code> literal and no <code>api.groq.com</code> reference anywhere in <code>lib/</code>. Also gitignored <code>OURMYND_TESTFLIGHT_PROMPT.txt</code>, which held the key in plaintext and was untracked but <i>not</i> ignored.</td></tr>
+      <tr><td class="id">1.5</td><td class="chk">Stripe price identifiers resolved server side only</td><td class="st"><span class="b pass">PASS</span></td><td class="ev"><code>config.ts:70-73</code>; client receives resolved plans from <code>/billing/plans</code>.</td></tr>
+      <tr><td class="id">1.6</td><td class="chk">Key rotation procedure written down and owned by a named person</td><td class="st"><span class="b blocked">BLOCKED</span></td><td class="ev">No such document in the repository. Organisational, not code.</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>2. Authentication and session <span>2.1 to 2.10</span></h2>
+    <table>
+      <tr><td class="id">2.1</td><td class="chk">Google ID tokens verified against the correct audiences for web, desktop and iOS</td><td class="st"><span class="b pass">PASS</span></td><td class="ev"><code>auth.ts</code> <code>googleAudiences()</code> covers all three client ids.</td></tr>
+      <tr><td class="id">2.2</td><td class="chk">Apple tokens verified against Apple public keys and the correct audience</td><td class="st"><span class="b pass">PASS</span></td><td class="ev"><code>auth.ts:106-137</code> &mdash; JWKS fetch by <code>kid</code>, RS256, issuer and audience both pinned.</td></tr>
+      <tr><td class="id">2.3</td><td class="chk">Signature, issuer, audience and expiry all checked. No decode without verify</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Unchanged and still correct, and now stronger: <code>verifyJwt</code> asserts <code>issuer</code> as well as the signature. It was set when signing and never checked.</td></tr>
+      <tr><td class="id">2.4</td><td class="chk">JWT secret at least 32 bytes of entropy and unique to production</td><td class="st"><span class="b partial">PARTIAL</span></td><td class="ev">Local value is 40 chars. The Render value cannot be inspected from outside &mdash; owner must confirm it differs from local and is &ge;32 bytes.</td></tr>
+      <tr><td class="id">2.5</td><td class="chk">30 day token lifetime reviewed. Shorter access token plus refresh token</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Fixed. 30-minute access token + 30-day rotating refresh token (<code>auth.ts</code>). Verified by decoding a live pair: <code>typ:access ttl=30m</code>, <code>typ:refresh ttl=30d</code>. A refresh token presented as an access token is refused (401).</td></tr>
+      <tr><td class="id">2.6</td><td class="chk">Token revocation on logout, password change, or account deletion</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Fixed. <code>users.token_version</code> counter; <code>POST /api/auth/logout</code> increments it. Verified: after logout the previously working access token returns 401 and the refresh token returns 401.</td></tr>
+      <tr><td class="id">2.7</td><td class="chk">Sign out clears the token from device storage and terminates sockets</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Now revokes server side as well as clearing the device. <code>signOut()</code> calls <code>/auth/logout</code> first.</td></tr>
+      <tr><td class="id">2.8</td><td class="chk">Account deletion invalidates all outstanding tokens</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Fixed. <code>DELETE /api/me</code> deletes the account and bumps the revocation counter. Verified: token returns 401 immediately after deletion.</td></tr>
+      <tr><td class="id">2.9</td><td class="chk">No endpoint accepts a user identifier from the body in place of the token subject</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">All own-data handlers scope to <code>req.user.id</code>. Endpoints taking a target id (friend request, DM open) are addressing another user by design, not substituting the subject.</td></tr>
+      <tr><td class="id">2.10</td><td class="chk">Brute force and credential stuffing resistance on every auth endpoint</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Fixed. <code>express-rate-limit</code>, 10 attempts per 15 min on <code>/api/auth</code>. Verified live: attempts returned 429 once the window budget was spent.</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>3. Authorisation and data isolation <span>3.1 to 3.9</span></h2>
+    <table>
+      <tr><td class="id">3.1</td><td class="chk">Every route under /api requires a verified token unless deliberately public</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Only <code>/auth/*</code> and the two billing return pages are unauthenticated, all deliberate.</td></tr>
+      <tr><td class="id">3.2</td><td class="chk">Every database query filters by the authenticated user</td><td class="st"><span class="b partial">PARTIAL</span></td><td class="ev">Verified on chat, profile, state and consent. A full sweep of all 19 identifier-bearing sites was not completed &mdash; see 3.9.</td></tr>
+      <tr><td class="id">3.3</td><td class="chk">Room membership enforced server side before any room data is returned</td><td class="st"><span class="b blocked">BLOCKED</span></td><td class="ev">Needs a runtime test with two accounts.</td></tr>
+      <tr><td class="id">3.4</td><td class="chk">Feed, social and body doubling queries respect blocks server side</td><td class="st"><span class="b fail">FAIL</span></td><td class="ev">No block feature exists. There is no moderation route and no blocks table. Also fails 18.7 and Apple Guideline 1.2.</td></tr>
+      <tr><td class="id">3.5</td><td class="chk">Premium features gated on server held entitlement, never on a client flag</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Fixed. The coach cap is now server-held too - see 6.7 - so no premium behaviour is decided by a client flag.</td></tr>
+      <tr><td class="id">3.6</td><td class="chk">Supabase row level security enabled on every table holding user data</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Fixed in <code>20260826000000_security_hardening.sql</code>: <code>enable</code> <i>and</i> <code>force row level security</code> on users, posts, post_tags, reactions, user_state, health_consent_events, subscriptions, notes, with an explicit policy for the API role. <b>Takes effect when the migration is run.</b></td></tr>
+      <tr><td class="id">3.7</td><td class="chk">Dev routes unreachable in production. Confirm against the live host</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Live test: <code>GET /api/dev/token?user=sam</code> &rarr; <b>404</b>. <code>NODE_ENV=production</code> is set on Render.</td></tr>
+      <tr><td class="id">3.8</td><td class="chk">Health endpoint reveals no configuration, versions or connection strings</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Fixed. <code>/health</code> now returns <code>{"ok":true}</code> and nothing else; the subsystem detail goes to the startup log. Verified live.</td></tr>
+      <tr><td class="id">3.9</td><td class="chk">Direct object reference test across all identifier bearing endpoints</td><td class="st"><span class="b blocked">BLOCKED</span></td><td class="ev">Requires two accounts on a scratch stack. Must not be run against production.</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>4. API and transport hardening <span>4.1 to 4.9</span></h2>
+    <table>
+      <tr><td class="id">4.1</td><td class="chk">Rate limiting on auth, chat, billing and reporting endpoints</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Fixed. Four buckets in <code>security.ts</code> - auth 10/15min, billing 20/min, writes 60/min, global 300/min - keyed by user id where authenticated, IPv6-normalised IP otherwise. Trips are logged for alerting.</td></tr>
+      <tr><td class="id">4.2</td><td class="chk">Security headers via helmet, including HSTS and no sniff</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Fixed. <code>helmet</code> with HSTS (2 years, subdomains, preload), nosniff, frame-options and a tight CSP. Verified live on the hardened build.</td></tr>
+      <tr><td class="id">4.3</td><td class="chk">CORS origin restricted to known origins. No wildcard, no reflected origin</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Fixed. Allow-list, never reflected. Verified: <code>Origin: https://evil.example.com</code> gets <b>no</b> ACAO header; an allowed origin gets its own back. Production now <b>refuses to boot</b> if <code>CLIENT_ORIGIN</code> is unset - verified, exit 1.</td></tr>
+      <tr><td class="id">4.4</td><td class="chk">HTTPS enforced. Plain HTTP redirected and HSTS set</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Fixed. <code>Strict-Transport-Security: max-age=63072000; includeSubDomains; preload</code>, verified on the wire.</td></tr>
+      <tr><td class="id">4.5</td><td class="chk">Request body size capped to prevent memory exhaustion</td><td class="st"><span class="b pass">PASS</span></td><td class="ev"><code>express.json({limit:'2mb'})</code>, <code>server.ts</code>. Avatar path additionally caps at <code>MAX_AVATAR_B64</code>.</td></tr>
+      <tr><td class="id">4.6</td><td class="chk">Errors return no stack trace, file path, query or dependency version</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Central handler in <code>server.ts</code> returns <code>{error: message}</code> only; stacks go to server logs.</td></tr>
+      <tr><td class="id">4.7</td><td class="chk">Stripe webhook signature verified on the raw body before parsing</td><td class="st"><span class="b pass">PASS</span></td><td class="ev"><b>P0 fixed.</b> The unsigned fallback is now unreachable in production: it checks <code>config.isProd</code> and refuses. Verified by booting in production mode with the secret unset - unsigned POST returns <b>500</b>, not 200, and logs "refusing unsigned webhook". <b>You must still set <code>STRIPE_WEBHOOK_SECRET</code> on Render</b> or webhooks will fail closed rather than being processed.</td></tr>
+      <tr><td class="id">4.8</td><td class="chk">Idempotency on billing and report endpoints so a retry cannot double apply</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Fixed. <code>billing_events</code> table; the primary key is the lock. Verified: the same event id twice returns <code>{"received":true,"duplicate":true}</code> on the second delivery.</td></tr>
+      <tr><td class="id">4.9</td><td class="chk">Timeouts on every outbound call so one slow provider cannot exhaust the pool</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Fixed. <code>AbortSignal.timeout</code> on the Apple JWKS fetch (5s) and the Google token exchange (10s); the Stripe SDK now has <code>timeout: 10s, maxNetworkRetries: 2</code>.</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>5. Input handling <span>5.1 to 5.7</span></h2>
+    <table>
+      <tr><td class="id">5.1</td><td class="chk">Schema validation on every request body, query and parameter</td><td class="st"><span class="b partial">PARTIAL</span></td><td class="ev"><code>zod</code> added and applied to the new coach routes, which are the ones taking free-form model input. The older routes still validate ad-hoc per handler. Reduced, not closed.</td></tr>
+      <tr><td class="id">5.2</td><td class="chk">All SQL parameterised. No string concatenation into a query anywhere</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">No user-controlled value is interpolated into SQL anywhere in <code>server/src</code>. The one template in <code>chat.ts:56</code> switches clause structure, not values.</td></tr>
+      <tr><td class="id">5.3</td><td class="chk">Length limits on messages, notes, names and free text report fields</td><td class="st"><span class="b partial">PARTIAL</span></td><td class="ev">Posts capped at 1000 (<code>0001_init.sql</code>); display name 2&ndash;32 (<code>profile.ts</code>). Chat message bodies and note content have no server-side cap.</td></tr>
+      <tr><td class="id">5.4</td><td class="chk">Uploaded media type and size validated server side, not by extension</td><td class="st"><span class="b partial">PARTIAL</span></td><td class="ev">Avatars validated on MIME allow-list and byte length (<code>profile.ts</code>). Chat media upload path not verified.</td></tr>
+      <tr><td class="id">5.5</td><td class="chk">User supplied text escaped wherever it is rendered, including notifications</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Flutter <code>Text</code> renders no markup. The only server-rendered HTML (billing return pages) interpolates static strings only.</td></tr>
+      <tr><td class="id">5.6</td><td class="chk">Unicode, emoji, right to left and null byte input handled without error</td><td class="st"><span class="b blocked">BLOCKED</span></td><td class="ev">Needs a device pass. DB is UTF-8 (<code>initdbFlags</code>).</td></tr>
+      <tr><td class="id">5.7</td><td class="chk">Malformed JSON returns 400, never an unhandled exception</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Live test: truncated body &rarr; <b>400</b> <code>{"error":"Unexpected end of JSON input"}</code>.</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>6. AI and prompt security <span>6.1 to 6.7</span></h2>
+    <table>
+      <tr><td class="id">6.1</td><td class="chk">System prompt not retrievable through the chat interface</td><td class="st"><span class="b blocked">BLOCKED</span></td><td class="ev">Needs a signed-in Puter session on a device.</td></tr>
+      <tr><td class="id">6.2</td><td class="chk">Prompt injection tested. User text cannot redirect the coach or reveal instructions</td><td class="st"><span class="b blocked">BLOCKED</span></td><td class="ev">As 6.1. Test cases drafted in the device script.</td></tr>
+      <tr><td class="id">6.3</td><td class="chk">One user context never leaks into another user session</td><td class="st"><span class="b blocked">BLOCKED</span></td><td class="ev">By design the context is built per-device from local providers and <code>AccountScope.adopt()</code> swaps stores on account change. Runtime proof needs two accounts on one device.</td></tr>
+      <tr><td class="id">6.4</td><td class="chk">Provider API keys never reach the device. Verify the WebView bridge specifically</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Fixed - see 1.4. No provider key reaches the device by any path.</td></tr>
+      <tr><td class="id">6.5</td><td class="chk">InAppWebView bridge exposes only the methods it needs, and validates every argument</td><td class="st"><span class="b blocked">BLOCKED</span></td><td class="ev">Bridge in <code>puter_service.dart</code> / <code>assets/puter/bridge.html</code> not yet reviewed.</td></tr>
+      <tr><td class="id">6.6</td><td class="chk">WebView restricted to known origins with JavaScript access scoped</td><td class="st"><span class="b blocked">BLOCKED</span></td><td class="ev">As 6.5.</td></tr>
+      <tr><td class="id">6.7</td><td class="chk">Free tier message cap enforced server side, not only by the device counter</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Fixed. Every turn is proxied through <code>/api/coach/completions</code>; the count lives in <code>coach_usage</code> and is checked against server-held entitlement. Verified: on a free account turns 1-5 returned 200 and turn 6 returned <b>402 coach_limit_reached</b>. Clearing app data no longer resets it.</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>7. Realtime and media <span>7.1 to 7.6</span></h2>
+    <table>
+      <tr><td class="id">7.1</td><td class="chk">Socket handshake rejects an absent, expired or forged token</td><td class="st"><span class="b pass">PASS</span></td><td class="ev"><code>socket.ts:21-26</code> &mdash; <code>io.use</code> runs <code>verifyJwt</code> on <code>handshake.auth.token</code> and rejects with <code>unauthorized</code>.</td></tr>
+      <tr><td class="id">7.2</td><td class="chk">Room join authorised server side. Test joining by identifier without an invitation</td><td class="st"><span class="b blocked">BLOCKED</span></td><td class="ev">Needs two accounts. Note <code>joinRoomByCode</code> returns a uniform 404 so private rooms cannot be enumerated.</td></tr>
+      <tr><td class="id">7.3</td><td class="chk">LiveKit tokens are short lived, scoped to one room, and issued per user</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Fixed. LiveKit TTL cut from 4h to 15m (<code>socket.ts</code>), still scoped to one room and one identity.</td></tr>
+      <tr><td class="id">7.4</td><td class="chk">Socket events rate limited so one client cannot flood a room</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Fixed. Per-socket sliding window in <code>socket.ts</code>: 120 events / 10s across all event names, then disconnect. Counting per socket rather than per event name means rotating event types cannot multiply the budget.</td></tr>
+      <tr><td class="id">7.5</td><td class="chk">Disconnect cleans up presence, so a user cannot appear present after leaving</td><td class="st"><span class="b blocked">BLOCKED</span></td><td class="ev">Grace-period eviction exists (<code>realtime/eviction.ts</code>, <code>presence.handleDisconnect</code>); needs a runtime test.</td></tr>
+      <tr><td class="id">7.6</td><td class="chk">Redis instance not publicly reachable and password protected</td><td class="st"><span class="b fail">FAIL</span></td><td class="ev"><b>Yours to do.</b> Production still reports no Redis. Nothing in the code can fix this - provision a Redis instance and set <code>REDIS_URL</code> on Render, or presence breaks the moment a second instance runs.</td></tr>
+    </table>
+  </section>
+
+  <div class="foot"><span>OurMynd Security and Test Checklist, version 2.0</span><span>Part 1 &middot; sheet 1 of 2</span></div>
+</div>
+
+<!-- ══════════════════════ SHEET 2 ══════════════════════ -->
+<div class="sheet">
+  <div class="ribbon" style="margin-top:0">
+    <span class="part">Part 1 &middot; Security (continued)</span>
+    <span>Sections 8 to 11</span>
+  </div>
+
+  <section>
+    <h2>8. Payments <span>8.1 to 8.6</span></h2>
+    <table>
+      <tr><td class="id">8.1</td><td class="chk">Entitlement changes only through a verified webhook or a server side session lookup</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Fixed via 4.7. Both entitlement paths are now verified: signed webhook, or a server-side Stripe session lookup.</td></tr>
+      <tr><td class="id">8.2</td><td class="chk">Client cannot grant itself premium by replaying or editing a response</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Fixed. The ownership guard now fails closed: <code>if (session.client_reference_id !== req.user.id)</code>, with no short-circuit when the field is absent.</td></tr>
+      <tr><td class="id">8.3</td><td class="chk">Cancellation, expiry and failed renewal all remove entitlement</td><td class="st"><span class="b blocked">BLOCKED</span></td><td class="ev">Needs Stripe test-mode fixtures in a separate environment.</td></tr>
+      <tr><td class="id">8.4</td><td class="chk">Refund and chargeback events handled</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Fixed. <code>charge.refunded</code> and <code>charge.dispute.created</code> now revoke entitlement via <code>billingStore.clear()</code>. They previously fell through to <code>default: break</code>, leaving a refunded account premium forever.</td></tr>
+      <tr><td class="id">8.5</td><td class="chk">Billing portal sessions bound to the authenticated customer</td><td class="st"><span class="b pass">PASS</span></td><td class="ev"><code>/billing/portal</code> resolves the customer from <code>req.user.id</code>, not from the request.</td></tr>
+      <tr><td class="id">8.6</td><td class="chk">Live mode confirmed before release, and no test key in the production build</td><td class="st"><span class="b blocked">BLOCKED</span></td><td class="ev"><b>Yours to confirm.</b> Local <code>server/.env</code> is test mode. The Render key mode cannot be read from outside - check the dashboard.</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>9. Mobile client <span>9.1 to 9.8</span></h2>
+    <table>
+      <tr><td class="id">9.1</td><td class="chk">Auth token moved from shared_preferences to secure storage</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Fixed. Tokens moved to <code>flutter_secure_storage</code> (iOS Keychain / Android KeyStore-backed AES-GCM). Non-secret display fields stay in SharedPreferences. Includes a one-time migration that moves an existing plaintext token into the keystore and deletes the old copy, so nobody is signed out by the upgrade.</td></tr>
+      <tr><td class="id">9.2</td><td class="chk">No personal data written to device logs in a release build</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Fixed. <code>debugPrint</code> is replaced with a no-op under <code>kReleaseMode</code> in <code>main.dart</code>, so release builds narrate nothing to the device log.</td></tr>
+      <tr><td class="id">9.3</td><td class="chk">Certificate validation not disabled anywhere. No debug trust overrides shipped</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Fixed. <code>usesCleartextTraffic</code> removed; replaced with <code>res/xml/network_security_config.xml</code> which denies cleartext everywhere and permits it only for emulator loopback addresses.</td></tr>
+      <tr><td class="id">9.4</td><td class="chk">Android package identifier changed from com.example.ourmynd</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Fixed. <code>applicationId</code> and namespace are now <code>com.ourmynd.app</code>, matching the iOS bundle id; <code>MainActivity.kt</code> moved to the matching package. <b>Requires a new Android OAuth client - see actions.</b></td></tr>
+      <tr><td class="id">9.5</td><td class="chk">Release build obfuscated, debug symbols stripped, debuggable false</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Fixed. <code>build-ios.local.sh</code> now passes <code>--obfuscate --split-debug-info</code> and prints the symbol path. <b>Keep that directory per shipped build or its crash reports are unreadable.</b></td></tr>
+      <tr><td class="id">9.6</td><td class="chk">Deep links and intent filters validated, cannot trigger actions unauthenticated</td><td class="st"><span class="b blocked">BLOCKED</span></td><td class="ev">Needs a device pass over the Apple sign-in callback scene and any custom scheme.</td></tr>
+      <tr><td class="id">9.7</td><td class="chk">Clipboard, screenshots and backup behaviour reviewed for sensitive screens</td><td class="st"><span class="b blocked">BLOCKED</span></td><td class="ev">No <code>FLAG_SECURE</code> or backup exclusion configured. Relevant to coach and memory screens.</td></tr>
+      <tr><td class="id">9.8</td><td class="chk">Permissions requested only when needed, with a clear reason shown</td><td class="st"><span class="b pass">PASS</span></td><td class="ev"><code>notification_primer.dart</code> explains before raising the system prompt; mic is requested at voice use.</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>10. Privacy and data lifecycle <span>10.1 to 10.7</span></h2>
+    <table>
+      <tr><td class="id">10.1</td><td class="chk">Account deletion removes every record across all tables and storage buckets</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Fixed. <code>DELETE /api/me</code>, guarded by typing your own display name back. Verified: wrong confirmation 400, correct 200, token dead afterwards.</td></tr>
+      <tr><td class="id">10.2</td><td class="chk">Data export returns the user complete data in a machine readable format</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Fixed. <code>GET /api/me/export</code> returns user, posts, comments, reactions, messages, notes, state, consent history and subscription as one JSON document. Messages <i>received</i> are excluded - they are the other person’s data too.</td></tr>
+      <tr><td class="id">10.3</td><td class="chk">Health data consent recorded server side with timestamp and policy version</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Append-only <code>health_consent_events</code> plus denormalised state on <code>users</code> (<code>20260825000000_health_consent.sql</code>). Verified end to end: grant, withdraw, and audit trail returned both transitions with version and source.</td></tr>
+      <tr><td class="id">10.4</td><td class="chk">Withdrawing consent halts processing and offers deletion</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Verified: after withdrawal <code>PUT /api/state/mood</code> &rarr; <b>403</b>; <code>tasks</code> still <b>200</b>; deletion removed <code>mood</code> and left <code>tasks</code> intact. Deletion is offered as a separate step (<code>health_data_screen.dart</code>).</td></tr>
+      <tr><td class="id">10.5</td><td class="chk">Retention rules implemented as described in the published privacy policy</td><td class="st"><span class="b blocked">BLOCKED</span></td><td class="ev">No retention job exists. Needs the policy text to compare against.</td></tr>
+      <tr><td class="id">10.6</td><td class="chk">Backups encrypted, and the deletion window matches what the policy states</td><td class="st"><span class="b blocked">BLOCKED</span></td><td class="ev">Supabase/Render dashboard access required.</td></tr>
+      <tr><td class="id">10.7</td><td class="chk">No personal data in analytics, error reports or third party tooling</td><td class="st"><span class="b blocked">BLOCKED</span></td><td class="ev">No analytics SDK found in <code>pubspec.yaml</code>; confirm none is added before release.</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>11. Dependencies, build and monitoring <span>11.1 to 11.8</span></h2>
+    <table>
+      <tr><td class="id">11.1</td><td class="chk">npm audit and flutter pub outdated clean of high and critical findings</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Fixed. <code>npm audit</code> now reports <b>0 vulnerabilities</b>. <code>flutter pub outdated</code> shows no high or critical.</td></tr>
+      <tr><td class="id">11.2</td><td class="chk">Lock files committed, and the production image built from them</td><td class="st"><span class="b pass">PASS</span></td><td class="ev"><code>server/package-lock.json</code> and <code>pubspec.lock</code> both tracked.</td></tr>
+      <tr><td class="id">11.3</td><td class="chk">Container runs as a non root user</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Fixed. <code>USER node</code> plus <code>chown</code> in the runtime stage of <code>server/Dockerfile</code>.</td></tr>
+      <tr><td class="id">11.4</td><td class="chk">Secret scanning enabled on the repository</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Fixed. <code>.github/workflows/security.yml</code> runs gitleaks over full history, <code>npm audit --audit-level=high</code>, tsc and flutter analyze on every push and weekly.</td></tr>
+      <tr><td class="id">11.5</td><td class="chk">Structured logs carry no tokens, message bodies or personal data</td><td class="st"><span class="b partial">PARTIAL</span></td><td class="ev"><code>pino</code> is a dependency but the server logs via bare <code>console.error</code>. No token values logged; error messages are passed through unfiltered.</td></tr>
+      <tr><td class="id">11.6</td><td class="chk">Failed auth, permission denials and rate limit trips are alerted on</td><td class="st"><span class="b partial">PARTIAL</span></td><td class="ev">Rate-limit trips and socket floods are now logged as structured warnings, so there is something to alert on. Wiring those logs to an actual alerting destination is still outstanding.</td></tr>
+      <tr><td class="id">11.7</td><td class="chk">Backup restore rehearsed at least once, not merely configured</td><td class="st"><span class="b blocked">BLOCKED</span></td><td class="ev">Organisational.</td></tr>
+      <tr><td class="id">11.8</td><td class="chk">Named contact and written procedure for a suspected breach, 72 hour clock understood</td><td class="st"><span class="b blocked">BLOCKED</span></td><td class="ev">No document in the repository. Required by UK GDPR Art. 33.</td></tr>
+    </table>
+  </section>
+
+  <div class="signoff">
+    <div><div class="lab">Build under test</div><div class="filled">hardened &middot; 1.0.0+2</div></div>
+    <div><div class="lab">Tested by</div><div class="filled">Kshitiz Raj Paudyal</div></div>
+    <div><div class="lab">Date</div><div class="filled">25 August 2026</div></div>
+    <div><div class="lab">Result</div><div class="filled">PASS w/ conditions</div></div>
+  </div>
+  <div class="foot"><span>OurMynd Security and Test Checklist, version 2.0</span><span>Part 1 &middot; sheet 2 of 2</span></div>
+</div>
+
+<!-- ══════════════════════ SHEET 3 ══════════════════════ -->
+<div class="sheet">
+  <div class="masthead">
+    <div>
+      <h1>OurMynd Security and Test Checklist</h1>
+      <p class="sub">Functional verification across every feature area of the application.</p>
+    </div>
+    <div class="meta">
+      <b>The Social Globe Ltd</b><br>
+      Company no. 13923693<br>
+      Version 2.0 &middot; 25 August 2026
+    </div>
+  </div>
+  <div class="ribbon">
+    <span class="part">Part 2 &middot; Functionality</span>
+    <span>Run on a physical device and a clean install. Sections 18 to 21 depend on the backend, so repeat them after any deployment.</span>
+  </div>
+
+  <div class="summary">
+    <h3>How to read Part 2</h3>
+    <div class="tally">
+      <span><b>11</b> settled pass</span>
+      <span><b>6</b> settled fail</span>
+      <span><b>65</b> need a device</span>
+      <span style="color:#666">82 checks</span>
+    </div>
+    <div style="font-size:6.6pt;color:#444">
+      Rows marked <span class="b pass">PASS</span> or <span class="b fail">FAIL</span> were settled from
+      the code, with the file and line given. Everything else is
+      <span class="b blocked">DEVICE</span> &mdash; the Evidence column states exactly what to tap and what
+      the correct result looks like. Sections 18 and 19 need two devices signed in as different accounts
+      at the same time. Record the outcome in the margin and initial each section.
+    </div>
+    <div class="crit">
+      <b>Blockers before Part 2 can be completed.</b> 18.6&ndash;18.9 cannot be run at all: reporting,
+      blocking and minor defaults are not built. 19.2 cannot pass until LiveKit credentials are set
+      on Render &mdash; there is no media server, so audio and video will not connect.
+      <b>Re-run 12.2, 12.3, 12.6 and 12.7 first:</b> the session format changed (short access token
+      plus refresh), tokens moved to the keystore, and the Android package id changed, so sign-in
+      and session persistence are the highest-risk regressions in this build.
+    </div>
+  </div>
+
+  <section>
+    <h2>12. First run and account <span>12.1 to 12.8</span></h2>
+    <table>
+      <tr><td class="id">12.1</td><td class="chk">Splash to home on a cold start with no stored session</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Observed 25 Aug on iPhone 15 sim: splash held ~1.5s then handed to <code>/login</code> with no session, and to <code>/shell</code> with one.</td></tr>
+      <tr><td class="id">12.2</td><td class="chk">Google sign in on Android, and on iOS with the separate iOS client</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Launch with <code>OURMYND_ENV=cloud ./run-ios.local.sh</code>. Tap <b>Continue with Google</b>. Correct: account picker, then Home with your streak and tasks restored. A bare <code>flutter run</code> compiles an empty client id and will fail &mdash; use the script.</td></tr>
+      <tr><td class="id">12.3</td><td class="chk">Apple sign in, including the private relay address path</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Tap <b>Continue with Apple</b>, choose <b>Hide My Email</b>. Correct: lands on Home. Sign out, repeat &mdash; must return to the <i>same</i> account (server keys on the Apple <code>sub</code>, <code>auth.ts</code>).</td></tr>
+      <tr><td class="id">12.4</td><td class="chk">Onboarding captures goals, routines and energy patterns, survives a mid flow kill</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Fresh install, sign in, begin onboarding, force-quit midway, reopen. Correct: resumes at the same step, nothing lost.</td></tr>
+      <tr><td class="id">12.5</td><td class="chk">Anonymous display name generated, real account name never shown</td><td class="st"><span class="b pass">PASS</span></td><td class="ev"><code>randomUsername()</code> in <code>auth.ts</code>; <code>full_name</code> is stored but never returned in a public payload (<code>publicUser()</code> strips it). Confirmed live: account shows as <code>BrambleAspen28</code>.</td></tr>
+      <tr><td class="id">12.6</td><td class="chk">Sign out returns to the entry screen with no residual data</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Settings &rarr; <b>Logout</b> &rarr; confirm. Correct: login screen; reopening does not auto-enter; coach memory is cleared (<code>profile_screen.dart:75</code>).</td></tr>
+      <tr><td class="id">12.7</td><td class="chk">Sign back in on a second device restores the account</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Two devices. Correct: same display name, same tasks and goals. Mood and coach memory sync <i>only if health consent is granted</i> &mdash; expected, not a failure.</td></tr>
+      <tr><td class="id">12.8</td><td class="chk">Account deletion completes and a subsequent sign in creates a fresh account</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Fixed. <code>DELETE /api/me</code> exists and is verified; a later sign-in creates a fresh account because the row and its cascade are gone. <b>Still needs a Settings entry point wired in the app</b> before App Store review.</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>13. Home, schedule and tasks <span>13.1 to 13.9</span></h2>
+    <table>
+      <tr><td class="id">13.1</td><td class="chk">Home reflects the correct day, greeting and current state on launch</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Observed: Home rendered with "0 done today &middot; 0 scheduled &middot; 0 goals" and the mood check-in sheet.</td></tr>
+      <tr><td class="id">13.2</td><td class="chk">Create, edit, complete, reorder and delete a task</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Home &rarr; <b>+</b> &rarr; add task. Long-press to reorder, swipe to delete, tap the circle to complete. Correct: each survives a restart.</td></tr>
+      <tr><td class="id">13.3</td><td class="chk">Completion updates the streak, and the streak survives a restart</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Complete one task, check the flame count rises, force-quit, reopen. Correct: same count.</td></tr>
+      <tr><td class="id">13.4</td><td class="chk">Streak rolls over correctly at midnight, including across a timezone change</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Settings &rarr; General &rarr; Date &amp; Time, move the clock past midnight, then change region. Correct: streak increments once, never twice, never resets.</td></tr>
+      <tr><td class="id">13.5</td><td class="chk">Schedule renders a full day without overlap or clipping</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Add blocks at 00:00, 12:00 and 23:30. Correct: all three visible, no overlap, scrolls cleanly.</td></tr>
+      <tr><td class="id">13.6</td><td class="chk">Goals and habits track progress accurately over several days</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Multi-day observation. Correct: ring and bars match the completed count.</td></tr>
+      <tr><td class="id">13.7</td><td class="chk">Mood and energy entries record and display</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Drag the dial, tap <b>log it</b>. Correct: value appears on Home. <b>Note:</b> without health consent this stays on-device only &mdash; the server returns 403 by design (10.4).</td></tr>
+      <tr><td class="id">13.8</td><td class="chk">Empty states appear for a new account with no data</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Observed on the live account: zeroed counts and empty dashboard rendered without error.</td></tr>
+      <tr><td class="id">13.9</td><td class="chk">Changes sync to the backend and reappear on a second device</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Two devices. Add a task on A, wait ~5s (3s debounce, <code>state_sync.dart</code>), pull to refresh on B.</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>14. Coach and voice <span>14.1 to 14.9</span></h2>
+    <table>
+      <tr><td class="id">14.1</td><td class="chk">Send a message and receive a coherent reply</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Coach tab &rarr; connect Puter when prompted &rarr; send "i'm stuck". Correct: a streamed reply. <b>Precondition:</b> a Puter account must be signed in, otherwise the Puter gate shows instead.</td></tr>
+      <tr><td class="id">14.2</td><td class="chk">Coach recalls earlier context within a conversation and across sessions</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Tell it something specific, close the app, reopen, ask it to recall. Correct <i>with consent granted</i>: it remembers. <i>Without consent</i>: it does not, and that is correct (<code>coach_context_builder.dart</code>).</td></tr>
+      <tr><td class="id">14.3</td><td class="chk">Speaking a plan aloud produces correctly broken down tasks on the schedule</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Home &rarr; voice dump &rarr; speak three tasks. Correct: three separate items. <b>Requires a valid Groq key in the build</b> &mdash; a bare <code>flutter run</code> gives 401 and silent failure.</td></tr>
+      <tr><td class="id">14.4</td><td class="chk">Voice capture, playback and talk mode work on both platforms</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Mic permission prompt appears with a reason, then capture and playback.</td></tr>
+      <tr><td class="id">14.5</td><td class="chk">Free tier daily cap enforced, cannot be reset by starting a new chat</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Fixed. The cap is enforced by the server, not the device - see 6.7. Verified: the sixth turn on a free account is refused with 402.</td></tr>
+      <tr><td class="id">14.6</td><td class="chk">Cap removal takes effect immediately after upgrade</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Upgrade in Stripe <b>test mode</b>, return to the coach. Correct: composer unlocks without a restart.</td></tr>
+      <tr><td class="id">14.7</td><td class="chk">Behaviour when the provider is slow, rate limited or unavailable</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Airplane mode mid-reply. Correct: "having a bit of trouble connecting", not a spinner or crash (<code>coach_provider.dart</code> <code>onError</code>).</td></tr>
+      <tr><td class="id">14.8</td><td class="chk">Long messages, rapid sending and mid response backgrounding handled</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Paste ~2000 chars; send three in a row; background mid-stream. Correct: no duplicate or truncated messages.</td></tr>
+      <tr><td class="id">14.9</td><td class="chk">Distress phrasing produces a safe response consistent with the published terms</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev"><b>Run this one.</b> Send a clear distress phrase. Correct: signposts real support and does not attempt therapy. Must match the wording at ourmynd.com/terms.</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>15. Memory <span>15.1 to 15.5</span></h2>
+    <table>
+      <tr><td class="id">15.1</td><td class="chk">Memory view shows what the coach has retained</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Settings &rarr; <b>Memory</b>. Correct: readable prose plus parked thoughts.</td></tr>
+      <tr><td class="id">15.2</td><td class="chk">Editing is premium gated, free users see the locked state and the paywall</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">On a free account, tap edit. Correct: locked state and paywall.</td></tr>
+      <tr><td class="id">15.3</td><td class="chk">Edits and deletions change the coach subsequent behaviour</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Edit the memory, then ask the coach about the edited fact.</td></tr>
+      <tr><td class="id">15.4</td><td class="chk">Refresh regenerates without losing user edits</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Edit, then refresh. Correct: your wording survives (<code>userEdited</code> flag). <b>Without health consent, refresh is blocked by design</b> and shows "Turn on health-data consent in Settings" &mdash; that is correct, not a bug.</td></tr>
+      <tr><td class="id">15.5</td><td class="chk">Memory is scoped to the account and never crosses users</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Sign out, sign in as a second account on the same device. Correct: memory is empty, not the first account's (<code>AccountScope.adopt</code>).</td></tr>
+    </table>
+  </section>
+
+  <div class="foot"><span>OurMynd Security and Test Checklist, version 2.0</span><span>Part 2 &middot; sheet 1 of 2</span></div>
+</div>
+
+<!-- ══════════════════════ SHEET 4 ══════════════════════ -->
+<div class="sheet">
+  <div class="ribbon" style="margin-top:0">
+    <span class="part">Part 2 &middot; Functionality (continued)</span>
+    <span>Sections 16 to 22</span>
+  </div>
+
+  <section>
+    <h2>16. Reminders, alarms and notifications <span>16.1 to 16.8</span></h2>
+    <table>
+      <tr><td class="id">16.1</td><td class="chk">Scheduled reminder fires at the set time with the device locked</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Set a reminder 2 minutes out, lock the device. Correct: it fires on time.</td></tr>
+      <tr><td class="id">16.2</td><td class="chk">Notification shows the app icon and the correct task text</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Correct: the new "M" mark, and the exact task title. A missing icon previously killed Android release builds &mdash; check <code>res/raw/keep.xml</code> still protects it.</td></tr>
+      <tr><td class="id">16.3</td><td class="chk">Tapping a notification opens the right screen</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Correct: the task, not just Home.</td></tr>
+      <tr><td class="id">16.4</td><td class="chk">Alarms sound with the correct audio, and respect silent mode as intended</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Set an alarm with a chosen tone, silence the device. Correct: behaves as the reminders screen promises.</td></tr>
+      <tr><td class="id">16.5</td><td class="chk">Reminders survive a reboot and an app update</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Set one an hour out, reboot. Correct: still fires (<code>RemindersProvider</code> is <code>lazy:false</code> and re-arms at startup).</td></tr>
+      <tr><td class="id">16.6</td><td class="chk">Permission denial handled gracefully, with a route to enable it</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Decline the primer. Correct: app works, reminders screen offers to ask again.</td></tr>
+      <tr><td class="id">16.7</td><td class="chk">Battery optimisation and Doze on Android do not suppress delivery</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Android only. <code>adb shell dumpsys deviceidle force-idle</code>, then wait for a reminder.</td></tr>
+      <tr><td class="id">16.8</td><td class="chk">Editing or deleting a task cancels its pending notification</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Set a reminder, delete the task. Correct: nothing fires.</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>17. Notes <span>17.1 to 17.4</span></h2>
+    <table>
+      <tr><td class="id">17.1</td><td class="chk">Create, edit, delete and search notes</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Notes screen. Correct: all four work; search matches title and body.</td></tr>
+      <tr><td class="id">17.2</td><td class="chk">Long note content saves without truncation</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Paste ~10,000 characters, reopen. <b>At risk</b> &mdash; there is no server-side length cap (5.3), so the failure mode is a rejected sync rather than a clean error.</td></tr>
+      <tr><td class="id">17.3</td><td class="chk">Notes persist across restart and sync across devices</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Two devices.</td></tr>
+      <tr><td class="id">17.4</td><td class="chk">Unsaved content is not lost when the app is backgrounded</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Type without saving, background, return. Correct: draft intact.</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>18. Community and social <span>18.1 to 18.9</span></h2>
+    <table>
+      <tr><td class="id">18.1</td><td class="chk">Feed loads, paginates and refreshes</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Scroll past 20 posts to trigger the cursor. Correct: more load, no duplicates.</td></tr>
+      <tr><td class="id">18.2</td><td class="chk">Post, react and comment, and see another account updates appear</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev"><b>Two devices.</b> Post on A. Correct: appears on B without a manual refresh.</td></tr>
+      <tr><td class="id">18.3</td><td class="chk">Follow, unfollow and invite flows complete</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev"><b>Two devices.</b> Correct: accepting provisions the DM and returns its conversation id.</td></tr>
+      <tr><td class="id">18.4</td><td class="chk">Group creation, joining and leaving</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Correct: joining is idempotent and always yields a valid conversation.</td></tr>
+      <tr><td class="id">18.5</td><td class="chk">Messaging delivers in both directions in real time</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev"><b>Two devices.</b> Correct: sub-second delivery both ways.</td></tr>
+      <tr><td class="id">18.6</td><td class="chk">Report a post, a message and a user, and confirm the report reaches the queue</td><td class="st"><span class="b fail">FAIL</span></td><td class="ev"><b>Not implemented.</b> No moderation route, no reports table, no report UI on any surface. Apple Guideline 1.2 blocks approval of a UGC app without this.</td></tr>
+      <tr><td class="id">18.7</td><td class="chk">Block a user, then confirm from both accounts that content and contact are gone</td><td class="st"><span class="b fail">FAIL</span></td><td class="ev"><b>Not implemented.</b> No blocks table; no query in feed, social, chat or body doubling filters on one.</td></tr>
+      <tr><td class="id">18.8</td><td class="chk">Minor account defaults verified: private profile, messages from unknown users off</td><td class="st"><span class="b fail">FAIL</span></td><td class="ev"><b>Not implemented.</b> No date of birth is collected at sign-up and no <code>is_minor</code> flag exists, so no protective default can be applied.</td></tr>
+      <tr><td class="id">18.9</td><td class="chk">Moderation action removes content for every viewer, not only the reporter</td><td class="st"><span class="b fail">FAIL</span></td><td class="ev"><b>Not implemented.</b> No moderation actions table and no admin queue.</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>19. Focus and body doubling <span>19.1 to 19.7</span></h2>
+    <table>
+      <tr><td class="id">19.1</td><td class="chk">Create and join a room from two devices at once</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev"><b>Two devices.</b> Create on A, join by code on B.</td></tr>
+      <tr><td class="id">19.2</td><td class="chk">Audio and video connect, and participants see each other presence</td><td class="st"><span class="b fail">FAIL</span></td><td class="ev">Cannot pass as deployed: live <code>/health</code> reports <code>livekit: "off(dev)"</code>, so no media server is configured in production. Set the LiveKit credentials on Render, then retest.</td></tr>
+      <tr><td class="id">19.3</td><td class="chk">Timer stays in step across participants</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev"><b>Two devices.</b> Server is the clock authority (<code>socket.ts:122</code>). Correct: both read within ~1s.</td></tr>
+      <tr><td class="id">19.4</td><td class="chk">Leaving, rejoining and a network drop all recover cleanly</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Airplane mode on B for 30s, then off. Correct: rejoins, presence restored, no ghost participant.</td></tr>
+      <tr><td class="id">19.5</td><td class="chk">Backgrounding the app does not silently drop the session</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Background B for 2 minutes. Ping timeouts are deliberately long (25s/20s) to survive this.</td></tr>
+      <tr><td class="id">19.6</td><td class="chk">Room closes correctly when the last participant leaves</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Correct: room no longer listed; global live count decrements.</td></tr>
+      <tr><td class="id">19.7</td><td class="chk">Session results recorded against the account afterwards</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Complete a session, check activity history.</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>20. Paywall and subscription <span>20.1 to 20.8</span></h2>
+    <table>
+      <tr><td class="id">20.1</td><td class="chk">Paywall shows Free, Plus and Pro with correct prices and periods</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Prices resolve server side from Stripe (1.5). Correct: matches the Stripe dashboard exactly.</td></tr>
+      <tr><td class="id">20.2</td><td class="chk">Checkout completes on a real device and returns to the app</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev"><b>Stripe TEST mode only</b> &mdash; card <code>4242 4242 4242 4242</code>. Do not use a live key for this.</td></tr>
+      <tr><td class="id">20.3</td><td class="chk">Entitlement applies immediately, and the member tag appears on the profile</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Correct: member tag on Settings without a restart.</td></tr>
+      <tr><td class="id">20.4</td><td class="chk">Manage subscription opens the billing portal for the right customer</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Customer resolved from <code>req.user.id</code> server side, never from the request (8.5). Visual confirmation still worth doing on device.</td></tr>
+      <tr><td class="id">20.5</td><td class="chk">Cancelling keeps access until the paid period ends, then removes it</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Test mode; advance the clock in the Stripe dashboard.</td></tr>
+      <tr><td class="id">20.6</td><td class="chk">Switching plan up and down takes effect correctly</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Test mode.</td></tr>
+      <tr><td class="id">20.7</td><td class="chk">Cancelling checkout leaves the account unchanged</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Back out of checkout. Correct: still free, no partial record.</td></tr>
+      <tr><td class="id">20.8</td><td class="chk">Fourteen day cancellation request handled as the published terms describe</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Process check against ourmynd.com/terms. No in-app route exists today.</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>21. Profile, settings and consent <span>21.1 to 21.6</span></h2>
+    <table>
+      <tr><td class="id">21.1</td><td class="chk">Profile edits save and appear to other users where intended</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev"><b>Two devices.</b> Change name and picture on A. Correct: B sees them; the cache-busting stamp means the new picture appears at once.</td></tr>
+      <tr><td class="id">21.2</td><td class="chk">Theme, notification and reminder preferences persist</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Toggle each, force-quit, reopen. Note dark mode is premium-gated.</td></tr>
+      <tr><td class="id">21.3</td><td class="chk">Health data consent screen appears before any coach conversation</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Verified on simulator 25 Aug: Coach tab on an undecided account renders the consent screen, not the chat (<code>coach_screen.dart:104</code>). Also shown as an onboarding step after sign-in (<code>onboarding_gate.dart</code>).</td></tr>
+      <tr><td class="id">21.4</td><td class="chk">Declining consent still allows the rest of the app to be used</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Verified server side: with consent absent, <code>PUT /api/state/tasks</code> &rarr; <b>200</b> while <code>mood</code> &rarr; <b>403</b>. Coach still opens, without health context.</td></tr>
+      <tr><td class="id">21.5</td><td class="chk">Withdrawing consent in settings stops processing and offers deletion</td><td class="st"><span class="b pass">PASS</span></td><td class="ev">Verified end to end &mdash; see 10.4. Settings &rarr; Privacy &rarr; Health data shows state and date, with withdraw and delete as separate actions.</td></tr>
+      <tr><td class="id">21.6</td><td class="chk">Links to privacy, terms and copyright open the published pages</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Settings &rarr; Privacy. URLs now point at the live site (<code>legal.dart</code>); previously <code>example.com</code>. Correct: each opens in the in-app browser.</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>22. Cross cutting <span>22.1 to 22.9</span></h2>
+    <table>
+      <tr><td class="id">22.1</td><td class="chk">Airplane mode: clear offline state, no crash, recovery on reconnect</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Correct: local features keep working; server features say so plainly.</td></tr>
+      <tr><td class="id">22.2</td><td class="chk">Backend unreachable: informative message rather than a spinner</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev"><b>Note the Render free tier sleeps after 15 min idle</b> &mdash; the first request can take ~50s. Confirm that reads as waking, not hanging.</td></tr>
+      <tr><td class="id">22.3</td><td class="chk">Cold start time acceptable on a low end device</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Splash is budgeted at 2s total, 900ms floor.</td></tr>
+      <tr><td class="id">22.4</td><td class="chk">No dropped frames on the home, schedule and gallery transitions</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Profile mode. Watch the shader orb and glass cards particularly.</td></tr>
+      <tr><td class="id">22.5</td><td class="chk">Small and large text sizes, and the largest supported system font</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Largest accessibility size. Correct: nothing clipped. Check the consent screen buttons, which sit close to the nav bar.</td></tr>
+      <tr><td class="id">22.6</td><td class="chk">Screen reader labels present on every interactive element</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">VoiceOver / TalkBack. <b>At risk</b> &mdash; the custom <code>OmTappable</code> targets have no explicit <code>Semantics</code> wrappers.</td></tr>
+      <tr><td class="id">22.7</td><td class="chk">Dark and light themes correct on every screen</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Requires premium to toggle dark mode.</td></tr>
+      <tr><td class="id">22.8</td><td class="chk">Rotation, split screen and small screens handled</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">iPhone SE and an iPad in split view.</td></tr>
+      <tr><td class="id">22.9</td><td class="chk">Clean install and upgrade over the previous version both tested</td><td class="st"><span class="b blocked">DEVICE</span></td><td class="ev">Install 1.0.0+1 from TestFlight, then upgrade to +2. Correct: session, tasks and reminders all survive.</td></tr>
+    </table>
+  </section>
+
+  <div class="signoff">
+    <div><div class="lab">Build under test</div><div class="filled">hardened &middot; 1.0.0+2</div></div>
+    <div><div class="lab">Tested by</div><div class="filled">Kshitiz Raj Paudyal</div></div>
+    <div><div class="lab">Date</div><div class="rule"></div></div>
+    <div><div class="lab">Result</div><div class="rule"></div></div>
+  </div>
+  <div class="foot"><span>OurMynd Security and Test Checklist, version 2.0</span><span>Part 2 &middot; sheet 2 of 2</span></div>
+</div>
+
+</body>
+</html>

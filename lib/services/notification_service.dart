@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart' show Color;
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart' show PlatformException;
+import 'package:flutter/services.dart' show MethodChannel, PlatformException;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
@@ -70,7 +70,7 @@ class NotificationService {
     if (_ready) return;
 
     tzdata.initializeTimeZones();
-    _useLocalZone();
+    await _useLocalZone();
 
     await _plugin.initialize(
       const InitializationSettings(
@@ -107,23 +107,57 @@ class NotificationService {
   /// Point `tz.local` at a zone that agrees with this device about what time it
   /// is, by matching the current UTC offset.
   ///
-  /// The obvious way is a plugin that reads the IANA zone name off the
-  /// platform, and that is what this did until `flutter_timezone` turned out to
-  /// compile its Kotlin at a JVM target Gradle now refuses to mix with. The
-  /// offset is enough for what we do with it: every reminder is scheduled from
-  /// a local wall-clock time, so a zone with the right offset produces the
-  /// right instant. The cost is that a daily reminder can land an hour out for
-  /// the day after a DST change, until the next resync corrects it, and this
-  /// country does not observe DST anyway. Left as a comment because the
-  /// tradeoff is not visible in the code.
-  void _useLocalZone() {
+  /// Ask the platform for its IANA zone name, e.g. "Europe/London".
+  ///
+  /// This used to be inferred by scanning the tz database for the first zone
+  /// whose CURRENT offset matched the device. That is wrong in a way that only
+  /// shows up later: on a +01:00 device, 24 zones match and the scan picks
+  /// Africa/Algiers, which does not observe DST. Reminders are then computed
+  /// against the wrong rules, so after a DST change they land an hour out, and
+  /// an hour out in the wrong direction puts them in the PAST.
+  ///
+  /// Android's AlarmManager fires a slightly-past trigger anyway. iOS's
+  /// UNCalendarNotificationTrigger silently never fires. That single difference
+  /// is why reminders "worked on Android but not iPhone".
+  ///
+  /// flutter_timezone would do this, but its Kotlin compiles at jvmTarget 1.8
+  /// while its Java lands on 11 and Gradle refuses the mix. A method channel
+  /// costs about twenty lines per platform and cannot break the build.
+  static const _tzChannel = MethodChannel('com.ourmynd.app/timezone');
+
+  Future<void> _useLocalZone() async {
+    try {
+      final name = await _tzChannel.invokeMethod<String>('localTimeZone');
+      if (name != null && name.isNotEmpty) {
+        tz.setLocalLocation(tz.getLocation(name));
+        debugPrint('[notify] timezone: $name (from platform)');
+        return;
+      }
+    } catch (e) {
+      // Unsupported platform, or a zone name the bundled tz database does not
+      // carry. Fall through rather than leaving the app on UTC.
+      debugPrint('[notify] platform timezone unavailable: $e');
+    }
+    _useLocalZoneByOffsetFallback();
+  }
+
+  /// Last resort only. Keeps the old behaviour so a channel failure degrades to
+  /// what shipped before rather than to UTC, which would put a Kathmandu user
+  /// 5h45m out on every reminder.
+  void _useLocalZoneByOffsetFallback() {
     final offset = DateTime.now().timeZoneOffset;
-    if (tz.local.currentTimeZone.offset == offset.inMilliseconds) return;
+    if (tz.local.currentTimeZone.offset == offset.inMilliseconds) {
+      debugPrint('[notify] timezone: ${tz.local.name} (already matched offset)');
+      return;
+    }
     final now = DateTime.now().toUtc();
     for (final location in tz.timeZoneDatabase.locations.values) {
       if (location.timeZone(now.millisecondsSinceEpoch).offset ==
           offset.inMilliseconds) {
         tz.setLocalLocation(location);
+        debugPrint(
+            '[notify] timezone: ${location.name} (GUESSED from offset $offset - '
+            'DST rules may be wrong)');
         return;
       }
     }
@@ -151,22 +185,32 @@ class NotificationService {
   Future<bool> requestPermissions() async {
     await init();
     final p = await SharedPreferences.getInstance();
-    await p.setBool(_kAsked, true);
 
     final android = _plugin.resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin>();
     if (android != null) {
       final granted = await android.requestNotificationsPermission() ?? false;
       await android.requestExactAlarmsPermission();
+      // Android only allows the ask once, so record it however they answered.
+      await p.setBool(_kAsked, true);
       return granted;
     }
 
     final ios = _plugin.resolvePlatformSpecificImplementation<
         IOSFlutterLocalNotificationsPlugin>();
     if (ios != null) {
-      return await ios.requestPermissions(
-              alert: true, badge: true, sound: true) ??
-          false;
+      final granted =
+          await ios.requestPermissions(alert: true, badge: true, sound: true) ??
+              false;
+      // Only remember the ask once it actually happened.
+      //
+      // This flag used to be written BEFORE the request. If the request then
+      // threw or returned null - which is what a misconfigured iOS build does -
+      // the user was marked as asked without ever seeing a prompt, and
+      // hasBeenAsked() kept them from ever being offered it again. Silent
+      // notifications, permanently, with no way back short of a reinstall.
+      await p.setBool(_kAsked, true);
+      return granted;
     }
     return false;
   }

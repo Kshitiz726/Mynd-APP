@@ -17,6 +17,14 @@ class MicroStep {
 
 /// A task in the backlog / timeline.
 class Task {
+  /// Ids of blocks mirrored in from the phone's calendar.
+  ///
+  /// Lives here rather than on either provider because both of them have to
+  /// agree on it: one writes it, the other must never push those blocks back
+  /// out, or the app and the calendar would copy the same event to each other
+  /// forever.
+  static const calendarPrefix = 'cal-';
+
   Task({
     required this.id,
     required this.title,

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { db } from '../db.js';
 import { requireAuth } from '../auth.js';
+import { HEALTH_STATE_KEYS, hasHealthConsent } from './consent.js';
 
 const r = Router();
 
@@ -138,6 +139,16 @@ const STATE_KEYS = new Set([
   'tasks', 'goals', 'habits', 'mood', 'streak', 'reminders', 'memory', 'focus',
 ]);
 
+/**
+ * Reading is deliberately not gated on health consent, where writing is.
+ *
+ * Withdrawing consent stops us building on this data; it does not make the
+ * person's own mood history unreadable to them. Erasure is a separate,
+ * explicitly offered action (DELETE /consent/health/data) precisely so that
+ * "stop using it" and "delete it" stay different choices. Locking the read
+ * would take the second decision away by making the data inaccessible either
+ * way, and would also break the export they are entitled to.
+ */
 r.get('/state/:key', requireAuth, async (req, res, next) => {
   try {
     if (!STATE_KEYS.has(req.params.key)) return res.status(404).json({ error: 'unknown key' });
@@ -156,6 +167,18 @@ r.put('/state/:key', requireAuth, async (req, res, next) => {
   try {
     if (!STATE_KEYS.has(req.params.key)) return res.status(404).json({ error: 'unknown key' });
     if (req.body?.value === undefined) return res.status(400).json({ error: 'no value' });
+
+    // The health-data gate, enforced here rather than only in the app.
+    //
+    // The app does not offer to sync these documents without consent, but "the
+    // client does not ask" is not a control - it is a convention, and it holds
+    // only for the build we shipped. This is the line that actually makes the
+    // policy's "we stop processing it" true, so a withdrawn account cannot
+    // have its mood history or coach memory written here by an old build, a
+    // queued request, or anything holding a valid token.
+    if (HEALTH_STATE_KEYS.has(req.params.key) && !(await hasHealthConsent(req.user.id))) {
+      return res.status(403).json({ error: 'health-data consent required', code: 'health_consent_required' });
+    }
     const row = await db.one(
       `insert into user_state(user_id, key, value) values($1,$2,$3)
        on conflict (user_id, key)

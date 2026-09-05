@@ -69,3 +69,29 @@ OURMYND_SETUP.txt
 OURMYND_MAC_HANDOFF.txt
 AuthKey_*.p8
 *.p8
+
+# Scratch/setup documents that carry real credentials in plaintext.
+# OURMYND_TESTFLIGHT_PROMPT.txt held the Groq API key and was untracked but NOT
+# ignored, so a single `git add .` would have committed it.
+OURMYND_TESTFLIGHT_PROMPT.txt
+OURMYND_SETUP.txt
+PROGRESS_PAUSE,TXT
+beta_testers.txt
+
+# Live Stripe signing secret pasted here while configuring the endpoint.
+# Never commit: anyone holding it can forge webhook events and grant
+# themselves a paid entitlement.
+webhooki_secret.txt
+*_secret.txt
+.build-config/
+
+# Scratch notes, pasted logs and one-off SQL that accumulate in the repo root
+# while debugging. Several of them (code.txt, way.txt, RUN_ME_IN_SUPABASE.sql,
+# "update_version 3.txt") carry real keys or connection strings in plaintext,
+# and key.txt is named for exactly what it holds. None of it is source, so it
+# is ignored as a class rather than one file at a time - a single `git add -A`
+# was all that stood between these and a public history.
+/*.txt
+/*.sql
+/*.webp
+server/testnote_txt

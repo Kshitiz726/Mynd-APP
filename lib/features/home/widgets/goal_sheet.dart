@@ -15,6 +15,24 @@ import '../../../widgets/om_tappable.dart';
 import '../../../widgets/om_time_picker.dart';
 import '../../../widgets/text_editing_scope.dart';
 
+/// A toast that does not need a live widget to show itself.
+///
+/// The plan is built after this page has closed, so by the time there is
+/// something to report the context that started it is gone. A messenger caught
+/// on the way in still works.
+void _toast(ScaffoldMessengerState messenger, Color ink, String message) {
+  messenger
+    ..clearSnackBars()
+    ..showSnackBar(
+      SnackBar(
+        content: Text(message),
+        duration: const Duration(seconds: 2),
+        margin: const EdgeInsets.fromLTRB(24, 0, 24, 96),
+        backgroundColor: ink,
+      ),
+    );
+}
+
 /// "New goal": capture a title, a target date ("achieve this by") and the slot
 /// they are setting aside for it, then hand off to [GoalProvider] which breaks
 /// the goal into a day-by-day plan tuned to the user's current energy.
@@ -24,6 +42,22 @@ import '../../../widgets/text_editing_scope.dart';
 Future<void> showAddGoalSheet(BuildContext context) async {
   final goals = context.read<GoalProvider>();
   final energy = context.read<EnergyProvider>().current;
+  // Read once, here, while the caller is definitely alive.
+  //
+  // Everything inside this page used to reach back through the CALLER's
+  // context - themes, the date picker, the toasts, the pop. That held only as
+  // long as the caller outlived the page. It stopped holding the moment this
+  // was opened from the nav bar's add sheet, which closes itself on the way in:
+  // every later lookup was then a lookup on a deactivated widget, which is the
+  // "looking up a deactivated widget's ancestor is unsafe" error, and it fired
+  // on the first keystroke.
+  //
+  // The page's own context is used inside instead. This one is only for the
+  // toasts that land AFTER the page is gone, and it is a messenger rather than
+  // a context because a messenger keeps working when the widget that found it
+  // does not.
+  final messenger = ScaffoldMessenger.of(context);
+  final toastInk = context.omColors.text;
   DateTime? targetDate;
   // The slot the user sets aside for this goal every day. A goal with no time
   // booked for it is a wish, so we ask up front rather than hoping
@@ -44,7 +78,7 @@ Future<void> showAddGoalSheet(BuildContext context) async {
             Future<void> pickDate() async {
               final now = DateTime.now();
               final picked = await showDatePicker(
-                context: context,
+                context: builderContext,
                 initialDate: targetDate ?? now.add(const Duration(days: 7)),
                 firstDate: now,
                 lastDate: now.add(const Duration(days: 365)),
@@ -55,7 +89,7 @@ Future<void> showAddGoalSheet(BuildContext context) async {
 
             Future<void> pickSlot() async {
               final picked = await showOmTimePicker(
-                context: context,
+                context: builderContext,
                 initialTime: dailyStart ?? const TimeOfDay(hour: 18, minute: 0),
                 helpText: 'Work on this each day at',
               );
@@ -65,11 +99,11 @@ Future<void> showAddGoalSheet(BuildContext context) async {
             void create() {
               final title = controller.text.trim();
               if (title.isEmpty) {
-                Toast.show(context, 'Give your goal a name first');
+                Toast.show(builderContext, 'Give your goal a name first');
                 return;
               }
               if (targetDate == null) {
-                Toast.show(context, 'Pick when you want to achieve it');
+                Toast.show(builderContext, 'Pick when you want to achieve it');
                 return;
               }
               
@@ -77,9 +111,9 @@ Future<void> showAddGoalSheet(BuildContext context) async {
               // selection overlays, avoiding a known Flutter framework bug where
               // the overlay unmounts incorrectly and crashes.
               FocusManager.instance.primaryFocus?.unfocus();
-              Navigator.of(context).pop();
+              Navigator.of(builderContext).pop();
               Haptics.success();
-              Toast.show(context, 'Breaking your goal into daily steps…');
+              _toast(messenger, toastInk, 'Breaking your goal into daily steps…');
 
               final date = targetDate!;
               final slot = dailyStart;
@@ -92,13 +126,12 @@ Future<void> showAddGoalSheet(BuildContext context) async {
                   dailyStart: slot,
                   dailyMinutes: minutes,
                 );
-                // ignore: use_build_context_synchronously
-                if (!context.mounted) return;
                 if (err != null) {
-                  Toast.show(context, err);
+                  _toast(messenger, toastInk, err);
                 } else {
                   Haptics.success();
-                  Toast.show(context, 'Goal plan ready - today’s step is on your timeline');
+                  _toast(messenger, toastInk,
+                      'Goal plan ready - today’s step is on your timeline');
                 }
               });
             }
@@ -115,10 +148,10 @@ Future<void> showAddGoalSheet(BuildContext context) async {
                   textCapitalization: TextCapitalization.sentences,
                   textInputAction: TextInputAction.done,
                   cursorColor: colors.primary,
-                  style: Theme.of(context).textTheme.bodyLarge,
+                  style: Theme.of(builderContext).textTheme.bodyLarge,
                   decoration: InputDecoration(
                     hintText: 'learn to play guitar',
-                    hintStyle: Theme.of(context).textTheme.bodyLarge?.copyWith(color: colors.text2),
+                    hintStyle: Theme.of(builderContext).textTheme.bodyLarge?.copyWith(color: colors.text2),
                     filled: true,
                     fillColor: colors.surfaceAlt,
                     prefixIcon: Icon(OmIcons.byName('activity'), size: 19, color: colors.text2),
@@ -134,7 +167,7 @@ Future<void> showAddGoalSheet(BuildContext context) async {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.lg),
-                Text('when do you want to achieve this by?', style: Theme.of(context).textTheme.titleSmall),
+                Text('when do you want to achieve this by?', style: Theme.of(builderContext).textTheme.titleSmall),
                 const SizedBox(height: AppSpacing.sm),
                 OmTappable(
                   onTap: pickDate,
@@ -157,7 +190,7 @@ Future<void> showAddGoalSheet(BuildContext context) async {
                           targetDate == null
                               ? 'pick a target date'
                               : DateFormat('EEE, MMM d, yyyy').format(targetDate!),
-                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          style: Theme.of(builderContext).textTheme.bodyLarge?.copyWith(
                                 color: targetDate == null ? colors.text2 : colors.text,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -168,10 +201,10 @@ Future<void> showAddGoalSheet(BuildContext context) async {
                 ),
                 const SizedBox(height: AppSpacing.lg),
                 Text('which part of the day is this goal’s?',
-                    style: Theme.of(context).textTheme.titleSmall),
+                    style: Theme.of(builderContext).textTheme.titleSmall),
                 const SizedBox(height: 4),
                 Text('today’s step gets booked here, every day, until the deadline.',
-                    style: Theme.of(context).textTheme.bodySmall),
+                    style: Theme.of(builderContext).textTheme.bodySmall),
                 const SizedBox(height: AppSpacing.sm),
                 OmTappable(
                   onTap: pickSlot,
@@ -193,8 +226,8 @@ Future<void> showAddGoalSheet(BuildContext context) async {
                         Text(
                           dailyStart == null
                               ? 'pick a daily time'
-                              : dailyStart!.format(context),
-                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                              : dailyStart!.format(builderContext),
+                          style: Theme.of(builderContext).textTheme.bodyLarge?.copyWith(
                                 color: dailyStart == null ? colors.text2 : colors.text,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -204,7 +237,7 @@ Future<void> showAddGoalSheet(BuildContext context) async {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.md),
-                Text('how long each day?', style: Theme.of(context).textTheme.bodySmall),
+                Text('how long each day?', style: Theme.of(builderContext).textTheme.bodySmall),
                 const SizedBox(height: AppSpacing.sm),
                 Wrap(
                   spacing: 8,

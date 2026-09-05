@@ -1,8 +1,10 @@
 import express from 'express';
-import cors from 'cors';
 import { createServer } from 'node:http';
 import { Server } from 'socket.io';
 import { config, logMode } from './config.js';
+import {
+  securityHeaders, cors, authLimiter, billingLimiter, writeLimiter, globalLimiter,
+} from './security.js';
 import { attachRealtime } from './realtime/socket.js';
 import { initNotify } from './services/notify.js';
 import feed from './routes/feed.js';
@@ -12,14 +14,31 @@ import notifications from './routes/notifications.js';
 import devRoutes from './routes/dev.js';
 import notesRouter from './routes/notes.js';
 import profileRouter from './routes/profile.js';
-import { authRouter } from './auth.js';
+import consentRouter from './routes/consent.js';
+import accountRouter from './routes/account.js';
+import coachRouter from './routes/coach.js';
+import { authRouter, requireAuth } from './auth.js';
 import { sessionsRouter } from './routes/sessions.js';
 import { roomsRouter } from './routes/rooms.js';
 import { bodyDoublingRouter } from './routes/bodydoubling.js';
 import { billingRouter, billingWebhookHandler } from './routes/billing.js';
 
+// Stamped once at import, so /version reports when this process came up. A
+// redeploy of an unchanged commit still moves this, which is the only way to
+// tell "deployed again" from "never deployed".
+const STARTED_AT = new Date().toISOString();
+
 const app = express();
-app.use(cors({ origin: config.clientOrigin }));
+
+// Behind Render's proxy. Without this express reads the proxy's address as the
+// client address, so every rate limiter would share one bucket for the whole
+// internet. Set to 1 rather than `true`: trusting the whole chain lets a client
+// forge X-Forwarded-For and pick its own bucket.
+app.set('trust proxy', 1);
+
+app.use(securityHeaders);
+app.use(cors);
+app.use(globalLimiter);
 
 // Stripe webhook needs the *raw* body to verify the signature, so it must be
 // registered before the JSON body parser swallows the stream.
@@ -29,16 +48,30 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), bill
 // and 256kb rejected every photo a phone camera produces.
 app.use(express.json({ limit: '2mb' }));
 
-app.get('/health', (_req, res) =>
-  res.json({
-    ok: true,
-    mode: {
-      db: config.hasDb ? 'cloud' : 'in-memory(dev)',
-      redis: config.hasRedis ? 'cloud' : 'in-memory(dev)',
-      livekit: config.hasLivekit ? 'on' : 'off(dev)',
-    },
-  }),
-);
+// Liveness only.
+//
+// This used to report which subsystems were real and which were dev fallbacks,
+// which told an unauthenticated caller that Redis was in-memory and LiveKit was
+// off - a map of where to push. The same detail is still available to an
+// operator, just not to the internet: it goes to the startup log instead.
+app.get('/health', (_req, res) => res.json({ ok: true }));
+
+// Which revision is actually serving.
+//
+// Behind auth on purpose, and the reason is the same one that stripped
+// /health above: this repo is public, so publishing the exact commit to
+// anonymous callers hands anyone the precise source running in production -
+// a map straight to any unpatched dependency. An operator with a token can
+// have it; the internet cannot.
+//
+// Render sets RENDER_GIT_COMMIT itself, so this cannot drift from what was
+// deployed the way a hand-maintained version string does. Without it, "did
+// the deploy land?" was only answerable by guessing from behaviour, and
+// during the 1.0.0+5 release it was not answerable at all.
+app.get('/version', requireAuth, (_req, res) => res.json({
+  commit: (process.env.RENDER_GIT_COMMIT ?? 'local').slice(0, 7),
+  startedAt: STARTED_AT,
+}));
 
 // Dev-only token minting, mounted before the DB guard so it always resolves.
 if (!config.isProd) app.use('/api', devRoutes);
@@ -61,7 +94,10 @@ app.use('/api', (req, res, next) => {
 
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
-  cors: { origin: config.clientOrigin },
+  // Same allow-list as the REST layer. A native client sends no Origin, which
+  // socket.io treats as same-origin and allows; a browser client must be on the
+  // list. This was `'*'` by inheritance from the old CORS default.
+  cors: { origin: config.clientOrigins, credentials: true },
   // Long timeouts so mobile clients survive backgrounding; the grace-period
   // eviction (presence.handleDisconnect) handles real drops.
   pingInterval: 25_000,
@@ -69,10 +105,20 @@ const io = new Server(httpServer, {
 });
 
 // REST
+//
+// Limiters are mounted per path group, tightest first. They sit here rather
+// than inside each router so the whole policy is readable in one place.
+app.use('/api/auth', authLimiter);
+app.use('/api/billing', billingLimiter);
+app.use(['/api/posts', '/api/conversations', '/api/comments', '/api/reports', '/api/coach'], writeLimiter);
+
 app.use('/api', authRouter);
 app.use('/api', feed);
 app.use('/api', social);
 app.use('/api', notesRouter);
+app.use('/api', consentRouter);
+app.use('/api', accountRouter);
+app.use('/api', coachRouter);
 app.use('/api', profileRouter);
 app.use('/api', chat);
 app.use('/api', notifications);

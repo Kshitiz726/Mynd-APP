@@ -9,7 +9,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../core/utils/om_icons.dart';
 import '../../../providers/task_provider.dart';
-import '../../../widgets/fluid_orb.dart';
+import '../../../widgets/glow_ring.dart';
 import '../../../widgets/om_tappable.dart';
 import 'brain_dump_sheet.dart';
 
@@ -88,7 +88,7 @@ class _VoiceDumpSheetState extends State<VoiceDumpSheet> {
     }
   }
 
-  // Just drives the orb's swell - no pause detection.
+  // Just drives the halo's swell - no pause detection.
   void _onLevel(double l) {
     if (!mounted || _phase != _Vp.listening) return;
     setState(() => _level = _level * 0.6 + l * 0.4);
@@ -161,17 +161,28 @@ class _VoiceDumpSheetState extends State<VoiceDumpSheet> {
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
-            // The orb swells with your voice while listening and spins while it
-            // is breaking the dump down.
+            // A mic, not a mascot. The orb that used to sit here was a
+            // rendered marble with no relationship to the thing it was
+            // doing: on a screen that says "listening" the one symbol
+            // everybody already reads is a microphone, and the orb made
+            // people wait to find out whether the app was recording. The
+            // halo swells with your voice, so the page answers that in the
+            // first syllable.
             SizedBox(
               height: 132,
               child: Center(
-                child: Transform.scale(
-                  scale: _phase == _Vp.listening ? 1 + _level * 0.18 : 1,
-                  child: FluidOrb(
-                    size: 108,
-                    playing: _phase == _Vp.listening || _phase == _Vp.processing,
-                  ),
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    if (_phase == _Vp.listening) _LevelBloom(level: _level),
+                    GlowRing(
+                      size: 108,
+                      icon: OmIcons.byName(_micIcon),
+                      active:
+                          _phase == _Vp.listening || _phase == _Vp.processing,
+                      semanticLabel: _title,
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -196,6 +207,16 @@ class _VoiceDumpSheetState extends State<VoiceDumpSheet> {
       ),
     );
   }
+
+  /// Mic while it is your turn, sparkles while the model has it. Leaving the
+  /// mic up during processing said the app was still listening when it had
+  /// already stopped.
+  String get _micIcon => switch (_phase) {
+        _Vp.processing => 'sparkles',
+        _Vp.done => 'check',
+        _Vp.error => 'mic-off',
+        _ => 'mic',
+      };
 
   String get _title => switch (_phase) {
         _Vp.listening => 'listening…',
@@ -270,6 +291,41 @@ class _VoiceDumpSheetState extends State<VoiceDumpSheet> {
                     fontWeight: FontWeight.w700,
                     fontSize: 15)),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The soft swell behind the mic, driven by how loud you actually are.
+///
+/// Sized rather than scaled, and drawn behind the button, so the tap target
+/// never moves under a thumb that is still resting on it.
+class _LevelBloom extends StatelessWidget {
+  const _LevelBloom({required this.level});
+
+  final double level;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.omColors;
+    final size = 104 + level * 46;
+    return IgnorePointer(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOut,
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: RadialGradient(
+            colors: [
+              c.primary.withValues(alpha: 0.02),
+              c.primary.withValues(alpha: 0.20 + level * 0.16),
+              c.primary.withValues(alpha: 0.0),
+            ],
+            stops: const [0.0, 0.72, 1.0],
+          ),
         ),
       ),
     );

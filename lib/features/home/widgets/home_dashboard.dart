@@ -596,8 +596,6 @@ class GoalsList extends StatelessWidget {
         // a task, and leaving it in the list means the thing you achieved
         // spends the rest of its life adding to the pile you are looking at.
         if (done.isNotEmpty) _FinishedGoals(goals: done),
-        const SizedBox(height: AppSpacing.sm),
-        const _AddGoalButton(),
       ],
     );
   }
@@ -749,75 +747,46 @@ class _GoalRow extends StatelessWidget {
   }
 }
 
-class _AddGoalButton extends StatelessWidget {
-  const _AddGoalButton();
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.omColors;
-    return OmCard.hero(
-      tint: c.primary,
-      padding: const EdgeInsets.symmetric(vertical: 14),
-      onTap: () => showAddGoalSheet(context),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(OmIcons.byName('plus'), size: 18, color: c.primary),
-          const SizedBox(width: 8),
-          Text('New goal',
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: c.primary,
-                    fontWeight: FontWeight.w800,
-                  )),
-        ],
-      ),
-    );
-  }
-}
-
-/// Clean, professional empty state when no goals exist yet.
+/// No goals yet, said in one line.
+///
+/// This was an illustrated card most of a phone tall: artwork, a heading, a
+/// sentence, and a gradient button. All of it to report an absence, on a
+/// screen where an absence is the least interesting thing present, and every
+/// pixel of it was pushing the goals of somebody who DOES have goals further
+/// down the page. The plus button now carries the action, so this only has to
+/// say the section is empty and point at it.
 class _GoalsEmptyState extends StatelessWidget {
   const _GoalsEmptyState();
 
   @override
   Widget build(BuildContext context) {
     final c = context.omColors;
-    // Neutral frost, not a brand-tinted pane.
-    //
-    // Brain Dump can carry the purple tint because what sits on it is a white
-    // icon on a solid gradient tile. This card's illustration is drawn in
-    // primary and flow, so tinting the pane the same hue put purple artwork on
-    // a purple slab: the target rings disappeared into it and the body copy
-    // lost most of its contrast. The colour in this card should come from the
-    // drawing and the CTA, not from the surface they sit on.
     return OmCard.glass(
-      padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 18),
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
       onTap: () => showAddGoalSheet(context),
-      child: Column(
+      child: Row(
         children: [
-          // Spans the box rather than sitting in it as a 64px circle, which
-          // read as a placeholder waiting for the real thing to load.
-          const NoGoalsArt(),
-          const SizedBox(height: 14),
-          Text('No active goals',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                  )),
-          const SizedBox(height: 4),
-          Text("Set a goal - we'll break it into daily steps.",
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall),
-          const SizedBox(height: 16),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            width: 38,
+            height: 38,
             decoration: BoxDecoration(
-              gradient: c.brandGradient,
-              borderRadius: BorderRadius.circular(AppRadius.pill),
+              color: c.primary.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
             ),
-            child: const Text('Set your first goal',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 14)),
+            child: Icon(OmIcons.byName('target'), size: 19, color: c.primary),
           ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              "no goals yet - set one and we'll break it into daily steps",
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    height: 1.35,
+                    color: c.text2,
+                  ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Icon(OmIcons.byName('plus'), size: 20, color: c.primary),
         ],
       ),
     );

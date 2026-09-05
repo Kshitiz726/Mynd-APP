@@ -1,7 +1,7 @@
 name: ourmynd
 description: "OurMynd — an ADHD-focused productivity, wellness & community app."
 publish_to: "none"
-version: 1.0.0+2
+version: 1.0.0+6
 
 environment:
   sdk: ">=3.6.0 <4.0.0"
@@ -74,6 +74,12 @@ dependencies:
   intl: ^0.20.2
   cupertino_icons: ^1.0.9
   video_player: ^2.11.1
+  flutter_secure_storage: ^11.0.0
+  youtube_player_iframe: ^6.0.2
+  file_picker: ^12.1.2
+  geolocator: ^14.0.3
+  geocoding: ^5.0.0
+  device_calendar: ^4.3.3
 
 dev_dependencies:
   flutter_lints: ^4.0.0
@@ -89,6 +95,10 @@ flutter:
   assets:
     - assets/audio/
     - assets/puter/
+    # The app icon, bundled so the splash and login screens can show the same
+    # mark the user tapped. flutter_launcher_icons only reads it at build time;
+    # displaying it inside the app needs it shipped as well.
+    - assets/branding/app_icon.png
 
   # The orb is generated on the GPU rather than decoded from a video, which is
   # why there is no longer an assets/video/ directory: fluid.mp4 and the still
@@ -98,8 +108,8 @@ flutter:
 
 # App-icon generation from the OurMynd logo.
 # Run: dart run flutter_launcher_icons
-# iOS forbids alpha in app icons (App Store rejects them), so we flatten the
-# transparent logo onto white — matching the logo's own background.
+# iOS forbids alpha in app icons (App Store rejects them), so the two settings
+# below flatten it onto white.
 flutter_launcher_icons:
   image_path: "assets/branding/app_icon.png"
   android: true

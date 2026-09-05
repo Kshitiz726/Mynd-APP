@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -25,7 +26,10 @@ import 'providers/focus_provider.dart';
 import 'providers/focus_room_provider.dart';
 import 'providers/goal_provider.dart';
 import 'providers/habit_provider.dart';
+import 'providers/health_consent_provider.dart';
 import 'providers/memory_provider.dart';
+import 'providers/calendar_provider.dart';
+import 'providers/motivation_provider.dart';
 import 'providers/mood_provider.dart';
 import 'providers/nav_provider.dart';
 import 'providers/premium_provider.dart';
@@ -63,9 +67,28 @@ void main() async {
   final bootAt = DateTime.now();
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Silence debug logging in release builds.
+  //
+  // debugPrint keeps working in release - it is not compiled out - so the
+  // verbose auth, sync and realtime tracing scattered through the app was
+  // being written to the device log on real phones. None of it prints a token
+  // or an email value, but it does narrate a user's session to anything that
+  // can read the log, and on a health app that is more than we should say.
+  // Assertions only run in debug, so this leaves development untouched.
+  if (kReleaseMode) {
+    debugPrint = (String? message, {int? wrapWidth}) {};
+  }
+
   // Coach memory (parked thoughts + rolling summary) is app-wide; load it once
   // up front so parking a thought outside the coach screen merges, not clobbers.
   await _bootStep('coach memory', CoachMemoryService.instance.init);
+
+  // The health-data consent answer, from this device's cache, before anything
+  // can consult it. Nothing here gates on a network call: the provider fails
+  // closed, so a launch that reached the first frame without this would spend
+  // it treating a consenting user as if they had declined. The server is asked
+  // straight after the session is restored, below.
+  await _bootStep('health consent', HealthConsentProvider.instance.loadCached);
 
   // Auto-login: if a session was saved, restore it and reconnect realtime so we
   // land straight in the shell. Otherwise start at the login screen.
@@ -79,6 +102,13 @@ void main() async {
   // unreachable server would just retry-storm in the background.
   if (hasSession && !kDemoMode) {
     await _bootStep('realtime', RealtimeService.instance.connect);
+    // Reconcile with the server, which is where the evidence lives and which
+    // knows about answers given on other devices and about a policy version
+    // that has moved on since this one was cached. Deliberately not awaited:
+    // the cached answer is already correct in the overwhelming majority of
+    // launches, and holding the splash open for it would make every cold start
+    // wait on a request whose answer it almost always already has.
+    unawaited(HealthConsentProvider.instance.refresh());
   }
 
   await _bootStep('alarms', AlarmService.instance.init);
@@ -111,6 +141,11 @@ void main() async {
     // The socket is still authenticated as the previous user, and connect() is
     // a no-op while one exists. Drop it so the new session opens its own.
     RealtimeService.instance.dispose();
+    // Consent belongs to an account, not to a phone. Forgetting it here is what
+    // stops the incoming account inheriting the outgoing one's answer - which
+    // would be wrong whichever way it pointed, but is worst when it silently
+    // grants permission nobody on this account ever gave.
+    unawaited(HealthConsentProvider.instance.clear());
     runApp(OurMyndApp(
       initialRoute: AppRoutes.shell,
       bootAt: DateTime.now(),
@@ -177,6 +212,12 @@ class OurMyndApp extends StatelessWidget {
         // drives the paywall checkout. Refreshed after sign-in / on the paywall.
         ChangeNotifierProvider(create: (_) => PremiumProvider()..refresh()),
         ChangeNotifierProvider(create: (_) => NavProvider()),
+        // A singleton behind a provider: the gate is consulted from plain
+        // static code as well as from the widget tree, and both have to see
+        // the same answer. See HealthConsentProvider.
+        ChangeNotifierProvider<HealthConsentProvider>.value(
+          value: HealthConsentProvider.instance,
+        ),
         ChangeNotifierProvider(create: (_) => EnergyProvider()),
         ChangeNotifierProvider(create: (_) => TaskProvider()),
         ChangeNotifierProvider(create: (_) => HabitProvider()),
@@ -191,6 +232,25 @@ class OurMyndApp extends StatelessWidget {
         // them, and read back into every coach reply.
         ChangeNotifierProvider(create: (_) => MemoryProvider()),
         ChangeNotifierProvider(create: (_) => MoodProvider()),
+        // Follows the tasks, so every edit, drag, tick and delete reaches the
+        // calendar without each of those call sites having to remember.
+        ChangeNotifierProxyProvider<TaskProvider, CalendarProvider>(
+          create: (_) => CalendarProvider()..load(),
+          update: (_, tasks, prev) => (prev ?? CalendarProvider()..load())..watch(tasks),
+        ),
+        // Bound to the mood and the memory rather than reading either at
+        // generation time. The lines are written from what the app actually
+        // knows about this person, and rewritten when that changes: a line
+        // about somebody's week is only worth anything while it is still their
+        // week.
+        ChangeNotifierProxyProvider3<MoodProvider, MemoryProvider, TaskProvider,
+            MotivationProvider>(
+          create: (_) => MotivationProvider(),
+          update: (_, mood, memory, tasks, prev) => (prev ?? MotivationProvider())
+            ..bindMood(mood)
+            ..bindMemory(memory)
+            ..bindTasks(tasks),
+        ),
         // Consecutive days you showed up. Listens for the two things that
         // count rather than polling them, and reconciles a check-in that
         // happened before this provider existed (a cold start later the same
@@ -247,6 +307,10 @@ class OurMyndApp extends StatelessWidget {
             habits: ctx.read<HabitProvider>(),
             focus: ctx.read<FocusProvider>(),
             settings: ctx.read<SettingsProvider>(),
+            // Read once rather than proxied: MoodProvider is a single
+            // long-lived instance, and the coach reads through the reference on
+            // every turn, so there is nothing for a proxy to update.
+            mood: ctx.read<MoodProvider>(),
             // The signed-in account's name. The session is restored before
             // runApp, so this is populated by the time the coach is built; if
             // it is not, the coach stays nameless rather than inventing one.

@@ -13,11 +13,19 @@
     <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
     <uses-permission android:name="android.permission.VIBRATE"/>
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+    <!-- No cleartext traffic.
+         This carried android:usesCleartextTraffic="true", which permits plain
+         HTTP app-wide. It was there so a debug build could reach a laptop
+         backend on http://10.0.2.2, but it shipped to release, where it means a
+         health-data app will happily send a session token over an unencrypted
+         connection if anything ever points it at one. The debug-only network
+         config below restores the local-development case without weakening
+         release builds. -->
     <application
         android:label="ourmynd"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
-        android:usesCleartextTraffic="true">
+        android:networkSecurityConfig="@xml/network_security_config">
         <activity
             android:name=".MainActivity"
             android:exported="true"

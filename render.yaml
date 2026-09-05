@@ -61,3 +61,22 @@ services:
       # (Stripe redirects come back here). Add it in the dashboard then redeploy.
       - key: PUBLIC_BASE_URL
         sync: false
+      # ── Required by the hardened server (added 2026-08-25) ──────────────
+      # CLIENT_ORIGIN is a comma-separated allow-list of browser origins. The
+      # API used to answer every origin with `*`; it now refuses to start in
+      # production rather than fall back to a wildcard, so THIS MUST BE SET
+      # BEFORE the next deploy or the service will not boot.
+      # Native iOS/Android send no Origin header and are unaffected - this only
+      # governs the Flutter web build and the Stripe return pages.
+      - key: CLIENT_ORIGIN
+        sync: false
+      # Stripe webhook signing secret (whsec_...). Without it the server now
+      # REFUSES unsigned webhook events in production instead of trusting them.
+      # Stripe Dashboard -> Developers -> Webhooks -> the endpoint -> Signing secret.
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      # Model provider key. Used to live inside the app binary where `strings`
+      # could recover it; the server now holds it and proxies /api/coach/*.
+      # Brain dump, transcription and memory refresh all fail without it.
+      - key: GROQ_API_KEY
+        sync: false

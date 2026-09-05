@@ -10,6 +10,7 @@ import '../../core/utils/om_icons.dart';
 import '../../core/utils/toast.dart';
 import '../../models/focus/room_participant.dart';
 import '../../providers/focus_room_provider.dart';
+import 'widgets/focus_music.dart';
 import '../../widgets/om_avatar.dart';
 import '../../widgets/om_back_button.dart';
 import '../../widgets/om_tappable.dart';
@@ -248,6 +249,14 @@ class _FocusRoomScreenState extends State<FocusRoomScreen> {
                         ),
                       ],
                     ),
+                  ),
+                  // One line under the controls: what the room is playing and
+                  // a pause that reaches everyone. There is no player to see -
+                  // the audio comes out of Mynd and the screen stays about the
+                  // session, which is what people came for.
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: AppSpacing.screenH),
+                    child: RoomMusicStrip(),
                   ),
                   // Leave Button
                   Padding(

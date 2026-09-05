@@ -15,13 +15,81 @@ import { scheduleEviction, cancelEviction } from './eviction.js';
  *   room:{id}:members       SET<userId>             liveCount = SCARD
  *   room:{id}:p:{userId}    HASH ParticipantView    grid state (TTL 120s)
  *   room:{id}:ambience      STRING ambience_kind
+ *   room:{id}:music         STRING JSON RoomMusic     (TTL, see MUSIC_TTL)
+ *                                                     carries startedAt: the
+ *                                                     room's shared playhead
  *   sess:{userId}           HASH {endsAt,pausedRemaining,running,roomId,sessionId,...}
  *   sock:{socketId}         HASH {userId, rooms}
  *   presence:global         SET<userId>             the "62 minds focusing" counter
  */
 
+/// What a room is playing. `uri` is always a canonical `{provider}:{kind}:{id}`
+/// string - the raw pasted string is normalised before it ever reaches here, so
+/// nothing downstream has to cope with share links or locale-prefixed URLs.
+///
+/// `startedAt` is the server's clock reading for position zero, and it is the
+/// reason a room can actually listen together rather than merely agree on a
+/// name: every client seeks to `now - startedAt` instead of starting from the
+/// beginning, so a late joiner lands where everyone else already is. It is
+/// deliberately the SERVER's clock - deriving it from whoever set the track
+/// would import their device's clock skew into everybody's playhead.
+///
+/// Null for providers that cannot be positioned from here (Spotify plays in
+/// its own app, out of our reach).
+export type RoomMusic = {
+  uri: string;
+  title: string | null;
+  changedBy: string;
+  changedAt: number;
+  /// Server clock at position zero. Null while paused.
+  startedAt: number | null;
+  paused: boolean;
+  /// Where the playhead was frozen. Only meaningful while `paused`, and it is
+  /// what `startedAt` is rebuilt from on resume, so a pause does not lose the
+  /// room's place.
+  positionMs: number;
+};
+
 const GRACE_MS = 30_000;
 const PARTICIPANT_TTL = 120;
+
+/// Room music expires; room ambience does not, and that is a bug we are not
+/// repeating here. `room:{id}:ambience` is written with a bare SET and never
+/// deleted, so every room that has ever existed still holds one. A day is long
+/// enough that nobody in a live room loses their track, and short enough that a
+/// dead room stops costing anything.
+const MUSIC_TTL = 60 * 60 * 24;
+
+/// Tolerant on read. A malformed value is treated as "no music" rather than
+/// throwing: this is read on every join_room, and one bad key should not stop
+/// people entering the room.
+async function readMusic(
+  redis: { get(key: string): Promise<string | null> },
+  roomId: string,
+): Promise<RoomMusic | null> {
+  const raw = await redis.get(`room:${roomId}:music`);
+  if (!raw) return null;
+  try {
+    const v = JSON.parse(raw) as Partial<RoomMusic>;
+    if (typeof v?.uri !== 'string') return null;
+    // Defaults are filled here rather than at the call sites because this key
+    // has a day-long TTL: records written by the previous build have no
+    // startedAt/paused/positionMs, and they stay readable for a day after a
+    // deploy. Normalising once means nothing downstream has to guess whether a
+    // missing field means "not paused" or "unknown".
+    return {
+      uri: v.uri,
+      title: typeof v.title === 'string' ? v.title : null,
+      changedBy: typeof v.changedBy === 'string' ? v.changedBy : '',
+      changedAt: typeof v.changedAt === 'number' ? v.changedAt : Date.now(),
+      startedAt: typeof v.startedAt === 'number' ? v.startedAt : null,
+      paused: v.paused === true,
+      positionMs: typeof v.positionMs === 'number' ? v.positionMs : 0,
+    };
+  } catch {
+    return null;
+  }
+}
 
 export type MicState = 'muted' | 'speaking' | 'ptt';
 export type ParticipantState = 'active' | 'inactive' | 'muted' | 'need_help';
@@ -133,6 +201,25 @@ export function makePresence(io: Server) {
 
     async setRoomAmbience(roomId: string, ambience: string) {
       await redis.set(`room:${roomId}:ambience`, ambience);
+    },
+
+    /// Whatever the room is currently playing, or null if nothing is.
+    async roomMusic(roomId: string): Promise<RoomMusic | null> {
+      return readMusic(redis, roomId);
+    },
+
+    /// Replace the room's music. Pass null to stop.
+    ///
+    /// Written whole rather than as a hash: it is only ever read and replaced
+    /// as one unit, and a partial update would let `uri` and `title` disagree
+    /// about what is playing.
+    async setRoomMusic(roomId: string, music: RoomMusic | null) {
+      const key = `room:${roomId}:music`;
+      if (music === null) {
+        await redis.del(key);
+        return;
+      }
+      await redis.set(key, JSON.stringify(music), 'EX', MUSIC_TTL);
     },
 
     // ── Timer authority: store absolute end-time, derive remaining on demand ──

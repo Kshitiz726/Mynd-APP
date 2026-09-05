@@ -6,6 +6,7 @@ import '../../core/theme/app_colors.dart';
 import '../../providers/task_provider.dart';
 import '../../widgets/om_states.dart';
 import '../home/home_screen.dart';
+import 'widgets/calendar_connect_card.dart';
 import '../home/widgets/day_timeline.dart';
 import '../home/widgets/week_strip.dart';
 
@@ -48,6 +49,10 @@ class ScheduleScreen extends StatelessWidget {
             AppSpacing.screenBottom,
           ),
           children: [
+            // Above the day, because it changes what the day means: with it
+            // connected, an empty afternoon is genuinely empty rather than
+            // just empty as far as this app can see.
+            const CalendarConnectCard(),
             const OmSectionHeader('your day'),
             const SleepScheduleBarX(),
             const SizedBox(height: AppSpacing.sm),

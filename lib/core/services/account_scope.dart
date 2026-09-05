@@ -58,6 +58,17 @@ class AccountScope {
   /// previous account's data in memory. Set in main().
   static void Function()? onSwitched;
 
+  /// Bumped once per completed switch.
+  ///
+  /// Rebuilding the widget tree does not reach work that is already in flight.
+  /// A request that started under one account and comes back after a switch
+  /// still has its result to write, and the live keys it would write to now
+  /// belong to somebody else - which is the very thing this class exists to
+  /// prevent, arriving by a route the swap cannot see. Long-running work takes
+  /// a copy of this before it starts and compares before it persists.
+  static int _generation = 0;
+  static int get generation => _generation;
+
   /// Hand this device's live data to [userId], parking whoever had it before
   /// and unparking [userId]'s own data if it is here.
   ///
@@ -81,6 +92,7 @@ class AccountScope {
     }
 
     await p.setString(_kOwner, userId);
+    _generation++;
 
     // Held in memory by a singleton, so swapping its keys is not enough.
     await CoachMemoryService.instance.reload();
