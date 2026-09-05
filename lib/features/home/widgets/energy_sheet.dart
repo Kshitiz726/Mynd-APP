@@ -164,7 +164,10 @@ Respond ONLY with a valid JSON array of objects. Do not wrap it in markdown. For
   }
 ]
 ''';
-                  final response = await GroqService.instance.complete([
+                  // Unmetered: this is the same bounded text-to-JSON job as a
+                  // brain dump, not a conversation, and it was rationed to
+                  // five a day along with everything else.
+                  final response = await GroqService.instance.extract([
                     {'role': 'system', 'content': 'You are a JSON-only API. Only output valid JSON.'},
                     {'role': 'user', 'content': prompt},
                   ]);
