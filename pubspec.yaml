@@ -1,7 +1,7 @@
 name: ourmynd
 description: "OurMynd — an ADHD-focused productivity, wellness & community app."
 publish_to: "none"
-version: 1.0.0+5
+version: 1.0.0+6
 
 environment:
   sdk: ">=3.6.0 <4.0.0"
