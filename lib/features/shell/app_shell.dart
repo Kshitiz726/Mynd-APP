@@ -187,7 +187,16 @@ class _AppShellState extends State<AppShell> {
                       builder: (context, snap) {
                         final signedIn = snap.data ?? false;
                         if (signedIn) return const SizedBox.shrink();
-                        return OmNavBar(current: nav.tab, onSelect: nav.select);
+                        // onAdd matters here too. Without it the centre slot
+                        // renders empty and the bar shows up on the coach gate
+                        // with a hole where the (+) is on every other tab -
+                        // which reads as the button breaking when you open the
+                        // coach, not as a deliberately different bar.
+                        return OmNavBar(
+                          current: nav.tab,
+                          onSelect: nav.select,
+                          onAdd: () => showQuickAddSheet(context),
+                        );
                       },
                     )
                   : OmNavBar(

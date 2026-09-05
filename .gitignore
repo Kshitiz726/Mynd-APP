@@ -95,3 +95,8 @@ webhooki_secret.txt
 /*.sql
 /*.webp
 server/testnote_txt
+
+# Xcode's resolved Swift package state for the macOS target. Tool output, and
+# it churns on every open.
+macos/Runner.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
+macos/Runner.xcworkspace/xcshareddata/swiftpm/

@@ -270,7 +270,10 @@ than inventing a personality.''',
     ];
 
     try {
-      final text = await GroqService.instance.complete(messages);
+      // Unmetered. This runs on its own schedule, so metering it meant the
+      // app spent the user's coaching allowance on housekeeping they never
+      // asked for, and then refused to talk to them.
+      final text = await GroqService.instance.extract(messages);
       _memory = UserMemory(
         text: text.trim(),
         updatedAt: DateTime.now(),

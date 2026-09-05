@@ -257,7 +257,10 @@ If the evidence is thin, answer: okay|not much to go on yet''',
     ];
 
     try {
-      final raw = await GroqService.instance.complete(messages);
+      // Unmetered: a background guess nobody asked for must not spend one of
+      // the five free coaching messages. It was, and silently - the gauge
+      // simply stopped updating once the day's allowance had gone.
+      final raw = await GroqService.instance.extract(messages);
       final parsed = _parse(raw);
       if (parsed != null) {
         _reading = parsed;

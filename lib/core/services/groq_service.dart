@@ -248,19 +248,27 @@ class GroqService {
   // ─── Blocking ─────────────────────────────────────────────────────────────
 
   /// Non-streaming completion - for summarisation and housekeeping tasks.
-  /// Turn a brain dump into task titles.
+  /// Turn what the user typed or spoke into structured JSON.
   ///
   /// Its own endpoint rather than [complete], because that one is the metered
   /// coach route: emptying your head into the app was spending one of the five
   /// free coaching messages a day, and once they were gone Brain Dump failed
   /// with a message about a chat limit. The server does not count this one, and
   /// it picks the model and the ceiling itself.
-  Future<String> extract(List<Map<String, String>> messages) async {
+  ///
+  /// [task] selects the token ceiling on the server and nothing else. A goal
+  /// plan needs far more room than a list of task titles, and asking for it
+  /// under the extraction ceiling truncates the JSON mid-array - which arrives
+  /// as a parse failure rather than as a short plan.
+  Future<String> extract(
+    List<Map<String, String>> messages, {
+    String task = 'extract',
+  }) async {
     final response = await _client
         .post(
       ApiConfig.instance.rest('/api/coach/extract'),
       headers: _headers,
-      body: jsonEncode({'messages': messages}),
+      body: jsonEncode({'task': task, 'messages': messages}),
     )
         .timeout(
       const Duration(seconds: 60),
@@ -277,10 +285,32 @@ class GroqService {
       );
     }
 
-    final json = jsonDecode(response.body) as Map<String, dynamic>;
-    return json['choices'][0]['message']['content'] as String;
+    final json = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+    final choices = json['choices'] as List?;
+    final message = choices?.firstOrNull?['message'] as Map<String, dynamic>?;
+    final content = ((message?['content'] ?? '') as String).trim();
+
+    // An empty answer is a real, silent failure mode here, not a defensive
+    // nicety. These are reasoning models: the thinking is spent out of the same
+    // token budget as the reply, so a ceiling that is too low returns HTTP 200
+    // with content: "". That reached the caller as jsonDecode('') and surfaced
+    // as a FormatException - a parse error blamed on the user's words, when
+    // nothing was wrong with them and nothing had been written at all.
+    if (content.isEmpty) {
+      throw const GroqException(
+        'The model returned nothing',
+        statusCode: 502,
+      );
+    }
+    return content;
   }
 
+  /// The metered coach route. Nothing in the app calls this today, and that is
+  /// deliberate rather than an oversight: the live conversation runs on Puter,
+  /// so everything that ever reached here was the app's own plumbing - reading
+  /// a brain dump, planning a goal, guessing a mood, rewriting the memory - and
+  /// the five-a-day cap was rationing housekeeping instead of chat. Anything
+  /// that is not a person talking to the coach belongs on [extract].
   Future<String> complete(List<Map<String, String>> messages) async {
     final response = await _client
         .post(

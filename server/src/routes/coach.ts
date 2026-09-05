@@ -413,6 +413,18 @@ const TranscribeRequest = z.object({
  * /api/coach already sits behind writeLimiter at 60 a minute per user.
  */
 const ExtractRequest = z.object({
+  // Which piece of the app's own plumbing is asking. It selects a token
+  // ceiling and nothing else - the model, the effort and the temperature stay
+  // the server's choice, so this cannot be widened into a general proxy by a
+  // client that sends a different string.
+  //
+  // 'plan' exists because breaking a goal into a day-by-day plan is the same
+  // kind of work as reading a brain dump - one bounded transformation of text
+  // the user already typed - but its answer is a JSON array with an entry per
+  // day, which does not fit in the extraction ceiling. It used to go through
+  // /coach/completions, so setting a goal spent a coaching message and a
+  // 30-day goal could be refused outright.
+  task: z.enum(['extract', 'plan']).default('extract'),
   messages: z
     .array(
       z.object({
@@ -423,6 +435,11 @@ const ExtractRequest = z.object({
     .min(1)
     .max(4),
 });
+
+/// Room for the answer, per job. A plan is one object per day for up to a
+/// couple of months; the extraction ceiling would truncate it mid-JSON, which
+/// surfaces as "could not read that" rather than as a short plan.
+const EXTRACT_CEILING = { extract: 1500, plan: 4000 } as const;
 
 r.post('/coach/extract', requireAuth, async (req, res, next) => {
   try {
@@ -445,12 +462,12 @@ r.post('/coach/extract', requireAuth, async (req, res, next) => {
         model: 'openai/gpt-oss-20b',
         reasoning_effort: 'low',
         messages: parsed.data.messages,
-        // Low, because the answer is a list of titles and nothing else.
+        // Low, because the answer is JSON and nothing else.
         temperature: 0.2,
         // Room for a long dump. The old path shared the summary ceiling of 300,
         // which silently truncated the JSON on a big brain dump and surfaced as
         // "failed to process" rather than as a missing task.
-        max_tokens: 1500,
+        max_tokens: EXTRACT_CEILING[parsed.data.task],
         stream: false,
       }),
       signal: AbortSignal.timeout(60_000),

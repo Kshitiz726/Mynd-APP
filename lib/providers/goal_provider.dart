@@ -297,10 +297,21 @@ Respond ONLY with a valid JSON array, no markdown. Example:
 
     final milestones = <GoalMilestone>[];
     try {
-      final response = await GroqService.instance.complete([
-        {'role': 'system', 'content': 'You are a JSON-only planning API. Only output valid JSON.'},
-        {'role': 'user', 'content': prompt},
-      ]);
+      // The unmetered route, not [complete]. Setting a goal is the app's own
+      // plumbing, not a conversation, and it was spending one of the five free
+      // coaching messages a day: three goals and the coach refused to talk.
+      // Worse, the plan is written once at creation, so a goal set on a spent
+      // day silently got no milestones at all.
+      final response = await GroqService.instance.extract(
+        [
+          {
+            'role': 'system',
+            'content': 'You are a JSON-only planning API. Only output valid JSON.'
+          },
+          {'role': 'user', 'content': prompt},
+        ],
+        task: 'plan',
+      );
 
       final cleaned = response.replaceAll('```json', '').replaceAll('```', '').trim();
       final arr = jsonDecode(cleaned) as List;

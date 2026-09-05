@@ -65,6 +65,27 @@ Future<int> processBrainDumpText(String text, TaskProvider tp) async {
   return newTasks.length;
 }
 
+/// Why a brain dump failed, in words a person can act on.
+///
+/// Shared by the typed sheet and the voice sheet, which used to swallow the
+/// exception entirely and say "could not break that down" whether the session
+/// had expired, the request had timed out, or the server had no key. Those need
+/// different things from the user, so they say different things to them.
+String brainDumpError(Object e) => switch (e) {
+      CoachLimitException() =>
+        'That hit the daily coach limit, which it should not - please report this.',
+      GroqException(statusCode: 401) => 'Your session expired. Sign in again.',
+      GroqException(statusCode: 408) =>
+        'That took too long. Check your connection and try again.',
+      GroqException(statusCode: 502) =>
+        'The model had nothing to say about that. Try rephrasing it.',
+      GroqException(statusCode: 503) =>
+        'The server is not set up for this yet.',
+      GroqException() => 'Could not reach the server. Try again in a moment.',
+      FormatException() => 'That came back garbled. Give it another go.',
+      _ => 'Could not read that. Try again.',
+    };
+
 class BrainDumpSheet extends StatefulWidget {
   const BrainDumpSheet({super.key});
 
@@ -76,29 +97,44 @@ class _BrainDumpSheetState extends State<BrainDumpSheet> {
   final _controller = TextEditingController();
   bool _processing = false;
 
+  /// Why the last attempt failed, shown inside the sheet.
+  ///
+  /// This used to be a SnackBar, which is drawn at the bottom of the Scaffold -
+  /// underneath the sheet that is still covering it. So a failed brain dump
+  /// spun, stopped, and said nothing at all: the button looked broken rather
+  /// than the request looking failed. The message has to appear on the surface
+  /// the user is actually looking at.
+  String? _error;
+
   Future<void> _process() async {
     final text = _controller.text.trim();
     if (text.isEmpty) return;
 
-    setState(() => _processing = true);
+    setState(() {
+      _processing = true;
+      _error = null;
+    });
     final tp = context.read<TaskProvider>();
+    // Captured while this sheet is still mounted. The success path pops first,
+    // and reaching back through a popped route's context for its messenger is
+    // the same "deactivated widget's ancestor" fault the goal form had.
+    final messenger = ScaffoldMessenger.of(context);
 
     try {
       final count = await processBrainDumpText(text, tp);
       if (!mounted) return;
       Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(content: Text('Added $count tasks to your backlog!')),
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to process: $e')),
-      );
+      setState(() => _error = brainDumpError(e));
     } finally {
       if (mounted) setState(() => _processing = false);
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -137,6 +173,25 @@ class _BrainDumpSheetState extends State<BrainDumpSheet> {
                 fillColor: c.bg,
               ),
             ),
+            if (_error != null) ...[
+              const SizedBox(height: AppSpacing.md),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(OmIcons.byName('x'), size: 16, color: c.error),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _error!,
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(color: c.error, height: 1.3),
+                    ),
+                  ),
+                ],
+              ),
+            ],
             const SizedBox(height: AppSpacing.xl),
             OmTappable(
               onTap: _processing ? null : _process,

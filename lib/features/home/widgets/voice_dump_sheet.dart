@@ -125,11 +125,15 @@ class _VoiceDumpSheetState extends State<VoiceDumpSheet> {
       });
       await Future<void>.delayed(const Duration(milliseconds: 1400));
       if (mounted) Navigator.of(context).maybePop();
-    } catch (_) {
+    } catch (e) {
       if (mounted) {
         setState(() {
           _phase = _Vp.error;
-          _error = 'Could not break that down, give it another go.';
+          // The reason, not just the fact. This was `catch (_)` with one fixed
+          // sentence, so an expired session and a timed-out request looked
+          // identical to somebody who had just spoken a paragraph at their
+          // phone and needed to know whether to try again.
+          _error = brainDumpError(e);
         });
       }
     }
