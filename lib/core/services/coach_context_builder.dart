@@ -3,6 +3,7 @@ import '../../models/energy_level.dart';
 import '../../providers/energy_provider.dart';
 import '../../providers/focus_provider.dart';
 import '../../providers/habit_provider.dart';
+import '../../providers/mood_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../providers/task_provider.dart';
 import 'coach_memory_service.dart';
@@ -41,6 +42,7 @@ class CoachContextBuilder {
     required SettingsProvider settings,
     required String userName,
     required bool healthConsent,
+    MoodProvider? mood,
     String userMemory = '',
   }) {
     final memory = CoachMemoryService.instance;
@@ -51,7 +53,12 @@ class CoachContextBuilder {
       // and substituting a plausible default would be inventing the very thing
       // consent was withheld for.
       currentEnergyLevel: healthConsent ? _energyLabel(energy.current) : 'unknown',
-      recentMoodLogs: const [], // populated from Firebase when integrated
+      // What they actually said about their own day, which until now was being
+      // collected on Home and then thrown away here. It is the one signal in
+      // this whole snapshot the user sets by hand, and the coach was answering
+      // as though it did not exist.
+      recentMoodLogs:
+          healthConsent && mood != null ? _buildMoodLogs(mood) : const [],
       recentBrainDumps: healthConsent ? _buildBrainDumps(memory) : const [],
       todayTasks: _buildTaskSummaries(tasks),
       habitProgress: _buildHabitProgress(habits),
@@ -76,6 +83,7 @@ class CoachContextBuilder {
               tasks: tasks,
               habits: habits,
               memory: memory,
+              mood: mood,
             ),
     );
   }
@@ -87,6 +95,24 @@ class CoachContextBuilder {
         EnergyLevel.low => 'low',
         EnergyLevel.dead => 'brain-dead',
       };
+
+  /// Their check-ins, newest first.
+  ///
+  /// A week rather than one reading: "rough today" means something different
+  /// after four good days than it does at the end of a bad fortnight, and the
+  /// difference is most of what a friend would actually know.
+  List<MoodLogEntry> _buildMoodLogs(MoodProvider mood) {
+    final logged = mood.recent.whereType<MoodEntry>().toList().reversed.take(7);
+    return [
+      for (final e in logged)
+        MoodLogEntry(
+          mood: e.mood.label,
+          intensity: e.mood.index + 1,
+          loggedAt: e.day,
+          note: e.note,
+        ),
+    ];
+  }
 
   List<BrainDumpEntry> _buildBrainDumps(CoachMemoryService memory) {
     return memory.brainDumps.take(3).map((d) {
@@ -167,8 +193,23 @@ class CoachContextBuilder {
     required TaskProvider tasks,
     required HabitProvider habits,
     required CoachMemoryService memory,
+    MoodProvider? mood,
   }) {
     final patterns = <String>[];
+
+    // A run of bad days is a different situation from one bad day, and it is
+    // the kind of thing a friend would have noticed without being told.
+    final logged = mood?.recent.whereType<MoodEntry>().toList() ?? const [];
+    if (logged.length >= 3) {
+      final last3 = logged.sublist(logged.length - 3);
+      if (last3.every((e) => e.mood == Mood.rough || e.mood == Mood.low)) {
+        patterns.add(
+          'This is the third day running they have said they are doing badly. '
+          'Do not treat today as an isolated bad day, and do not ask them to '
+          'push through it again.',
+        );
+      }
+    }
 
     // Overwhelm: many undone tasks + low energy. Scoped to today's plan plus the
     // undated backlog - the load the user is actually carrying *now*, not blocks

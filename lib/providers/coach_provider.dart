@@ -17,6 +17,7 @@ import 'energy_provider.dart';
 import 'focus_provider.dart';
 import 'habit_provider.dart';
 import 'health_consent_provider.dart';
+import 'mood_provider.dart';
 import 'settings_provider.dart';
 import 'task_provider.dart';
 
@@ -42,8 +43,10 @@ class CoachProvider extends ChangeNotifier {
     required HabitProvider habits,
     required FocusProvider focus,
     required SettingsProvider settings,
+    MoodProvider? mood,
     String userName = '',
   })  : _energy = energy,
+        _mood = mood,
         _tasks = tasks,
         _habits = habits,
         _focus = focus,
@@ -55,6 +58,10 @@ class CoachProvider extends ChangeNotifier {
   // ─── Dependencies ─────────────────────────────────────────────────────────
 
   final EnergyProvider _energy;
+
+  /// The daily check-in. Held rather than passed per turn because it is the one
+  /// piece of context the user sets by hand, and every reply has to see it.
+  final MoodProvider? _mood;
   final TaskProvider _tasks;
   final HabitProvider _habits;
   final FocusProvider _focus;
@@ -465,6 +472,7 @@ class CoachProvider extends ChangeNotifier {
         // for the whole app session, so a consent withdrawn in Settings has to
         // take effect on the very next message rather than at the next launch.
         healthConsent: _healthConsent,
+        mood: _mood,
         userMemory: _userMemory,
       );
 

@@ -238,11 +238,18 @@ class OurMyndApp extends StatelessWidget {
           create: (_) => CalendarProvider()..load(),
           update: (_, tasks, prev) => (prev ?? CalendarProvider()..load())..watch(tasks),
         ),
-        // Bound to the mood rather than reading it at generation time, so a
-        // line written for a rough day knows it is a rough day.
-        ChangeNotifierProxyProvider<MoodProvider, MotivationProvider>(
+        // Bound to the mood and the memory rather than reading either at
+        // generation time. The lines are written from what the app actually
+        // knows about this person, and rewritten when that changes: a line
+        // about somebody's week is only worth anything while it is still their
+        // week.
+        ChangeNotifierProxyProvider3<MoodProvider, MemoryProvider, TaskProvider,
+            MotivationProvider>(
           create: (_) => MotivationProvider(),
-          update: (_, mood, prev) => (prev ?? MotivationProvider())..bindMood(mood),
+          update: (_, mood, memory, tasks, prev) => (prev ?? MotivationProvider())
+            ..bindMood(mood)
+            ..bindMemory(memory)
+            ..bindTasks(tasks),
         ),
         // Consecutive days you showed up. Listens for the two things that
         // count rather than polling them, and reconciles a check-in that
@@ -300,6 +307,10 @@ class OurMyndApp extends StatelessWidget {
             habits: ctx.read<HabitProvider>(),
             focus: ctx.read<FocusProvider>(),
             settings: ctx.read<SettingsProvider>(),
+            // Read once rather than proxied: MoodProvider is a single
+            // long-lived instance, and the coach reads through the reference on
+            // every turn, so there is nothing for a proxy to update.
+            mood: ctx.read<MoodProvider>(),
             // The signed-in account's name. The session is restored before
             // runApp, so this is populated by the time the coach is built; if
             // it is not, the coach stays nameless rather than inventing one.

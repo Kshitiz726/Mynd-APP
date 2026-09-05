@@ -269,12 +269,77 @@ Good (they have a 4pm dentist call they have moved twice): "hey. that dentist ca
         'been here the whole time.]\n\n$summary';
   }
 
+  // ─── Mood ─────────────────────────────────────────────────────────────────
+
+  /// What they said about today, and what that asks of the reply.
+  ///
+  /// Written as instructions rather than as data. "mood: rough" in a context
+  /// dump is a fact the model is free to acknowledge and then ignore, which is
+  /// exactly what it did; the difference between rough and great has to be a
+  /// difference in what the reply is allowed to be.
+  String _moodBlock(CoachContext ctx) {
+    final logs = ctx.recentMoodLogs;
+    if (logs.isEmpty) return '';
+    final today = logs.first;
+
+    final direction = switch (today.mood) {
+      'rough' =>
+        'They are having a bad day and have said so. Drop the task talk '
+            'entirely unless they raise it. No plans, no suggestions, no '
+            'silver linings, nothing that implies today still has to be '
+            'productive. Be short, be with them, and let today be a write-off '
+            'if that is what it is.',
+      'low' =>
+        'They are running low. Match it: slower, softer, fewer words. One '
+            'small thing at most, and only if they ask. Nothing that sounds '
+            'like they are behind.',
+      'okay' =>
+        'A middling day. Level and practical is right. You can point at the '
+            'next real thing without making it a push.',
+      'good' =>
+        'A good day, by their own account. You can be a bit more direct and '
+            'point at something worth spending it on. Still no cheerleading.',
+      'great' =>
+        'They are having a great day. Meet the energy, and aim it at the thing '
+            'they keep saying they will get to. Do not flatten it with '
+            'caution, and do not perform excitement back at them.',
+      _ => '',
+    };
+    if (direction.isEmpty) return '';
+
+    final b = StringBuffer('MOOD: they have said today feels '
+        '"${today.mood}". $direction');
+
+    // The run of days, when there is one. "rough" on the back of a good week
+    // is a bad day; "rough" on the back of a bad week is something else, and
+    // answering both the same way is how this reads as a script.
+    if (logs.length >= 3) {
+      final trail = logs.take(5).map((e) => e.mood).toList().reversed.join(' then ');
+      b.write('\nHow the last few days have gone, oldest first: $trail. '
+          'Weigh the run, not just today.');
+    }
+
+    // Their own words about it, which beat the five-point scale outright.
+    final note = today.note?.trim();
+    if (note != null && note.isNotEmpty) {
+      b.write('\nWhat they wrote alongside it, in their words: "$note". '
+          'This matters more than the rating.');
+    }
+    return b.toString();
+  }
+
   // ─── Dynamic Context Note ─────────────────────────────────────────────────
 
   String _contextNote(CoachContext ctx) {
     final parts = <String>[];
 
-    // Energy level - most important signal, shapes everything.
+    // Mood goes first and outranks everything below it. It is the only thing
+    // here the user set by hand, so if moving it does not visibly change the
+    // reply, they are right to conclude the control does nothing.
+    final moodBlock = _moodBlock(ctx);
+    if (moodBlock.isNotEmpty) parts.add(moodBlock);
+
+    // Energy level - shapes pace and length, under the mood.
     switch (ctx.currentEnergyLevel) {
       case 'brain-dead':
         parts.add(
