@@ -12,6 +12,7 @@ import '../../core/utils/om_icons.dart';
 import '../../widgets/om_back_button.dart';
 import '../../core/utils/toast.dart';
 import '../../models/focus/body_double.dart';
+import '../community/moderation_sheet.dart';
 import '../community/user_profile_sheet.dart';
 import '../../models/focus_mode.dart';
 import '../../providers/focus_provider.dart';
@@ -346,6 +347,38 @@ class _BodyDoublingScreenState extends State<BodyDoublingScreen> {
         const SizedBox(height: 6),
         Text('is ready to focus alongside you.',
             style: Theme.of(context).textTheme.bodySmall),
+        // Report or block the person you have just been paired with.
+        //
+        // Matchmaking puts a stranger in a room with you and live voice, which
+        // is the single situation on this app where "I need this to stop now"
+        // has to be one tap away. Deliberately plain text rather than an icon:
+        // somebody who needs it is not in a mood to decode a glyph.
+        if (p != null) ...[
+          const SizedBox(height: AppSpacing.md),
+          OmTappable(
+            onTap: () async {
+              final blocked = await showModerationSheet(
+                context,
+                targetType: 'user',
+                targetId: p.id,
+                authorId: p.id,
+                authorName: p.name,
+              );
+              // Blocked means they must not be your partner any more, so the
+              // match is abandoned rather than left on screen.
+              if (blocked && mounted) await _cancelMatch();
+            },
+            feedback: OmTapFeedback.light,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
+              child: Text('Report or block',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: c.text2,
+                        decoration: TextDecoration.underline,
+                      )),
+            ),
+          ),
+        ],
         const SizedBox(height: AppSpacing.xxl),
         OmButton(label: 'Start focusing together', icon: OmIcons.byName('activity'), onPressed: _enterRoom),
       ],

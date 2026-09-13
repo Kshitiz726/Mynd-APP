@@ -63,15 +63,22 @@ void main() {
       expect(read('server/src/server.ts'), contains('moderationRouter'));
     });
 
-    test('report and block are reachable from the feed and from a DM', () {
-      expect(
-        read('lib/features/community/community_screen.dart'),
-        contains('showModerationSheet'),
-      );
-      expect(
-        read('lib/features/community/chat_screen.dart'),
-        contains('showModerationSheet'),
-      );
+    test('report and block are reachable on every surface a reviewer can reach',
+        () {
+      // The feed is parked out of the shell (see app_shell.dart), so the post
+      // card is not where this gets tested - it is in the code, and unreachable.
+      // What a reviewer CAN reach is a direct message, a focus room, and a
+      // stranger they were matched with. Those carry live voice, which is the
+      // situation Apple is strictest about, so those are the ones that matter.
+      for (final file in [
+        'lib/features/community/community_screen.dart',
+        'lib/features/community/chat_screen.dart',
+        'lib/features/focus/focus_room_screen.dart',
+        'lib/features/focus/body_doubling_screen.dart',
+      ]) {
+        expect(read(file), contains('showModerationSheet'),
+            reason: '$file has no way to report or block');
+      }
     });
 
     test('a block can be undone, and support can be reached', () {
