@@ -21,7 +21,9 @@ import '../../widgets/om_switch.dart';
 import '../../widgets/om_tappable.dart';
 import '../memory/memory_screen.dart';
 import 'about_screen.dart';
+import '../../core/constants/legal.dart';
 import 'account_data_screen.dart';
+import 'blocked_accounts_screen.dart';
 import 'health_data_screen.dart';
 import 'profile_identity.dart';
 
@@ -175,6 +177,22 @@ class ProfileScreen extends StatelessWidget {
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute<void>(builder: (_) => const MemoryScreen()),
                 ),
+              ),
+              // The two remaining things Guideline 1.2 asks for, next to each
+              // other because they are the same conversation: somewhere to undo
+              // a block, and somewhere to reach a person about one.
+              _Row(
+                icon: Icons.block_rounded,
+                label: 'Blocked accounts',
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                      builder: (_) => const BlockedAccountsScreen()),
+                ),
+              ),
+              _Row(
+                icon: Icons.mail_outline_rounded,
+                label: 'Contact support',
+                onTap: () => Legal.contactSupport(context),
                 last: true,
               ),
             ]),

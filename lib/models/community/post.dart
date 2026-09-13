@@ -22,6 +22,7 @@ class Post {
   Post({
     required this.id,
     required this.authorName,
+    this.authorId = '',
     required this.initial,
     required this.avatarColor,
     required this.avatarTextColor,
@@ -36,6 +37,11 @@ class Post {
 
   final String id;
   final String authorName;
+
+  /// Who wrote it. Needed to block them - reporting identifies the post, but a
+  /// block is about the person. Defaults to empty rather than being required so
+  /// the optimistic local copy built when you post does not have to invent one.
+  final String authorId;
   final String initial;
   final String avatarColor;     // hex string, e.g. '#E0E7FF'
   final String avatarTextColor;
@@ -68,6 +74,7 @@ class Post {
     return Post(
       id: j['id'] as String,
       authorName: j['display_name'] as String? ?? 'Someone',
+      authorId: j['author_id'] as String? ?? '',
       initial: j['initial'] as String? ?? '?',
       avatarColor: j['avatar_color'] as String? ?? '#E0E7FF',
       avatarTextColor: j['avatar_text_color'] as String? ?? '#4F46E5',
@@ -91,7 +98,8 @@ class Post {
     final mine = {...myReactions};
     active ? mine.add(kind) : mine.remove(kind);
     return Post(
-      id: id, authorName: authorName, initial: initial, avatarColor: avatarColor,
+      id: id, authorName: authorName, authorId: authorId,
+      initial: initial, avatarColor: avatarColor,
       avatarTextColor: avatarTextColor, body: body, mood: mood, tags: tags,
       createdAt: createdAt, commentCount: commentCount,
       counts: {...counts, ...newCounts}, myReactions: mine,

@@ -26,6 +26,7 @@ import '../notifications/notifications_screen.dart';
 import '../shell/route_host.dart';
 import 'chat_screen.dart';
 import 'new_dm_sheet.dart';
+import 'moderation_sheet.dart';
 import 'widgets/post_comments_sheet.dart';
 import 'widgets/room_code.dart';
 import 'widgets/room_glyph.dart';
@@ -798,6 +799,37 @@ class _PostCard extends StatelessWidget {
                             ],
                           ),
                         ),
+                        // Report and block. Visible rather than hidden behind a
+                        // long-press: Apple requires a way to report content and
+                        // block a user, and a reviewer has to be able to FIND it
+                        // in the ten seconds they spend on this screen. Hidden
+                        // on your own posts, where neither action means
+                        // anything.
+                        if (post.authorId.isNotEmpty &&
+                            post.authorId != ApiConfig.instance.userId)
+                          OmTappable(
+                            onTap: () async {
+                              final blocked = await showModerationSheet(
+                                context,
+                                targetType: 'post',
+                                targetId: post.id,
+                                authorId: post.authorId,
+                                authorName: post.authorName,
+                                snapshot: post.body,
+                              );
+                              if (blocked && context.mounted) {
+                                await context
+                                    .read<CommunityProvider>()
+                                    .loadFeed(refresh: true);
+                              }
+                            },
+                            feedback: OmTapFeedback.light,
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(8, 2, 4, 8),
+                              child: Icon(Icons.more_horiz_rounded,
+                                  size: 20, color: c.text2),
+                            ),
+                          ),
                         // The reference's one round button on the card: a heart
                         // in the top-right. Here it is the real "relate"
                         // reaction, not decoration.

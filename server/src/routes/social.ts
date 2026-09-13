@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import type { ITask } from 'pg-promise';
 import { db } from '../db.js';
+import { isBlockedBetween } from '../services/moderation.js';
 import { requireAuth } from '../auth.js';
 import { pushNotification } from '../services/notify.js';
 
@@ -82,6 +83,12 @@ async function friendshipState(me: string, other: string) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 r.post('/friends/request', requireAuth, async (req, res) => {
+  // A block is not a mute: somebody you blocked must not be able to put a
+  // friend request in front of you. Same 400 in both directions, so the
+  // endpoint does not become a way to discover that you were blocked.
+  if (await isBlockedBetween(db, req.user.id, (req.body as { userId?: string }).userId ?? '')) {
+    return res.status(400).json({ error: 'cannot send that request' });
+  }
   const { userId } = req.body as { userId: string };
   if (!userId || userId === req.user.id) return res.status(400).json({ error: 'bad target' });
   await db.none(

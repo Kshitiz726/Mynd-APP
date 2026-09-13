@@ -11,6 +11,22 @@ abstract final class Legal {
   static const String privacyUrl = 'https://ourmynd.com/privacy';
   static const String copyrightUrl = 'https://ourmynd.com/copyright';
 
+  /// Where a person reaches a human.
+  ///
+  /// App Store Review Guideline 1.2 asks for published contact information on
+  /// any app carrying user-generated content, alongside the report and block
+  /// tools - somebody who has reported something has to be able to follow it
+  /// up. An address rather than a form, because a form is one more thing that
+  /// can be down on the day it matters.
+  static const String supportEmail = 'support@ourmynd.com';
+
+  /// mailto: with the subject pre-filled, so a support inbox can triage.
+  static Uri supportMailto({String subject = 'OurMynd support'}) => Uri(
+        scheme: 'mailto',
+        path: supportEmail,
+        query: 'subject=${Uri.encodeComponent(subject)}',
+      );
+
   /// Opens a legal page in an in-app browser.
   ///
   /// In-app rather than handing off to Chrome, because being thrown out of the
@@ -42,4 +58,18 @@ abstract final class Legal {
       open(context, privacyUrl);
   static Future<void> openCopyright(BuildContext context) =>
       open(context, copyrightUrl);
+
+  /// Opens the mail composer. Quiet on failure, like the rest of this file.
+  static Future<void> contactSupport(BuildContext context,
+      {String subject = 'OurMynd support'}) async {
+    try {
+      final ok = await launchUrl(supportMailto(subject: subject));
+      if (ok) return;
+    } catch (_) {/* fall through */}
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Email us at $supportEmail')),
+      );
+    }
+  }
 }

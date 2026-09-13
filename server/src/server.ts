@@ -12,6 +12,7 @@ import social from './routes/social.js';
 import chat from './routes/chat.js';
 import notifications from './routes/notifications.js';
 import devRoutes from './routes/dev.js';
+import moderationRouter from './routes/moderation.js';
 import notesRouter from './routes/notes.js';
 import profileRouter from './routes/profile.js';
 import consentRouter from './routes/consent.js';
@@ -121,6 +122,10 @@ app.use('/api', accountRouter);
 app.use('/api', coachRouter);
 app.use('/api', profileRouter);
 app.use('/api', chat);
+// Report and block. Mounted with the rest of the authenticated API; /api/reports
+// already sits behind writeLimiter, which was configured for a route that did
+// not exist yet.
+app.use('/api', moderationRouter);
 app.use('/api', notifications);
 app.use('/api', roomsRouter(io));
 app.use('/api', sessionsRouter);

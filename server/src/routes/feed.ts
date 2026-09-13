@@ -3,6 +3,7 @@ import { db } from '../db.js';
 import { requireAuth } from '../auth.js';
 import { toggleReaction } from '../services/reactions.js';
 import { pushNotification } from '../services/notify.js';
+import { notBlockedSql } from '../services/moderation.js';
 
 const r = Router();
 
@@ -54,8 +55,12 @@ r.get('/feed', requireAuth, async (req, res) => {
     from posts p
     join users u on u.id = p.author_id
     left join post_tags pt on pt.post_id = p.id
-    ${tag ? `where exists (select 1 from post_tags f where f.post_id=p.id and f.tag=$3)` : ''}
-    ${cursor ? `${tag ? 'and' : 'where'} p.created_at < $2` : ''}
+    -- Blocking applies here first, because the feed is where a reviewer will
+    -- check it. Always a WHERE rather than one of the conditional ones, so the
+    -- filter cannot depend on whether a tag or a cursor happened to be passed.
+    where ${notBlockedSql('p.author_id', '$1')}
+    ${tag ? `and exists (select 1 from post_tags f where f.post_id=p.id and f.tag=$3)` : ''}
+    ${cursor ? `and p.created_at < $2` : ''}
     group by p.id, u.id
     order by p.created_at desc
     limit 20`,
@@ -104,7 +109,8 @@ r.get('/posts/:id/comments', requireAuth, async (req, res) => {
             (select count(*) from comment_upvotes cu where cu.comment_id = c.id) as upvote_count,
             exists(select 1 from comment_upvotes cu where cu.comment_id = c.id and cu.user_id = $2) as has_upvoted
      from comments c join users u on u.id = c.author_id
-     where c.post_id=$1 order by c.path`,
+     where c.post_id=$1 and ${notBlockedSql('c.author_id', '$2')}
+     order by c.path`,
     [req.params.id, req.user.id],
   );
   res.json({ comments: rows });
