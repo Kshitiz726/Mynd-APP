@@ -53,3 +53,64 @@ create index if not exists content_reports_open_idx
 -- matters. Changing your mind about the reason is an update, not a new row.
 create unique index if not exists content_reports_one_per_reporter
   on content_reports (reporter_id, target_type, target_id);
+
+-- ============ ROW LEVEL SECURITY ============
+--
+-- Same shape as 20260826000000_security_hardening.sql, and for the same reason:
+-- the API connects as the table owner and scopes every query in application
+-- code, so this is defence in depth. It is the control that still holds if
+-- anything else is ever pointed at this database - PostgREST with the anon key,
+-- the Supabase client, a BI tool - and these two tables are the ones where that
+-- matters most. user_blocks says who is avoiding whom; content_reports says who
+-- reported whom and why. Neither should be readable by anything but the API.
+--
+-- `force` as well as `enable`, because `enable` alone exempts the table owner,
+-- which is exactly the role the API connects as - the policies would otherwise
+-- be decorative.
+alter table user_blocks      enable row level security;
+alter table user_blocks      force  row level security;
+alter table content_reports  enable row level security;
+alter table content_reports  force  row level security;
+
+-- The API's role keeps full access, or every feed and chat request breaks the
+-- moment RLS is forced above.
+--
+-- Derived from who owns an EXISTING table rather than from current_user, which
+-- is what the earlier migration used. current_user is whoever happens to run
+-- the file: run it from the Supabase SQL editor when the API connects as some
+-- other role and the policy names the wrong one, locking the server out of the
+-- tables it just created - with no error at migration time and a broken feed
+-- afterwards. Whoever can already read `posts` is by definition the right role.
+do $$
+declare api_role text;
+begin
+  select pg_get_userbyid(relowner) into api_role
+    from pg_class where oid = to_regclass('posts');
+  if api_role is null then
+    api_role := current_user;
+  end if;
+
+  execute format('drop policy if exists api_server_full_access on user_blocks');
+  execute format(
+    'create policy api_server_full_access on user_blocks to %I using (true) with check (true)',
+    api_role);
+
+  execute format('drop policy if exists api_server_full_access on content_reports');
+  execute format(
+    'create policy api_server_full_access on content_reports to %I using (true) with check (true)',
+    api_role);
+end $$;
+
+-- Owner-only access for any other role, where Supabase provides auth.uid().
+-- Deliberately absent for content_reports: a report is not the reporter's to
+-- read back, and letting the reported party read it would identify whoever
+-- reported them. Only the API sees that table.
+do $$
+begin
+  if exists (select 1 from pg_proc where proname = 'uid'
+               and pronamespace = (select oid from pg_namespace where nspname = 'auth')) then
+    drop policy if exists own_rows on user_blocks;
+    create policy own_rows on user_blocks
+      using (blocker_id = auth.uid()) with check (blocker_id = auth.uid());
+  end if;
+end $$;
