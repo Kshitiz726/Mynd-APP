@@ -3,6 +3,7 @@ import { db } from '../db.js';
 import { requireAuth } from '../auth.js';
 import { isMember } from '../services/chat.js';
 import { ensureDirectConversation } from './social.js';
+import { isBlockedBetween, notBlockedSql } from '../services/moderation.js';
 
 const r = Router();
 
@@ -32,6 +33,12 @@ r.get('/conversations', requireAuth, async (req, res) => {
       where cm2.conversation_id=c.id and cm2.user_id <> $1 limit 1
     ) o on not c.is_group
     where cm.user_id=$1
+      -- A blocked person's thread leaves the list entirely. Filtering only the
+      -- messages inside it would leave their name sitting in the Chats tab with
+      -- an empty conversation behind it, which is worse than not blocking them.
+      -- Group threads are untouched: o.id is null there, and leaving a group
+      -- because one member was blocked is not what anybody asked for.
+      and (o.id is null or ${notBlockedSql('o.id', '$1')})
     order by m.created_at desc nulls last`,
     [req.user.id],
   );
@@ -53,9 +60,11 @@ r.get('/conversations/:id/messages', requireAuth, async (req, res) => {
      join users u on u.id = m.sender_id
      left join messages rm on rm.id = m.reply_to_id
      left join users ru on ru.id = rm.sender_id
-     where m.conversation_id=$1 ${cursor ? 'and m.created_at < $2' : ''}
+     where m.conversation_id=$1
+       and ${notBlockedSql('m.sender_id', '$' + (cursor ? 3 : 2))}
+       ${cursor ? 'and m.created_at < $2' : ''}
      order by m.created_at desc limit 30`,
-    cursor ? [req.params.id, cursor] : [req.params.id],
+    cursor ? [req.params.id, cursor, req.user.id] : [req.params.id, req.user.id],
   );
   res.json({ messages: rows.reverse(), nextCursor: rows.at(0)?.created_at ?? null });
 });
@@ -83,6 +92,13 @@ r.get('/conversations/:id/members', requireAuth, async (req, res) => {
 r.post('/conversations/direct', requireAuth, async (req, res) => {
   const { userId } = req.body as { userId: string };
   if (!userId || userId === req.user.id) return res.status(400).json({ error: 'bad target' });
+
+  // Blocking has to stop a conversation being opened at all. Filtering the
+  // thread out of the list afterwards would still have delivered the first
+  // message as a push notification.
+  if (await isBlockedBetween(db, req.user.id, userId)) {
+    return res.status(403).json({ error: 'cannot open that conversation' });
+  }
 
   // DMs are unlocked only between accepted friends (or an already-existing convo).
   const accepted = await db.oneOrNone(

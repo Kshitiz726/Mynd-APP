@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'account_scope.dart';
 import 'api_config.dart';
 import 'session_store.dart';
+import '../../models/community/blocked_user.dart';
 import '../../models/community/post.dart';
 import '../../models/community/chat_models.dart';
 import '../../models/focus/focus_room.dart';
@@ -270,6 +271,42 @@ class ApiClient {
   Future<List<PostComment>> fetchComments(String postId) async {
     final j = await _get('/api/posts/$postId/comments');
     return (j['comments'] as List).map((c) => PostComment.fromJson((c as Map).cast())).toList();
+  }
+
+  // ── Moderation ──
+  //
+  // Report and block. Apple requires both of any app carrying user-generated
+  // content, and this one carries a feed, comments, direct messages and live
+  // voice.
+
+  /// Flag something for review. [targetType] is post | comment | message | user
+  /// | room. [snapshot] is a copy of what the reporter was looking at, because
+  /// the author can delete or edit it before anyone reads the report.
+  Future<void> reportContent({
+    required String targetType,
+    required String targetId,
+    required String reason,
+    String? note,
+    String? snapshot,
+  }) =>
+      _post('/api/reports', {
+        'targetType': targetType,
+        'targetId': targetId,
+        'reason': reason,
+        if (note != null && note.isNotEmpty) 'note': note,
+        if (snapshot != null && snapshot.isNotEmpty) 'snapshot': snapshot,
+      });
+
+  Future<void> blockUser(String userId) => _post('/api/blocks', {'userId': userId});
+
+  Future<void> unblockUser(String userId) => delete('/api/blocks/$userId');
+
+  /// The people this user has blocked, newest first.
+  Future<List<BlockedUser>> fetchBlocked() async {
+    final j = await _get('/api/blocks');
+    return (j['blocked'] as List)
+        .map((b) => BlockedUser.fromJson((b as Map).cast()))
+        .toList();
   }
 
   // ── Rooms ──

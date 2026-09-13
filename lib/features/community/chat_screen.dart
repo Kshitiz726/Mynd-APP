@@ -11,6 +11,7 @@ import '../../widgets/om_avatar.dart';
 import '../../widgets/om_back_button.dart';
 import '../../widgets/om_tappable.dart';
 import 'group_members_sheet.dart';
+import 'moderation_sheet.dart';
 import 'user_profile_sheet.dart';
 
 /// A single conversation - group chat or 1:1 DM. Realtime text + media via
@@ -180,6 +181,40 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         ),
         actions: [
+          // Report and block, from inside the conversation. A reviewer testing
+          // a messaging app looks for exactly this, and a direct message is the
+          // surface where "block them" matters most - the feed you can scroll
+          // past, a DM arrives at you.
+          //
+          // The peer is read off the messages rather than passed in: this
+          // screen is opened from several places with different amounts of
+          // information, and the one thing always true of somebody worth
+          // blocking is that they have said something to you.
+          if (!widget.isGroup)
+            Builder(builder: (context) {
+              final peer = msgs.where((m) => !m.mine).firstOrNull;
+              if (peer == null) return const SizedBox.shrink();
+              return OmTappable(
+                onTap: () async {
+                  final blocked = await showModerationSheet(
+                    context,
+                    targetType: 'message',
+                    targetId: peer.id,
+                    authorId: peer.senderId,
+                    authorName: widget.title,
+                    snapshot: peer.body,
+                  );
+                  // Their thread is gone from the list now, so staying on it
+                  // would be a screen showing somebody you just blocked.
+                  if (blocked && context.mounted) Navigator.of(context).maybePop();
+                },
+                pressedScale: 0.9,
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 14, left: 6),
+                  child: Icon(Icons.more_horiz_rounded, color: c.text, size: 22),
+                ),
+              );
+            }),
           if (widget.isGroup)
             OmTappable(
               onTap: () => GroupMembersSheet.show(context, widget.conversationId, widget.title),

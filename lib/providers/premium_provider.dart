@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../core/config/store_policy.dart';
 import '../core/services/billing_service.dart';
 
 /// Owns the user's subscription entitlement and the checkout flow.
@@ -22,7 +23,15 @@ class PremiumProvider extends ChangeNotifier {
   String? _pendingSessionId;
 
   BillingStatus get status => _status;
-  bool get isPremium => _status.premium;
+
+  /// True for a real subscriber, and true for everyone on a build that is not
+  /// allowed to sell. See [StorePolicy]: iOS ships without StoreKit, so the
+  /// paid features are unlocked there rather than dangled behind a paywall
+  /// nobody on that platform could complete.
+  ///
+  /// Deliberately an OR and not a replacement: a web subscriber signing in on
+  /// iOS keeps their real tier, and this only ever grants access.
+  bool get isPremium => StorePolicy.unlockAllPaidFeatures || _status.premium;
   String get tier => _status.tier;
   List<BillingPlan> get plans => _plans;
   bool get loadingPlans => _loadingPlans;
@@ -62,6 +71,10 @@ class PremiumProvider extends ChangeNotifier {
   /// Start Checkout for [planId] (a catalogue id like 'pro_month'). Opens the
   /// hosted page in the browser. Returns true if the browser launched.
   Future<bool> startCheckout(String planId) async {
+    // Refused outright where the build may not sell, not merely hidden in the
+    // UI. This is the call that opens an external payment page, so it is the
+    // one that has to be impossible rather than unlikely.
+    if (!StorePolicy.canSell) return false;
     if (_busy) return false;
     _busy = true;
     notifyListeners();
@@ -101,6 +114,10 @@ class PremiumProvider extends ChangeNotifier {
   /// After the portal we re-check status on resume, so a cancel or plan change
   /// reflects the moment the user returns. Returns true if the browser launched.
   Future<bool> openBillingPortal() async {
+    // Also an external payment page: it can change a plan and take money. A
+    // reviewer finding any route to one is the rejection, whether or not a
+    // purchase completes there.
+    if (!StorePolicy.canSell) return false;
     if (_busy) return false;
     _busy = true;
     notifyListeners();
