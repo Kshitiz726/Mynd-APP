@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/constants/app_spacing.dart';
 import '../../core/constants/legal.dart';
+import '../../core/config/store_policy.dart';
 import '../../core/routes/app_routes.dart';
 import '../../core/services/api_client.dart';
 import '../../core/services/google_auth.dart';
@@ -133,19 +134,34 @@ class ProfileScreen extends StatelessWidget {
             const SizedBox(height: AppSpacing.xl),
 
             // ── The plan ──
+            // The plan card is shown to everyone, so its tap is one of only two
+            // routes to the paywall that an isPremium check does not already
+            // close. On a build that may not sell, it stops being a door.
             _PlanCard(
               premium: premium,
               tier: context.watch<PremiumProvider>().tier,
-              onTap: () => Navigator.of(context).pushNamed(AppRoutes.paywall),
+              onTap: StorePolicy.canSell
+                  ? () => Navigator.of(context).pushNamed(AppRoutes.paywall)
+                  : null,
             ),
             const SizedBox(height: AppSpacing.xl),
 
             const _GroupLabel('Account'),
             _Group(children: [
+              // Opens the account screen, which is where "delete my account"
+              // lives. It used to open the PAYWALL - so the delete path had no
+              // caller anywhere in the app and AccountDataScreen was orphaned
+              // code. Apple requires account deletion to be reachable from
+              // inside the app (5.1.1(v)), so that was a rejection on its own,
+              // quite apart from being a door to the paywall.
               _Row(
                 icon: Icons.person_outline_rounded,
                 label: 'Account',
-                onTap: () => Navigator.of(context).pushNamed(AppRoutes.paywall),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const AccountDataScreen(),
+                  ),
+                ),
               ),
               _Row(
                 icon: Icons.notifications_none_rounded,
@@ -357,7 +373,10 @@ class _PlanCard extends StatelessWidget {
 
   final bool premium;
   final String tier; // free | plus | pro
-  final VoidCallback onTap;
+
+  /// Null on a build that may not sell, which makes the card inert rather than
+  /// a route to a paywall nobody on that platform could complete.
+  final VoidCallback? onTap;
 
   /// The gradient for the current state. Free is intentionally not grey - a flat
   /// white card here read as "off"; the point is to look like something worth
@@ -383,13 +402,17 @@ class _PlanCard extends StatelessWidget {
         ? Icons.auto_awesome_outlined
         : Icons.workspace_premium_rounded;
 
+    final tap = onTap;
     return OmTappable(
-      onTap: () {
-        Haptics.medium();
-        onTap();
-      },
+      // Inert, not merely undecorated, when there is nowhere to send them.
+      onTap: tap == null
+          ? null
+          : () {
+              Haptics.medium();
+              tap();
+            },
       feedback: OmTapFeedback.none,
-      pressedScale: 0.98,
+      pressedScale: tap == null ? 1.0 : 0.98,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
         decoration: BoxDecoration(
