@@ -9,6 +9,7 @@ import '../../core/utils/haptics.dart';
 import '../../core/utils/om_icons.dart';
 import '../../core/utils/toast.dart';
 import '../../models/focus/room_participant.dart';
+import '../community/moderation_sheet.dart';
 import '../../providers/focus_room_provider.dart';
 import 'widgets/focus_music.dart';
 import '../../widgets/om_avatar.dart';
@@ -196,6 +197,7 @@ class _FocusRoomScreenState extends State<FocusRoomScreen> {
                             color: _hex(p.avatarColor),
                             needsHelp: p.state == ParticipantState.needHelp,
                             dimmed: p.state == ParticipantState.inactive,
+                            isMe: p.userId == fr.myUserId,
                           ),
                       ],
                     ),
@@ -454,6 +456,7 @@ class _ParticipantTile extends StatelessWidget {
     required this.color,
     required this.needsHelp,
     required this.dimmed,
+    this.isMe = false,
   });
 
   final String userId;
@@ -463,10 +466,37 @@ class _ParticipantTile extends StatelessWidget {
   final bool needsHelp;
   final bool dimmed;
 
+  /// Reporting yourself is never the intent, so the gesture is off on your own
+  /// tile rather than opening a sheet that makes no sense.
+  final bool isMe;
+
   @override
   Widget build(BuildContext context) {
     final c = context.omColors;
-    return Opacity(
+    // Long-press to report or block. This is the surface Apple cares most about
+    // on this app: a focus room carries live voice, so the person beside you can
+    // talk into your ear. The community feed is parked out of the shell, which
+    // makes these tiles - not the post cards - the place moderation has to
+    // actually be reachable.
+    //
+    // Long-press rather than a visible control, because the tile is 56px of
+    // avatar in a wrap of other people and a permanent (...) on each one would
+    // bury the room in chrome. The room's own help sheet names the gesture, and
+    // so do the App Review notes.
+    return GestureDetector(
+      onLongPress: isMe
+          ? null
+          : () async {
+              Haptics.medium();
+              await showModerationSheet(
+                context,
+                targetType: 'user',
+                targetId: userId,
+                authorId: userId,
+                authorName: name,
+              );
+            },
+      child: Opacity(
       opacity: dimmed ? 0.4 : 1.0,
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -491,6 +521,7 @@ class _ParticipantTile extends StatelessWidget {
                   .labelMedium
                   ?.copyWith(fontSize: 13)),
         ],
+      ),
       ),
     );
   }
