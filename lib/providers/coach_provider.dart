@@ -11,8 +11,7 @@ import '../core/services/api_config.dart';
 import '../core/services/coach_context_builder.dart';
 import '../core/services/coach_memory_service.dart';
 import '../core/services/coach_prompt_builder.dart';
-// import '../core/services/groq_service.dart'; // replaced by Puter.js (in-app WebView bridge)
-import '../core/services/puter_service.dart';
+import '../core/services/groq_service.dart';
 import 'energy_provider.dart';
 import 'focus_provider.dart';
 import 'habit_provider.dart';
@@ -83,8 +82,13 @@ class CoachProvider extends ChangeNotifier {
     return ApiConfig.instance.displayName ?? '';
   }
 
-  // final _groq = GroqService.instance; // swapped for Puter.js (free, in-app)
-  final _ai = PuterService.instance;
+  // Groq, reached through our own server, rather than Puter's in-app WebView
+  // bridge. Puter is free, but it asks each person for a Puter account before
+  // it will answer - a second signup, to a company they did not choose, in
+  // front of the feature the app is named for. The server already meters and
+  // authenticates this route, so the coach now needs nothing beyond being
+  // signed in to OurMynd.
+  final _ai = GroqService.instance;
   final _memory = CoachMemoryService.instance;
 
   /// The user's editable memory, pushed in from the widget tree. Kept as a

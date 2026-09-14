@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import '../../core/constants/app_spacing.dart';
 import '../../core/routes/app_routes.dart';
 import '../../core/theme/app_colors.dart';
-import '../../core/services/puter_service.dart';
 import '../../core/utils/haptics.dart';
 import '../../core/utils/om_icons.dart';
 import '../../models/chat_message.dart';
@@ -19,13 +18,12 @@ import '../../widgets/om_glass.dart';
 import '../../widgets/om_tappable.dart';
 import '../onboarding/health_consent_screen.dart';
 import 'coach_history_screen.dart';
-import 'puter_gate.dart';
 
 /// "coach" - Mynd, the pocket coach. A calm chat with one-tap prompts for the
 /// moments words are hard to find ("i'm stuck", "i'm overwhelmed"…).
 ///
-/// Design is 100% unchanged from the prototype. The only difference is that
-/// [_send] and message state now route through [CoachProvider] → Groq.
+/// Design is 100% unchanged from the prototype. [_send] and message state route
+/// through [CoachProvider] → Groq, reached through our own server.
 class CoachScreen extends StatefulWidget {
   const CoachScreen({super.key});
 
@@ -111,7 +109,7 @@ class _CoachScreenState extends State<CoachScreen> {
     // server cannot be reached - or is running a build that predates this
     // endpoint - the coach opens as normal with health context off, rather
     // than showing a consent screen whose answer cannot be recorded and taking
-    // the whole feature, Puter sign-in included, down with it.
+    // the whole feature down with it.
     final consent = context.watch<HealthConsentProvider>();
     if (consent.mustAsk) {
       return HealthConsentScreen(onDecided: (_) {});
@@ -126,16 +124,12 @@ class _CoachScreenState extends State<CoachScreen> {
       ..setUserMemory(memory.promptBlock)
       ..setPreferredName(memory.preferredName);
 
-    // No Puter account, no coach. Saying so on the whole screen beats a chat
-    // that accepts your message and times out forty seconds later.
-    return StreamBuilder<bool>(
-      stream: PuterService.instance.authState,
-      initialData: PuterService.instance.signedIn,
-      builder: (context, auth) {
-        if (auth.data != true) return const PuterGate();
-        return _buildChat(context, c);
-      },
-    );
+    // Straight to the chat. This used to sit behind a Puter sign-in wall, which
+    // meant the coach - the thing the app is for - was unreachable until you
+    // registered with a third party. The turn is authenticated and metered by
+    // our own server now, so being signed in to OurMynd is the only account
+    // anyone needs.
+    return _buildChat(context, c);
   }
 
   Widget _buildChat(BuildContext context, OmColors c) {
@@ -161,7 +155,7 @@ class _CoachScreenState extends State<CoachScreen> {
         return Column(
           children: [
             // Messenger-style header: back to the previous tab, Mynd's avatar
-            // with a live "active" dot, name + model picker, and the connect chip.
+            // with a live "active" dot, name + subtitle, and the connect chip.
             Padding(
               padding: const EdgeInsets.fromLTRB(
                   8, AppSpacing.screenTop, AppSpacing.screenH, 8),
@@ -217,7 +211,7 @@ class _CoachScreenState extends State<CoachScreen> {
                                 .titleLarge
                                 ?.copyWith(
                                     fontSize: 19, fontWeight: FontWeight.w800)),
-                        const _ModelPicker(),
+                        const _CoachSubtitle(),
                       ],
                     ),
                   ),
@@ -355,123 +349,22 @@ class _CoachScreenState extends State<CoachScreen> {
 
 // ─── Widgets ──────────────────────────────────────────────────────────────────
 
-/// Coach subtitle that doubles as the Puter model picker.
-class _ModelPicker extends StatefulWidget {
-  const _ModelPicker();
-  @override
-  State<_ModelPicker> createState() => _ModelPickerState();
-}
-
-class _ModelPickerState extends State<_ModelPicker> {
-  /// A sheet, not a popup menu.
-  ///
-  /// The menu opened as a hard-edged rectangle pinned under a subtitle, in
-  /// none of the app's own shapes, and every model in it was a bare line of
-  /// text. Eight near-identical names need room to breathe and a tick you can
-  /// find without reading all of them.
-  Future<void> _choose() async {
-    Haptics.light();
-    final current = PuterService.instance.model;
-    final picked = await showModalBottomSheet<String>(
-      context: context,
-      showDragHandle: true,
-      builder: (sheet) {
-        final c = sheet.omColors;
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 4, 20, 2),
-                child: Text('which model',
-                    style: Theme.of(sheet).textTheme.titleLarge),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-                child: Text('they all sound a little different. try a few.',
-                    style: Theme.of(sheet).textTheme.bodySmall),
-              ),
-              Flexible(
-                child: ListView(
-                  shrinkWrap: true,
-                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
-                  children: [
-                    for (final m in kPuterModels)
-                      OmTappable(
-                        onTap: () => Navigator.of(sheet).pop(m.id),
-                        feedback: OmTapFeedback.none,
-                        pressedScale: 0.98,
-                        child: Container(
-                          margin: const EdgeInsets.only(bottom: 6),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 14),
-                          decoration: BoxDecoration(
-                            color: m.id == current ? c.primaryTint : c.surface,
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  m.label,
-                                  style: Theme.of(sheet)
-                                      .textTheme
-                                      .bodyLarge
-                                      ?.copyWith(
-                                        fontWeight: m.id == current
-                                            ? FontWeight.w800
-                                            : FontWeight.w500,
-                                      ),
-                                ),
-                              ),
-                              if (m.id == current)
-                                Icon(OmIcons.byName('check'),
-                                    size: 17, color: c.primary),
-                            ],
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-    if (picked != null && mounted) {
-      Haptics.select();
-      setState(() => PuterService.instance.setModel(picked));
-    }
-  }
+/// The line under "Mynd".
+///
+/// This was a model picker: eight Puter model names in a sheet, chosen on the
+/// device. The coach runs on Groq through our own server now, which picks the
+/// model itself, so a picker here would offer a choice that changes nothing.
+/// What it said about availability was the useful half, so that is what stays.
+class _CoachSubtitle extends StatelessWidget {
+  const _CoachSubtitle();
 
   @override
-  Widget build(BuildContext context) {
-    final c = context.omColors;
-    final current = PuterService.instance.model;
-    final label = kPuterModels
-        .firstWhere((m) => m.id == current,
-            orElse: () => (id: current, label: current))
-        .label;
-    return OmTappable(
-      onTap: _choose,
-      feedback: OmTapFeedback.none,
-      pressedScale: 0.97,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Flexible(
-            child: Text('$label · always here',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall),
-          ),
-          Icon(OmIcons.byName('chevR'), size: 13, color: c.text2),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => Text(
+        'always here',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.bodySmall,
+      );
 }
 
 /// One quiet row under the orb that opens everything you have said before.
