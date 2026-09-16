@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 // import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/services/puter_service.dart';
 import '../../providers/alerts_provider.dart';
 import '../../providers/chat_provider.dart';
 import '../../providers/settings_provider.dart';
@@ -103,7 +102,7 @@ class _AppShellState extends State<AppShell> {
     final showLivePill = focus.isActive && nav.tab != AppTab.focus;
 
     // Immersive surfaces hide the bottom nav so they read full-screen: a live
-    // focus room, an open DM / group chat, and the keyboard being up.
+    // focus room, an open DM / group chat, the coach, and the keyboard being up.
     // A minimised room still counts as being *in* a room, but the app is
     // navigable again, so the nav bar comes back and the room waits behind a
     // pill instead of covering everything.
@@ -114,7 +113,13 @@ class _AppShellState extends State<AppShell> {
     // A running solo session is immersive too: on the Focus tab the timer owns
     // the screen and the only way out is its own back button (which confirms).
     final inFocusSession = focus.isActive && nav.tab == AppTab.focus;
-    final hideNav = inFocusRoom || inChat || keyboardUp || inFocusSession;
+    // The coach is a conversation, and a conversation owns the screen. The bar
+    // sat under the composer stealing thumb-room and breaking the one flow the
+    // app is named for. CoachScreen carries its own back arrow precisely
+    // because the bar is not here, so nothing is stranded by this.
+    final inCoach = nav.tab == AppTab.coach;
+    final hideNav =
+        inFocusRoom || inChat || keyboardUp || inFocusSession || inCoach;
 
     return MemoryAutopilot(
       child: FocusInviteListener(
@@ -175,35 +180,21 @@ class _AppShellState extends State<AppShell> {
                 ),
             ],
           ),
+          // One rule, one bar.
+          //
+          // The coach used to get its own branch here, keeping the bar on
+          // screen whenever a PuterService stream said you were not signed in
+          // to Puter. The coach talks to our own server now and that stream is
+          // permanently false, so the special case did the exact opposite of
+          // what it was written for: the bar was always up on the one tab
+          // designed not to have one.
           bottomNavigationBar: hideNav
               ? null
-              : nav.tab == AppTab.coach
-                  // The coach is full-screen while you are actually chatting:
-                  // the bar steals thumb-room and breaks the flow. But the Puter
-                  // sign-in gate needs a way back out, so the bar stays there.
-                  ? StreamBuilder<bool>(
-                      stream: PuterService.instance.authState,
-                      initialData: PuterService.instance.signedIn,
-                      builder: (context, snap) {
-                        final signedIn = snap.data ?? false;
-                        if (signedIn) return const SizedBox.shrink();
-                        // onAdd matters here too. Without it the centre slot
-                        // renders empty and the bar shows up on the coach gate
-                        // with a hole where the (+) is on every other tab -
-                        // which reads as the button breaking when you open the
-                        // coach, not as a deliberately different bar.
-                        return OmNavBar(
-                          current: nav.tab,
-                          onSelect: nav.select,
-                          onAdd: () => showQuickAddSheet(context),
-                        );
-                      },
-                    )
-                  : OmNavBar(
-                      current: nav.tab,
-                      onSelect: nav.select,
-                      onAdd: () => showQuickAddSheet(context),
-                    ),
+              : OmNavBar(
+                  current: nav.tab,
+                  onSelect: nav.select,
+                  onAdd: () => showQuickAddSheet(context),
+                ),
           ),
         ),
       ),
