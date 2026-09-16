@@ -6,6 +6,7 @@ import 'account_scope.dart';
 import 'api_config.dart';
 import 'session_store.dart';
 import '../../models/community/blocked_user.dart';
+import '../../models/music_search_result.dart';
 import '../../models/community/post.dart';
 import '../../models/community/chat_models.dart';
 import '../../models/focus/focus_room.dart';
@@ -307,6 +308,20 @@ class ApiClient {
         if (note != null && note.isNotEmpty) 'note': note,
         if (snapshot != null && snapshot.isNotEmpty) 'snapshot': snapshot,
       });
+
+  /// Find music by name. Best match first.
+  ///
+  /// The search runs on our server rather than here so the app carries no
+  /// third-party key and no provider specific parsing, the same way the coach
+  /// reaches its model. Each result's `url` is already a playable stream link.
+  Future<List<MusicSearchResult>> searchMusic(String query) async {
+    final j = await _get('/api/music/search?q=${Uri.encodeQueryComponent(query)}');
+    return ((j['results'] as List?) ?? const [])
+        .whereType<Map>()
+        .map((m) => MusicSearchResult.fromJson(m.cast<String, dynamic>()))
+        .whereType<MusicSearchResult>()
+        .toList();
+  }
 
   Future<void> blockUser(String userId) => _post('/api/blocks', {'userId': userId});
 

@@ -4,6 +4,7 @@ import 'package:integration_test/integration_test.dart';
 
 import 'package:ourmynd/core/services/api_client.dart';
 import 'package:ourmynd/core/services/realtime_service.dart';
+import 'package:ourmynd/core/services/session_store.dart';
 
 /// Two real app instances, one on each simulator, against a real server.
 ///
@@ -19,6 +20,25 @@ const _role = String.fromEnvironment('BD_ROLE');
 const _handleA = 'bdtest_a';
 const _handleB = 'bdtest_b';
 
+/// Against the real server there is no mock auth to mint accounts with - it is
+/// dev-only, and rightly so, since it hands out a session for any handle you
+/// can guess. So the live run uses whoever is already signed in on the device,
+/// which also makes it a test of two genuine accounts rather than two fixtures.
+const _live = bool.fromEnvironment('BD_LIVE');
+
+Future<void> _signIn(ApiClient api, String handle, String name) async {
+  if (!_live) {
+    await api.authWithGoogle(handle: handle, displayName: name);
+    return;
+  }
+  final restored = await SessionStore.restore();
+  if (!restored) {
+    throw StateError(
+        'BD_LIVE needs a signed-in account on this device, and there is none. '
+        'Sign in first - a green run against an empty device proves nothing.');
+  }
+}
+
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
@@ -28,7 +48,7 @@ void main() {
     final api = ApiClient.instance;
 
     if (_role == 'a') {
-      await api.authWithGoogle(handle: _handleA, displayName: 'BD Test A');
+      await _signIn(api, _handleA, 'BD Test A');
       RealtimeService.instance.connect();
       await RealtimeService.instance.ensureConnected();
 
@@ -49,7 +69,7 @@ void main() {
     }
 
     // ── Role B ──
-    await api.authWithGoogle(handle: _handleB, displayName: 'BD Test B');
+    await _signIn(api, _handleB, 'BD Test B');
     RealtimeService.instance.connect();
     await RealtimeService.instance.ensureConnected();
 

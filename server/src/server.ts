@@ -18,6 +18,7 @@ import profileRouter from './routes/profile.js';
 import consentRouter from './routes/consent.js';
 import accountRouter from './routes/account.js';
 import coachRouter from './routes/coach.js';
+import musicRouter from './routes/music.js';
 import { authRouter, requireAuth } from './auth.js';
 import { sessionsRouter } from './routes/sessions.js';
 import { roomsRouter } from './routes/rooms.js';
@@ -126,6 +127,8 @@ app.use('/api', chat);
 // already sits behind writeLimiter, which was configured for a route that did
 // not exist yet.
 app.use('/api', moderationRouter);
+// Search music by name. /music/stream is deliberately open; see the route.
+app.use('/api', musicRouter);
 app.use('/api', notifications);
 app.use('/api', roomsRouter(io));
 app.use('/api', sessionsRouter);

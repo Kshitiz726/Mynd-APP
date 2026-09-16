@@ -10,6 +10,7 @@ import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 import '../../../core/constants/app_spacing.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/haptics.dart';
+import '../../../core/services/api_client.dart';
 import '../../../core/utils/music_link.dart';
 import '../../../core/utils/music_playback.dart';
 import '../../../core/utils/toast.dart';
@@ -46,7 +47,11 @@ class MusicBar extends StatefulWidget {
   final RoomMusic? music;
 
   /// Called with a raw pasted string, or null to stop.
-  final ValueChanged<String?> onSet;
+  ///
+  /// [title] is passed when we already know what the track is called - a
+  /// search result knows, a pasted URL does not - so the bar does not have to
+  /// fall back to guessing a name out of the last path segment.
+  final void Function(String? raw, {String? title}) onSet;
 
   /// Pause/resume for everyone in a room. Null in a solo session, where the
   /// timer is the only thing that pauses anything.
@@ -674,7 +679,7 @@ class _MusicLinkSheet extends StatefulWidget {
 
   final bool hasMusic;
   final String? error;
-  final ValueChanged<String?> onSet;
+  final void Function(String? raw, {String? title}) onSet;
 
   @override
   State<_MusicLinkSheet> createState() => _MusicLinkSheetState();
@@ -686,6 +691,10 @@ class _MusicLinkSheetState extends State<_MusicLinkSheet> {
   /// Errors from picking, kept apart from the paste field's own error.
   String? _pickError;
 
+  /// A search in flight, and anything that went wrong with the last one.
+  bool _searching = false;
+  String? _searchError;
+
   /// Live feedback while typing, so a wrong paste is obvious before submitting.
   MusicLink? get _preview => parseMusicLink(_controller.text);
 
@@ -695,9 +704,52 @@ class _MusicLinkSheetState extends State<_MusicLinkSheet> {
     super.dispose();
   }
 
-  void _submit(String value) {
-    widget.onSet(value);
-    Navigator.of(context).pop();
+  /// Typing a name searches; pasting a link still just works.
+  ///
+  /// The two are told apart by whether the text parses as a link we recognise,
+  /// not by looking for "http" - somebody typing a band with a dot in its name
+  /// should still get a search, and a bare youtu.be/xxxx with no scheme should
+  /// still be treated as the link it obviously is.
+  Future<void> _submit(String value) async {
+    final raw = value.trim();
+    if (raw.isEmpty) return;
+
+    if (parseMusicLink(raw) != null) {
+      widget.onSet(raw);
+      if (mounted) Navigator.of(context).pop();
+      return;
+    }
+
+    setState(() {
+      _searching = true;
+      _searchError = null;
+    });
+    try {
+      final results = await ApiClient.instance.searchMusic(raw);
+      if (!mounted) return;
+      if (results.isEmpty) {
+        setState(() {
+          _searching = false;
+          _searchError = 'nothing found for "$raw"';
+        });
+        return;
+      }
+      // Best match, played. Its name goes up with it, so if the match is wrong
+      // that is obvious immediately rather than after a minute of listening.
+      final best = results.first;
+      widget.onSet(best.url, title: best.label);
+      Navigator.of(context).pop();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _searching = false;
+        _searchError = 'could not search just now';
+      });
+    }
+  }
+
+  void _submitRaw(String value) {
+    unawaited(_submit(value));
   }
 
   Future<void> _pickFile() async {
@@ -714,7 +766,7 @@ class _MusicLinkSheetState extends State<_MusicLinkSheet> {
         return;
       }
       if (!mounted) return;
-      _submit(link.uri);
+      _submitRaw(link.uri);
     } catch (e) {
       debugPrint('[focus-music] file pick failed: $e');
       if (mounted) setState(() => _pickError = "couldn't open the file picker");
@@ -738,8 +790,9 @@ class _MusicLinkSheetState extends State<_MusicLinkSheet> {
               style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 4),
           Text(
-            'an audio link or a file on this device plays here. a YouTube '
-            'link plays here too, sound only. a Spotify link opens in Spotify.',
+            'type what you want to hear and the closest match plays. or paste '
+            'a link: audio and YouTube play here, sound only, and Spotify '
+            'opens in Spotify.',
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: AppSpacing.lg),
@@ -749,8 +802,18 @@ class _MusicLinkSheetState extends State<_MusicLinkSheet> {
             textInputAction: TextInputAction.done,
             onChanged: (_) => setState(() {}),
             decoration: InputDecoration(
-              hintText: 'paste an audio, YouTube or Spotify link',
-              errorText: widget.error ?? _pickError,
+              hintText: 'a song name, or paste a link',
+              errorText: widget.error ?? _pickError ?? _searchError,
+              suffixIcon: _searching
+                  ? const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    )
+                  : null,
               filled: true,
               fillColor: c.surfaceAlt,
               border: OutlineInputBorder(
@@ -758,7 +821,7 @@ class _MusicLinkSheetState extends State<_MusicLinkSheet> {
                 borderSide: BorderSide.none,
               ),
             ),
-            onSubmitted: _submit,
+            onSubmitted: _submitRaw,
           ),
           if (preview != null) ...[
             const SizedBox(height: AppSpacing.sm),

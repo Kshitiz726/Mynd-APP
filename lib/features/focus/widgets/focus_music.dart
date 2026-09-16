@@ -19,7 +19,7 @@ class RoomMusicStrip extends StatelessWidget {
     return MusicBar(
       music: room.music,
       error: room.musicError,
-      onSet: (v) => room.setMusic(v),
+      onSet: (v, {title}) => room.setMusic(v, title: title),
       // A room's pause is everybody's. There is no shared room timer to hang it
       // off - each person's clock is their own - so the bar keeps its own
       // pause here, and that one press reaches every device.
@@ -63,7 +63,7 @@ class _SoloMusicStripState extends State<SoloMusicStrip> {
   Widget build(BuildContext context) => MusicBar(
         music: _store.music,
         error: _store.error,
-        onSet: (v) => _store.set(v),
+        onSet: (v, {title}) => _store.set(v, title: title),
         onScene: widget.onScene,
         // The session's pause is the transport. Pausing to take a call should
         // not leave the track playing, resuming should not need a second tap,
