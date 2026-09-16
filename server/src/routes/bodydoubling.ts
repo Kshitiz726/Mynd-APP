@@ -2,6 +2,7 @@ import { Router } from 'express';
 import type { Server } from 'socket.io';
 import { db } from '../db.js';
 import { requireAuth } from '../auth.js';
+import { blockedIdsSql, isBlockedBetween } from '../services/moderation.js';
 import { pushNotification } from '../services/notify.js';
 
 /**
@@ -73,8 +74,21 @@ export function bodyDoublingRouter(io: Server) {
       const me = req.user.id;
       queue.delete(me); // never match with myself / stale self entry
 
-      // Find the longest-waiting partner.
-      const partnerEntry = [...queue.values()].sort((a, b) => a.since - b.since)[0];
+      // Whoever this account has blocked, in either direction.
+      //
+      // Matchmaking is the one place in the app that puts a stranger and a
+      // live microphone in a room together, which makes it the one place a
+      // block has to be honoured *before* the pairing rather than after it.
+      // Without this, blocking the person you were just matched with and
+      // pressing the button again could hand you straight back to them - and
+      // the block, from where the user is standing, did nothing at all.
+      const blockedRows = await db.any<{ id: string }>(blockedIdsSql, [me]);
+      const blocked = new Set(blockedRows.map((r) => r.id));
+
+      // Find the longest-waiting partner who is not on either side of a block.
+      const partnerEntry = [...queue.values()]
+        .filter((e) => !blocked.has(e.profile.id))
+        .sort((a, b) => a.since - b.since)[0];
       if (partnerEntry) {
         const partnerId = partnerEntry.profile.id;
         queue.delete(partnerId);
@@ -110,6 +124,12 @@ export function bodyDoublingRouter(io: Server) {
     try {
       const { userId } = req.body as { userId: string };
       if (!userId || userId === req.user.id) return res.status(400).json({ error: 'bad target' });
+
+      // An invite is a push notification with a room attached, so it is a way
+      // to reach somebody. A block has to close it, the same as a DM does.
+      if (await isBlockedBetween(db, req.user.id, userId)) {
+        return res.status(403).json({ error: 'blocked' });
+      }
 
       // Only invite accepted friends.
       const friend = await db.oneOrNone(
