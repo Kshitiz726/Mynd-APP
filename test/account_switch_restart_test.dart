@@ -62,6 +62,50 @@ void main() {
     expect(find.text('signed in'), findsOneWidget);
   });
 
+  testWidgets('the restart does not carry the login route into the new account',
+      (tester) async {
+    // The bug this file missed the first time.
+    //
+    // Because the navigator is held by a GlobalKey, the keyed rebuild does not
+    // give the new tree a new Navigator - the old one is reparented into it,
+    // route stack and all. So after signing in as a second account the app
+    // stayed on the login screen: `home:` was never consulted, and the restart
+    // looked from the outside like the sign-in had silently done nothing.
+    //
+    // The first assertion pins that reparenting really does happen, so nobody
+    // "simplifies" the explicit reset away. The second pins the fix.
+    final navKey = GlobalKey<NavigatorState>();
+
+    Widget root(Key k) => KeyedSubtree(
+          key: k,
+          child: MaterialApp(
+            navigatorKey: navKey,
+            home: const Scaffold(body: Text('splash')),
+            routes: {
+              '/login': (_) => const Scaffold(body: Text('login')),
+              '/shell': (_) => const Scaffold(body: Text('shell')),
+            },
+          ),
+        );
+
+    await tester.pumpWidget(root(const ValueKey(0)));
+    navKey.currentState!.pushNamed('/login');
+    await tester.pumpAndSettle();
+    expect(find.text('login'), findsOneWidget);
+
+    // The restart, exactly as main() performs it.
+    await tester.pumpWidget(root(const ValueKey(1)));
+    await tester.pumpAndSettle();
+    expect(find.text('login'), findsOneWidget,
+        reason: 'the reparented navigator keeps its stack - this is why the '
+            'restart needs to be told where to go');
+
+    navKey.currentState!.pushNamedAndRemoveUntil('/shell', (_) => false);
+    await tester.pumpAndSettle();
+    expect(find.text('shell'), findsOneWidget);
+    expect(find.text('login'), findsNothing);
+  });
+
   testWidgets('an unkeyed rebuild keeps the previous providers', (tester) async {
     // The behaviour the key exists to avoid, pinned so nobody removes the key
     // believing runApp alone starts the app over.

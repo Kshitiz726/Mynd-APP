@@ -158,6 +158,22 @@ void main() async {
       initialRoute: AppRoutes.shell,
       bootAt: DateTime.now(),
     ));
+    // And then say where to go, because the new tree does not get a new
+    // Navigator.
+    //
+    // rootNavigatorKey is a GlobalKey, so the Navigator from the outgoing tree
+    // is reparented into the incoming one rather than rebuilt - and it brings
+    // its route stack with it. At this moment that stack is the login screen
+    // somebody has just signed in on. `home:` is never consulted, the splash
+    // never runs, and the app sits on login looking like the sign-in silently
+    // did nothing; only the second attempt worked, because by then the owner
+    // key matched and none of this ran.
+    //
+    // Post-frame, so the swap has finished before the stack is rewritten.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      rootNavigatorKey.currentState
+          ?.pushNamedAndRemoveUntil(AppRoutes.shell, (_) => false);
+    });
   };
 
   runApp(OurMyndApp(
