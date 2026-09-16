@@ -8,23 +8,35 @@ import '../../core/utils/toast.dart';
 import '../../models/community/chat_models.dart';
 import '../../widgets/om_avatar.dart';
 import '../../widgets/om_tappable.dart';
+import 'moderation_sheet.dart';
 
-/// Bottom sheet shown when tapping a member in a group chat. Lets you send a
-/// follow request; once accepted (handled in Alerts) a DM unlocks.
+/// Bottom sheet shown when tapping a member in a group chat, or the person
+/// matchmaking has just paired you with. Lets you send a follow request; once
+/// accepted (handled in Alerts) a DM unlocks.
+///
+/// It also carries report and block. This is the one screen in the app that is
+/// only ever about another human being, which makes it the place somebody
+/// looks when they want that person gone - rather than having to remember
+/// which surface they first met them on. Guideline 1.2 asks for the action to
+/// be available wherever the person is; putting it here means every caller
+/// gets it without having to wire it up again.
 class UserProfileSheet extends StatefulWidget {
   const UserProfileSheet({super.key, required this.userId, this.fallbackName});
 
   final String userId;
   final String? fallbackName;
 
-  static Future<void> show(BuildContext context, String userId, {String? fallbackName}) {
+  /// True when the sheet was closed because this person was blocked, so the
+  /// caller can drop them from whatever it is showing.
+  static Future<bool> show(BuildContext context, String userId, {String? fallbackName}) async {
     Haptics.select();
-    return showModalBottomSheet(
+    final blocked = await showModalBottomSheet<bool>(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (_) => UserProfileSheet(userId: userId, fallbackName: fallbackName),
     );
+    return blocked ?? false;
   }
 
   @override
@@ -124,11 +136,42 @@ class _UserProfileSheetState extends State<UserProfileSheet> {
           const SizedBox(height: 22),
           if (_loading)
             const Padding(padding: EdgeInsets.all(8), child: CircularProgressIndicator(strokeWidth: 2))
-          else
+          else ...[
             _action(context, p, status),
+            // Not offered on your own profile - there is nobody to report.
+            if (p?.isMe != true) ...[
+              const SizedBox(height: 14),
+              OmTappable(
+                onTap: () => _reportOrBlock(name),
+                feedback: OmTapFeedback.light,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
+                  child: Text('Report or block',
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                            color: c.text2,
+                            decoration: TextDecoration.underline,
+                          )),
+                ),
+              ),
+            ],
+          ],
         ],
       ),
     );
+  }
+
+  Future<void> _reportOrBlock(String name) async {
+    final blocked = await showModerationSheet(
+      context,
+      targetType: 'user',
+      targetId: widget.userId,
+      authorId: widget.userId,
+      authorName: name,
+    );
+    // Closing on a block is the point: the sheet is a page about somebody you
+    // have just decided not to see, and leaving it open is leaving them on
+    // screen. The flag travels back up so the list behind it can lose them too.
+    if (blocked && mounted) Navigator.of(context).pop(true);
   }
 
   Widget _action(BuildContext context, UserProfile? p, String? status) {

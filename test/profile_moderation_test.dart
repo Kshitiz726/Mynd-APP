@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:ourmynd/core/theme/app_theme.dart';
+import 'package:ourmynd/features/community/user_profile_sheet.dart';
 import 'package:ourmynd/features/profile/blocked_accounts_screen.dart';
 import 'package:ourmynd/features/profile/profile_screen.dart';
 import 'package:ourmynd/providers/health_consent_provider.dart';
@@ -57,5 +58,39 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(BlockedAccountsScreen), findsOneWidget);
+  });
+
+  /// The profile sheet is the one screen that is only ever about another
+  /// person, which makes it the place somebody goes to get rid of them. It
+  /// carries report and block for every caller - a group chat member, and the
+  /// stranger matchmaking has just paired you with - so none of those surfaces
+  /// has to remember to wire it up. A build where this row is missing is a
+  /// build where the only route to blocking is a long-press nobody discovers.
+  testWidgets('a person profile offers report and block', (tester) async {
+    await tester.pumpWidget(MultiProvider(
+      providers: [
+        // OmTappable reads the reduced-motion and haptics settings.
+        ChangeNotifierProvider(create: (_) => SettingsProvider()),
+      ],
+      child: MaterialApp(
+        theme: AppTheme.light(),
+        home: Builder(
+          builder: (context) => TextButton(
+            onPressed: () => UserProfileSheet.show(context, 'someone-else',
+                fallbackName: 'Sam'),
+            child: const Text('open'),
+          ),
+        ),
+      ),
+    ));
+
+    await tester.tap(find.text('open'));
+    // The sheet fetches the profile and there is no server here, so it settles
+    // on the fallback name. That is the worst case and the one worth pinning:
+    // the action has to be there even when the profile could not be loaded.
+    await tester.pumpAndSettle();
+
+    expect(find.text('Sam'), findsOneWidget);
+    expect(find.text('Report or block'), findsOneWidget);
   });
 }

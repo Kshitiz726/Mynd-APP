@@ -331,7 +331,14 @@ class _BodyDoublingScreenState extends State<BodyDoublingScreen> {
         // them for an hour, so "who is this" should not be a dead end.
         if (p != null)
           OmTappable(
-            onTap: () => UserProfileSheet.show(context, p.id, fallbackName: p.name),
+            onTap: () async {
+              // Blocking from in here has to end the match too, or the person
+              // you have just blocked is still sitting on your screen waiting
+              // to be focused with.
+              final blocked = await UserProfileSheet.show(context, p.id,
+                  fallbackName: p.name);
+              if (blocked && mounted) await _cancelMatch();
+            },
             feedback: OmTapFeedback.light,
             pressedScale: 0.96,
             child: OmAvatar(
