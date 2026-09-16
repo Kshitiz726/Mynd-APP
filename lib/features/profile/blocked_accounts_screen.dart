@@ -87,7 +87,9 @@ class _BlockedAccountsScreenState extends State<BlockedAccountsScreen> {
                 padding: const EdgeInsets.all(AppSpacing.xl),
                 child: Text(
                   "You haven't blocked anyone.\n"
-                  'You can block someone from any post or message they send.',
+                  'Tap someone to open their profile - in a focus room, or when '
+                  'body doubling pairs you with them - and choose Report or '
+                  'block. They will show up here, and you can undo it here too.',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: c.text2, height: 1.45),
                 ),
