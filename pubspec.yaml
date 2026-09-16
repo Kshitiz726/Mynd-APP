@@ -86,6 +86,13 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
 
+  # Drives the real app on a real device against the real server. The widget
+  # tests above prove a screen is wired up; this is the only thing that proves
+  # a screen actually loads once a live session and a live backend are in front
+  # of it. Dev-only, so nothing here reaches a release binary.
+  integration_test:
+    sdk: flutter
+
   # Generates platform app icons (iOS/Android/web/macOS) from a single source
   # PNG — pure Dart, so it runs on Windows. See `flutter_launcher_icons:` below.
   flutter_launcher_icons: ^0.14.1
