@@ -146,7 +146,15 @@ void main() async {
     // would be wrong whichever way it pointed, but is worst when it silently
     // grants permission nobody on this account ever gave.
     unawaited(HealthConsentProvider.instance.clear());
+    // The key is what makes this a restart rather than a repaint. runApp on an
+    // app that is already running *updates* the root widget, and an updated
+    // MultiProvider keeps every object it has already built - so the incoming
+    // account carried on reading the outgoing one's tasks, goals and schedule
+    // out of memory, which is the exact thing AccountScope exists to prevent.
+    // A key the old root cannot match forces the whole tree to be built again
+    // from the keys that were just swapped underneath it.
     runApp(OurMyndApp(
+      key: ValueKey(AccountScope.generation),
       initialRoute: AppRoutes.shell,
       bootAt: DateTime.now(),
     ));

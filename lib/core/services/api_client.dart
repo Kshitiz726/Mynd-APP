@@ -143,23 +143,23 @@ class ApiClient {
   // ── Auth ──
   /// Real Google sign-in: hands the server a Google ID token, which it verifies
   /// and exchanges for our own session JWT + the (created-or-existing) user.
-  Future<void> authWithGoogleIdToken(String idToken) async {
+  Future<bool> authWithGoogleIdToken(String idToken) async {
     final j = await _post('/api/auth/google', {'idToken': idToken});
-    await _applyUser(j);
+    return _applyUser(j);
   }
 
   /// Real Sign in with Apple: hands the backend the identity token Apple gave
   /// the app. The server checks it against Apple's published keys and our
   /// bundle id, then returns our own session JWT + user, same as Google.
-  Future<void> authWithAppleIdentityToken(String identityToken) async {
+  Future<bool> authWithAppleIdentityToken(String identityToken) async {
     final j = await _post('/api/auth/apple', {'identityToken': identityToken});
-    await _applyUser(j);
+    return _applyUser(j);
   }
 
   /// Desktop (Windows/Linux) real Google OAuth: hands the backend the auth code
   /// from the loopback flow; the server exchanges it (with the desktop client
   /// secret) for an ID token, verifies it, and returns our session JWT + user.
-  Future<void> authWithGoogleDesktop({
+  Future<bool> authWithGoogleDesktop({
     required String code,
     required String codeVerifier,
     required String redirectUri,
@@ -169,15 +169,17 @@ class ApiClient {
       'codeVerifier': codeVerifier,
       'redirectUri': redirectUri,
     });
-    await _applyUser(j);
+    return _applyUser(j);
   }
 
-  Future<void> authWithGoogle({required String handle, required String displayName}) async {
+  Future<bool> authWithGoogle({required String handle, required String displayName}) async {
     final j = await _post('/api/auth/google-mock', {'handle': handle, 'displayName': displayName});
-    await _applyUser(j);
+    return _applyUser(j);
   }
 
-  Future<void> _applyUser(Map<String, dynamic> j) async {
+  /// Returns whether this sign-in replaced a different account's data on the
+  /// device, which is the caller's cue to restart the app rather than navigate.
+  Future<bool> _applyUser(Map<String, dynamic> j) async {
     final user = j['user'] as Map<String, dynamic>;
     final userId = user['id'] as String;
 
@@ -199,9 +201,18 @@ class ApiClient {
 
     // Swapping the keys is only half of it: the providers built at launch are
     // still holding the previous user's tasks and goals in memory, and would
-    // write them straight back over the new account's. Rebuild the app once
-    // the new session is in place, so everything reloads from disk.
-    if (switched) AccountScope.onSwitched?.call();
+    // write them straight back over the new account's. The app has to be
+    // rebuilt from the root for that to clear.
+    //
+    // Deliberately NOT done here. This used to call AccountScope.onSwitched
+    // itself, which tore the widget tree down in the middle of an await the
+    // login screen was still sitting on - and that screen then went on to
+    // navigate and setState through a context whose tree had just been
+    // replaced. Signing in as a second account therefore threw on the way in
+    // and only worked on the retry, by which point the owner key already
+    // matched and no switch happened at all. Handing the answer back lets the
+    // caller finish with its own context first and restart deliberately.
+    return switched;
   }
 
   /// Clear the session, locally and on the server.

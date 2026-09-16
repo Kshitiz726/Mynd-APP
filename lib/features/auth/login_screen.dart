@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import '../../core/constants/legal.dart';
+import '../../core/services/account_scope.dart';
 import '../../core/services/api_client.dart';
 import '../../core/services/google_auth.dart';
 // Desktop-only real Google OAuth (loopback). Web/mobile pull in the stub.
@@ -105,9 +106,10 @@ class _LoginScreenState extends State<LoginScreen>
     Haptics.medium();
     try {
       final n = math.Random().nextInt(9000) + 1000;
-      await ApiClient.instance
+      final switched = await ApiClient.instance
           .authWithGoogle(handle: 'test_$n', displayName: 'Test User $n');
       RealtimeService.instance.connect();
+      if (_restartedForNewAccount(switched)) return;
       if (mounted) OnboardingGate.enter(context);
     } catch (e) {
       if (mounted)
@@ -150,11 +152,13 @@ class _LoginScreenState extends State<LoginScreen>
       }
 
       debugPrint('[apple] 3/3 POST /api/auth/apple…');
-      await ApiClient.instance.authWithAppleIdentityToken(identityToken);
+      final switched =
+          await ApiClient.instance.authWithAppleIdentityToken(identityToken);
       debugPrint('[apple] 3/3 backend accepted the token');
 
       RealtimeService.instance.connect();
 
+      if (_restartedForNewAccount(switched)) return;
       if (mounted) {
         OnboardingGate.enter(context);
       }
@@ -176,10 +180,26 @@ class _LoginScreenState extends State<LoginScreen>
     }
   }
 
+  /// A different account has taken over this device's local data, so the whole
+  /// app has to be rebuilt for it - the providers in the current tree are still
+  /// holding the previous account's tasks, goals and schedule.
+  ///
+  /// This screen is part of what gets torn down, so it returns true to say
+  /// "stop touching me": no navigation, no setState, no OnboardingGate on a
+  /// context that is about to be gone. The restart lands on the shell, and the
+  /// health-consent question that OnboardingGate would have asked is asked by
+  /// the coach instead, which gates on the same answer independently.
+  bool _restartedForNewAccount(bool switched) {
+    if (!switched) return false;
+    AccountScope.onSwitched?.call();
+    return true;
+  }
+
   Future<void> _handleGoogleSignIn() async {
     setState(() => _loading = true);
     Haptics.medium();
 
+    var switched = false;
     try {
       if (_googleNativeSupported) {
         // Always ask which account. Trying silently first meant the first
@@ -221,10 +241,11 @@ class _LoginScreenState extends State<LoginScreen>
                       'name and signing SHA-1.';
         }
         debugPrint('[gsi] 4/4 POST /api/auth/google…');
-        await ApiClient.instance.authWithGoogleIdToken(idToken);
+        switched = await ApiClient.instance.authWithGoogleIdToken(idToken);
         debugPrint('[gsi] 4/4 backend accepted the token');
       } else if (_desktopClientId.isNotEmpty) {
-        await desktop_auth.runDesktopGoogleAuth(clientId: _desktopClientId);
+        switched =
+            await desktop_auth.runDesktopGoogleAuth(clientId: _desktopClientId);
       } else {
         await _handleTestSignIn();
         return;
@@ -232,6 +253,7 @@ class _LoginScreenState extends State<LoginScreen>
 
       RealtimeService.instance.connect();
 
+      if (_restartedForNewAccount(switched)) return;
       if (mounted) {
         OnboardingGate.enter(context);
       }

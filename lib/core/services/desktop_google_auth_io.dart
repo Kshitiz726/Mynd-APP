@@ -19,7 +19,7 @@ import 'api_client.dart';
 ///
 /// The client secret never lives in the app - only the desktop *client id* is
 /// baked in; the exchange happens server-side.
-Future<void> runDesktopGoogleAuth({required String clientId}) async {
+Future<bool> runDesktopGoogleAuth({required String clientId}) async {
   final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
   try {
     final redirectUri = 'http://localhost:${server.port}';
@@ -65,7 +65,9 @@ Future<void> runDesktopGoogleAuth({required String clientId}) async {
     if (code == null) throw 'No authorization code returned from Google.';
 
     // Backend exchanges the code → verifies → creates/loads the anonymous user.
-    await ApiClient.instance.authWithGoogleDesktop(
+    // The flag it hands back says a different account now owns this device's
+    // local data, which the caller answers by restarting the app.
+    return ApiClient.instance.authWithGoogleDesktop(
       code: code,
       codeVerifier: verifier,
       redirectUri: redirectUri,
