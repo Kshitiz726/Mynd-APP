@@ -52,6 +52,8 @@
 	<string>Mynd reads your calendar so it never schedules work on top of a meeting, and writes the blocks you plan here back to the calendar you choose.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>OurMynd uses the camera for video in focus rooms.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Mynd uses your town to find what is happening near you, so the daily motivation can be grounded in your own day rather than nowhere. Only the town name is kept, and your coordinates never leave the phone. Mynd never asks for your location in the background.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Mynd uses your town to find what is happening near you, so the daily motivation can be grounded in your own day rather than nowhere. Only the town name is kept, and your coordinates never leave the phone.</string>
 	<key>NSMicrophoneUsageDescription</key>
