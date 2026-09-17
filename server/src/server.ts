@@ -8,6 +8,7 @@ import {
 import { attachRealtime } from './realtime/socket.js';
 import { initNotify } from './services/notify.js';
 import { startDiscordPresence } from './services/discord.js';
+import { startKeepAlive } from './services/keepalive.js';
 import feed from './routes/feed.js';
 import social from './routes/social.js';
 import chat from './routes/chat.js';
@@ -155,4 +156,8 @@ httpServer.listen(config.port, () => {
   // decoration, and the API must never wait on it or fail with it. It swallows
   // its own errors, so the catch here is belt and braces.
   void startDiscordPresence().catch(() => {});
+
+  // Keeps the free instance from sleeping, which is what actually keeps the
+  // bot above in the member list. See the file for why this is not free.
+  startKeepAlive();
 });

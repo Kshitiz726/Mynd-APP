@@ -87,3 +87,11 @@ services:
       # a bad token is caught and logged without affecting the API.
       - key: DISCORD_BOT_TOKEN
         sync: false
+      # The service pings its own /health every 10 minutes
+      # (server/src/services/keepalive.ts) so the free instance never idles out
+      # and takes the Discord bot down with it. RENDER_EXTERNAL_URL is injected
+      # by Render, so there is nothing to set for it.
+      #
+      # COST: this keeps the instance running ~730h/month. The free tier gives
+      # 750 instance-hours across ALL free web services, so it consumes nearly
+      # the whole allowance. A second free service kept awake would exceed it.
