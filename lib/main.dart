@@ -242,13 +242,22 @@ class OurMyndApp extends StatelessWidget {
         ChangeNotifierProvider<HealthConsentProvider>.value(
           value: HealthConsentProvider.instance,
         ),
+        // Declared before FocusProvider, which proxies onto it.
+        ChangeNotifierProvider(create: (_) => FocusRoomProvider()),
         ChangeNotifierProvider(create: (_) => EnergyProvider()),
         ChangeNotifierProvider(create: (_) => TaskProvider()),
         ChangeNotifierProvider(create: (_) => HabitProvider()),
-        ChangeNotifierProvider(create: (_) => FocusProvider()),
+        // Bound to the room state rather than built beside it. A body doubling
+        // session and the room its two people share are the same thing from
+        // the user's side - same music, same ambience, same people - and while
+        // these were independent the session read all three off the device.
+        ChangeNotifierProxyProvider<FocusRoomProvider, FocusProvider>(
+          create: (_) => FocusProvider(),
+          update: (_, rooms, previous) =>
+              (previous ?? FocusProvider())..bindRooms(rooms),
+        ),
         // Backend-backed Community feed + live Focus Rooms (Socket.IO/LiveKit).
         ChangeNotifierProvider(create: (_) => CommunityProvider()),
-        ChangeNotifierProvider(create: (_) => FocusRoomProvider()),
         ChangeNotifierProvider(create: (_) => ChatProvider()),
         ChangeNotifierProvider(create: (_) => AlertsProvider()),
         ChangeNotifierProvider(create: (_) => AlarmsProvider()),

@@ -192,6 +192,26 @@ class FocusRoomProvider extends ChangeNotifier {
   }
 
   // ── Join / leave ──
+  /// Join a room for its shared state without taking over the screen.
+  ///
+  /// Body doubling from the Focus tab keeps the timer you chose and stays on
+  /// FocusActiveScreen, but the two of you are in a real room on the server
+  /// the whole time - which is where the shared music and the shared ambience
+  /// live. Before this, that session read its music from the DEVICE, so two
+  /// people body doubling each heard their own thing and neither could pause
+  /// the other. The state was never shared because nothing had joined the
+  /// room; only the full-screen route ever did.
+  ///
+  /// Minimised on purpose: joining is what makes the state shared, and the
+  /// room screen appearing over a running pomodoro is not what anyone asked
+  /// for by pressing start.
+  void joinRoomQuietly(String roomId) {
+    if (activeRoomId == roomId) return;
+    joinRoom(roomId);
+    _minimised = true;
+    notifyListeners();
+  }
+
   void joinRoom(String roomId) {
     _wireListeners();
     activeRoomId = roomId;

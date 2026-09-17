@@ -7,6 +7,7 @@ import '../../core/utils/haptics.dart';
 import '../../core/utils/om_icons.dart';
 import '../../models/focus_ambience.dart';
 import '../../providers/focus_provider.dart';
+import '../../providers/focus_room_provider.dart';
 import 'widgets/focus_music.dart';
 import '../../providers/nav_provider.dart';
 import '../../providers/task_provider.dart';
@@ -70,7 +71,12 @@ class FocusActiveScreen extends StatelessWidget {
 
     // When a scene is playing the whole screen becomes an image slideshow, so
     // the text flips to white over a dark scrim for legibility.
-    final ambience = focus.ambience;
+    // In a room the scene belongs to the room, so it is read from there and
+    // changes when the other person changes it. Alone, it is this device's.
+    final rooms = context.watch<FocusRoomProvider>();
+    final inRoom = focus.bdRoomId != null;
+    final ambience =
+        inRoom ? ambienceById(rooms.ambience) : focus.ambience;
     final onScene = ambience.hasScene;
     final labelColor = onScene ? Colors.white70 : c.text2;
     final titleColor = onScene ? Colors.white : c.text;
@@ -119,7 +125,15 @@ class FocusActiveScreen extends StatelessWidget {
                   // With the timer, not in a card of its own at the bottom.
                   // The music is part of the session, and its pause is the
                   // session's pause, so it belongs where the clock is.
-                  SoloMusicStrip(onScene: onScene),
+                  // In a room the music is the room's, not this phone's.
+                  //
+                  // This was SoloMusicStrip unconditionally, which is why two
+                  // people body doubling each heard their own track and
+                  // neither could pause the other: the state was never shared
+                  // because it was never a room's to begin with.
+                  focus.bdRoomId != null
+                      ? const RoomMusicStrip()
+                      : SoloMusicStrip(onScene: onScene),
                   const Spacer(),
                   const SizedBox(height: AppSpacing.lg),
                   // Switch the scene without leaving: drag the thumb across.
@@ -128,7 +142,15 @@ class FocusActiveScreen extends StatelessWidget {
                     onScene: onScene,
                     onSelect: (id) {
                       Haptics.select();
+                      // The scene is the room's mood, so in a room it is
+                      // everyone's. Setting it locally left two people sitting
+                      // in what each believed was the same room, looking at
+                      // different weather.
                       context.read<FocusProvider>().setAmbience(id);
+                      final roomId = context.read<FocusProvider>().bdRoomId;
+                      if (roomId != null) {
+                        context.read<FocusRoomProvider>().setAmbience(id);
+                      }
                     },
                   ),
                   const SizedBox(height: AppSpacing.lg),

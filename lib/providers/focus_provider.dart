@@ -12,6 +12,7 @@ import '../models/focus/room_participant.dart';
 import '../models/focus_ambience.dart';
 import '../models/focus_mode.dart';
 import '../models/saved_focus.dart';
+import 'focus_room_provider.dart';
 
 class FocusProvider extends ChangeNotifier {
   FocusProvider() {
@@ -64,6 +65,18 @@ class FocusProvider extends ChangeNotifier {
 
   /// The matched partner (name, avatar), or null if none yet.
   BdPartner? get partner => _partner;
+
+  /// The shared room this session is paired into, or null when working alone.
+  ///
+  /// Public because the screen has to know: in a room the music and the
+  /// ambience belong to both of you, and reading them off this device is the
+  /// bug that made two people body doubling hear two different things.
+  String? get bdRoomId => _bdRoomId;
+
+  /// The shared-room state, handed in by main() so this session can put both
+  /// partners in the same room rather than only the same socket.
+  FocusRoomProvider? _rooms;
+  void bindRooms(FocusRoomProvider rooms) => _rooms = rooms;
 
   /// The matched partner's name, or null if none yet.
   String? get partnerName => _partner?.name;
@@ -243,6 +256,15 @@ class FocusProvider extends ChangeNotifier {
     // Sit both partners in the same room and share the pomodoro - with our real
     // task, so each side sees what the other is working on. The room
     // auto-closes when both leave.
+    //
+    // Through FocusRoomProvider rather than straight down the socket. Joining
+    // the socket room is enough to RECEIVE the room's events, but nothing was
+    // holding the state they carry: the music one person chose, the ambience
+    // they switched to and who else is here all arrive and were dropped on the
+    // floor. So this session read music off the device instead, and two people
+    // body doubling each heard their own. Quietly, because the full room
+    // screen must not appear over the timer somebody just started.
+    _rooms?.joinRoomQuietly(roomId);
     _rt.joinRoom(roomId);
     final mode = _activeMode;
     if (mode != null) {
@@ -263,7 +285,13 @@ class FocusProvider extends ChangeNotifier {
     _bdHeartbeat = null;
     final roomId = _bdRoomId;
     if (roomId != null) {
-      _rt.leaveRoom(roomId);
+      // Leave through the same door we came in, or the shared state stays
+      // behind holding a room this session has finished with.
+      if (_rooms?.activeRoomId == roomId) {
+        unawaited(_rooms!.leaveRoom());
+      } else {
+        _rt.leaveRoom(roomId);
+      }
     } else if (_searchingPartner) {
       ApiClient.instance.bodyDoublingCancel().catchError((_) {});
     }
