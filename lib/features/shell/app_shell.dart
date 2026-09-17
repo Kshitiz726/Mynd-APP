@@ -152,12 +152,14 @@ class _AppShellState extends State<AppShell> {
               // One pill slot. A minimised room outranks a solo session, because
               // other people are waiting in it.
               //
-              // Body doubling joins the room minimised so the room screen does
-              // not drop over a session you just started, which meant the pill
-              // hovered over the focus timer for the whole sitting. The pill is
-              // only ever a way *back* from another tab, so it follows the same
-              // rule as the solo one: never on the Focus tab.
-              if ((rooms.minimised && nav.tab != AppTab.focus) || showLivePill)
+              // The pill is only ever a way *back* to a session from somewhere
+              // else, so it has no business on top of that session. It is hidden
+              // on the Focus tab, where the timer is already the screen, and on
+              // the focus room, which is a full-screen overlay that can sit over
+              // any tab - so without this a running solo timer put a spinner and
+              // a clock on top of the room for as long as both were going.
+              if (!inFocusRoom &&
+                  ((rooms.minimised && nav.tab != AppTab.focus) || showLivePill))
                 Positioned(
                   top: 0,
                   left: 0,
