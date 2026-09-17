@@ -80,3 +80,10 @@ services:
       # Brain dump, transcription and memory refresh all fail without it.
       - key: GROQ_API_KEY
         sync: false
+      # Discord presence bot. Cosmetic only: it holds an idle gateway
+      # connection so the OurMynd account shows online at the top of the
+      # Discord server's member list (Discord puts only ONLINE members into a
+      # hoisted role group). Unset is fine and the server logs `discord=off`;
+      # a bad token is caught and logged without affecting the API.
+      - key: DISCORD_BOT_TOKEN
+        sync: false

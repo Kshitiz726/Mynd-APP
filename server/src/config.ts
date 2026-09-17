@@ -86,6 +86,13 @@ export const config = {
   livekit: { url: lkUrl, apiKey: lkKey, apiSecret: lkSecret },
   fcmServiceAccount: process.env.FCM_SA_JSON ?? '',
 
+  // Discord presence bot. Purely cosmetic: it holds a gateway connection so the
+  // OurMynd account shows as online at the top of the server's member list.
+  // Discord only puts ONLINE members into a hoisted role group, so an invited
+  // bot that never connects sits in Offline at the bottom, which is the whole
+  // thing this exists to avoid.
+  discordBotToken: process.env.DISCORD_BOT_TOKEN ?? '',
+
   // Stripe billing. The secret key stays server-side (never shipped to the app);
   // the publishable key is safe to hand the client. Webhook secret is optional -
   // when unset we reconcile by polling the Checkout Session on return instead.
@@ -107,6 +114,7 @@ export const config = {
   hasLivekit: !!(lkUrl && lkKey && lkSecret),
   hasGoogleAuth: !!process.env.GOOGLE_CLIENT_ID,
   hasStripe: !!stripeSecret,
+  hasDiscord: !!process.env.DISCORD_BOT_TOKEN,
 };
 
 export function logMode() {
@@ -118,6 +126,7 @@ export function logMode() {
       `redis=${config.hasRedis ? 'cloud' : 'in-memory(dev)'} ` +
       `livekit=${config.hasLivekit ? 'on' : 'off(dev)'} ` +
       `google-auth=${config.hasGoogleAuth ? 'on' : 'off'} ` +
-      `stripe=${config.hasStripe ? 'on' : 'off'}`,
+      `stripe=${config.hasStripe ? 'on' : 'off'} ` +
+      `discord=${config.hasDiscord ? 'on' : 'off'}`,
   );
 }

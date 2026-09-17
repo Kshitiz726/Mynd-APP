@@ -7,6 +7,7 @@ import {
 } from './security.js';
 import { attachRealtime } from './realtime/socket.js';
 import { initNotify } from './services/notify.js';
+import { startDiscordPresence } from './services/discord.js';
 import feed from './routes/feed.js';
 import social from './routes/social.js';
 import chat from './routes/chat.js';
@@ -149,4 +150,9 @@ attachRealtime(io);
 httpServer.listen(config.port, () => {
   logMode();
   console.log(`OurMynd server listening on :${config.port} (${config.isProd ? 'prod' : 'dev'})`);
+
+  // After listen, and deliberately not awaited: the Discord presence is
+  // decoration, and the API must never wait on it or fail with it. It swallows
+  // its own errors, so the catch here is belt and braces.
+  void startDiscordPresence().catch(() => {});
 });
