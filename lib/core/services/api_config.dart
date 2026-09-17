@@ -1,6 +1,3 @@
-import 'dart:io' show Platform;
-import 'package:flutter/foundation.dart';
-
 /// Central place for the backend base URL + the auth token the app holds.
 ///
 /// The token is a Supabase Auth JWT (or your own) - the server's `verifyJwt`

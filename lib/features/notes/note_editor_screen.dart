@@ -4,7 +4,6 @@ import '../../core/constants/app_spacing.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/toast.dart';
 import '../../providers/notes_provider.dart';
-import '../../widgets/om_screen_header.dart';
 import '../../widgets/om_tappable.dart';
 import '../../models/note.dart';
 import '../../core/utils/om_icons.dart';

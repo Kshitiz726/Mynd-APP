@@ -6,7 +6,6 @@ import '../../core/theme/app_colors.dart';
 import '../../core/utils/om_icons.dart';
 import '../../providers/alerts_provider.dart';
 import '../../widgets/om_card.dart';
-import '../../widgets/om_tappable.dart';
 import '../../widgets/om_back_button.dart';
 import '../../widgets/om_top_bar.dart';
 import '../notifications/notifications_screen.dart'; // for relativeTime

@@ -78,7 +78,6 @@ class PuterService {
   // an EPHEMERAL port instead of a fixed-port InAppLocalhostServer because the
   // latter is unreliable on Windows AND a fixed port collides when two app
   // instances run - both were the "localhost refused to connect" on Connect.
-  HttpServer? _assetServer;
   int? _serverPort;
   Completer<void>? _serverReady;
 
@@ -92,7 +91,6 @@ class PuterService {
     _serverReady = ready;
     try {
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-      _assetServer = server;
       _serverPort = server.port;
       server.listen((req) async {
         try {

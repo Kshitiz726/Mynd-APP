@@ -37,23 +37,15 @@ class BodyDoublingScreen extends StatefulWidget {
   State<BodyDoublingScreen> createState() => _BodyDoublingScreenState();
 }
 
-enum _Mode { auto, invite }
-
 enum _Phase { idle, searching, matched }
 
 class _BodyDoublingScreenState extends State<BodyDoublingScreen> {
   final _rt = RealtimeService.instance;
 
-  _Mode _mode = _Mode.auto;
   _Phase _phase = _Phase.idle;
 
   BdPartner? _partner;
   String? _roomId;
-
-  List<BdFriend>? _friends;
-  bool _loadingFriends = false;
-  /// Who we invited, kept whole so the session shows their face too.
-  BdPartner? _invited;
 
   @override
   void initState() {
@@ -145,41 +137,12 @@ class _BodyDoublingScreenState extends State<BodyDoublingScreen> {
         widget.mode!,
         true,
         preMatchedRoomId: id,
-        preMatchedPartner: _partner ?? _invited,
+        preMatchedPartner: _partner,
       );
       Navigator.of(context).maybePop();
     } else {
       context.read<FocusRoomProvider>().joinRoom(id);
       Navigator.of(context).maybePop();
-    }
-  }
-
-  Future<void> _loadFriends() async {
-    if (_friends != null || _loadingFriends) return;
-    setState(() => _loadingFriends = true);
-    try {
-      final all = await ApiClient.instance.fetchFriends();
-      if (mounted) setState(() => _friends = all.where((f) => f.accepted).toList());
-    } catch (_) {
-      if (mounted) setState(() => _friends = []);
-    } finally {
-      if (mounted) setState(() => _loadingFriends = false);
-    }
-  }
-
-  Future<void> _invite(BdFriend f) async {
-    Haptics.medium();
-    try {
-      final roomId = await ApiClient.instance.bodyDoublingInvite(f.id);
-      if (!mounted) return;
-      setState(() {
-        _roomId = roomId;
-        _invited = BdPartner(
-            id: f.id, name: f.name, initial: f.initial, color: f.color);
-      });
-      Toast.show(context, 'Invited ${f.name} - they\'ll get a notification');
-    } catch (_) {
-      if (mounted) Toast.show(context, "Couldn't send invite");
     }
   }
 
@@ -250,70 +213,6 @@ class _BodyDoublingScreenState extends State<BodyDoublingScreen> {
         const SizedBox(height: AppSpacing.xl),
         OmButton(label: 'Find a partner', icon: OmIcons.byName('zap'), onPressed: _startMatch),
       ],
-    );
-  }
-
-  // ── Invite a friend ──
-  Widget _inviteView(OmColors c) {
-    if (_invited != null) {
-      return Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(OmIcons.byName('check'), size: 56, color: c.success),
-          const SizedBox(height: AppSpacing.lg),
-          Text('Invited ${_invited!.name}',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-          const SizedBox(height: 6),
-          Text('They’ll get a notification to join. You can head in now.',
-              textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodySmall),
-          const SizedBox(height: AppSpacing.xl),
-          OmButton(label: 'Enter the room', icon: OmIcons.byName('activity'), onPressed: _enterRoom),
-        ],
-      );
-    }
-    if (_loadingFriends) {
-      return const Center(child: CircularProgressIndicator(strokeWidth: 2));
-    }
-    final friends = _friends ?? [];
-    if (friends.isEmpty) {
-      return Center(
-        child: Text('No friends yet - follow people in Community first.',
-            textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: c.text2)),
-      );
-    }
-    return ListView.separated(
-      itemCount: friends.length,
-      separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.sm),
-      itemBuilder: (context, i) {
-        final f = friends[i];
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          decoration: BoxDecoration(
-            color: c.surface,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: c.border.withValues(alpha: 0.5)),
-          ),
-          child: Row(
-            children: [
-              OmAvatar(userId: f.id, fallbackInitial: f.initial, fallbackColor: _hex(f.color, c.primary), size: 44),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(f.name,
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
-              ),
-              OmTappable(
-                onTap: () => _invite(f),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-                  decoration: BoxDecoration(gradient: c.brandGradient, borderRadius: BorderRadius.circular(12)),
-                  child: const Text('Invite',
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
     );
   }
 
@@ -389,50 +288,6 @@ class _BodyDoublingScreenState extends State<BodyDoublingScreen> {
         const SizedBox(height: AppSpacing.xxl),
         OmButton(label: 'Start focusing together', icon: OmIcons.byName('activity'), onPressed: _enterRoom),
       ],
-    );
-  }
-}
-
-class _ModeToggle extends StatelessWidget {
-  const _ModeToggle({required this.mode, required this.onChanged});
-
-  final _Mode mode;
-  final ValueChanged<_Mode>? onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.omColors;
-    Widget seg(String label, _Mode m) {
-      final active = mode == m;
-      return Expanded(
-        child: OmTappable(
-          onTap: onChanged == null ? null : () => onChanged!(m),
-          feedback: OmTapFeedback.select,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            padding: const EdgeInsets.symmetric(vertical: 11),
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: active ? c.surface : Colors.transparent,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: active
-                  ? [BoxShadow(color: c.shadow.withValues(alpha: 0.12), blurRadius: 8, offset: const Offset(0, 2))]
-                  : null,
-            ),
-            child: Text(label,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: active ? c.text : c.text2,
-                    )),
-          ),
-        ),
-      );
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(color: c.surfaceAlt, borderRadius: BorderRadius.circular(14)),
-      child: Row(children: [seg('Auto match', _Mode.auto), seg('Invite friend', _Mode.invite)]),
     );
   }
 }

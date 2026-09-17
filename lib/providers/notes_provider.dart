@@ -27,10 +27,8 @@ class NotesProvider extends ChangeNotifier {
     try {
       final path = _searchQuery.isNotEmpty ? '/api/notes?q=${Uri.encodeComponent(_searchQuery)}' : '/api/notes';
       final res = await _api.get(path);
-      if (res != null) {
-        final list = res as List<dynamic>;
-        _notes = list.map((e) => Note.fromJson(e as Map<String, dynamic>)).toList();
-      }
+      final list = res as List<dynamic>;
+      _notes = list.map((e) => Note.fromJson(e as Map<String, dynamic>)).toList();
     } catch (_) {
       // Handle error quietly
     } finally {
@@ -55,12 +53,10 @@ class NotesProvider extends ChangeNotifier {
         'content': content,
         'tags': tags,
       });
-      if (res != null) {
-        final note = Note.fromJson(res as Map<String, dynamic>);
-        _notes.insert(0, note);
-        notifyListeners();
-        return note;
-      }
+      final note = Note.fromJson(res);
+      _notes.insert(0, note);
+      notifyListeners();
+      return note;
     } catch (_) {}
     return null;
   }
@@ -69,13 +65,11 @@ class NotesProvider extends ChangeNotifier {
     try {
       final updated = !note.isPinned;
       final res = await _api.put('/api/notes/${note.id}', {'isPinned': updated});
-      if (res != null) {
-        final newNote = Note.fromJson(res as Map<String, dynamic>);
-        final idx = _notes.indexWhere((n) => n.id == note.id);
-        if (idx != -1) {
-          _notes[idx] = newNote;
-          notifyListeners();
-        }
+      final newNote = Note.fromJson(res);
+      final idx = _notes.indexWhere((n) => n.id == note.id);
+      if (idx != -1) {
+        _notes[idx] = newNote;
+        notifyListeners();
       }
     } catch (_) {}
   }
@@ -88,14 +82,12 @@ class NotesProvider extends ChangeNotifier {
         'content': content,
         'tags': tags,
       });
-      if (res != null) {
-        final newNote = Note.fromJson(res as Map<String, dynamic>);
-        final idx = _notes.indexWhere((n) => n.id == id);
-        if (idx != -1) {
-          _notes[idx] = newNote;
-          notifyListeners();
-          return newNote;
-        }
+      final newNote = Note.fromJson(res);
+      final idx = _notes.indexWhere((n) => n.id == id);
+      if (idx != -1) {
+        _notes[idx] = newNote;
+        notifyListeners();
+        return newNote;
       }
     } catch (_) {}
     return null;

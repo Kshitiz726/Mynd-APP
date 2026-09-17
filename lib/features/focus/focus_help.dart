@@ -6,7 +6,6 @@ import '../../core/utils/haptics.dart';
 import '../../providers/alerts_provider.dart';
 import '../../providers/coach_provider.dart';
 import '../../providers/focus_provider.dart';
-import '../../providers/nav_provider.dart';
 import '../../providers/task_provider.dart';
 
 /// Routes a "Need help" tap from Focus straight to Mynd (the AI coach), priming
@@ -17,7 +16,6 @@ import '../../providers/task_provider.dart';
 /// The coach already folds energy/tasks/focus state into its prompt; this adds
 /// the focus-specific framing on top.
 void askMyndForHelp(BuildContext context) {
-  final nav = context.read<NavProvider>();
   final focus = context.read<FocusProvider>();
   final tasks = context.read<TaskProvider>();
   final alerts = context.read<AlertsProvider>();

@@ -21,7 +21,6 @@ import '../../widgets/om_switch.dart';
 import '../../widgets/om_tappable.dart';
 import '../memory/memory_screen.dart';
 import 'about_screen.dart';
-import '../../core/constants/legal.dart';
 import 'account_data_screen.dart';
 import 'blocked_accounts_screen.dart';
 import 'health_data_screen.dart';
