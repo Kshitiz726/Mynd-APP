@@ -72,7 +72,18 @@ void main() {
   });
 
   test('provider decides whether it can play here', () {
-    expect(parseMusicLink('https://youtu.be/$videoId')!.playsInApp, isTrue);
+    // Neither of these plays inside Mynd, for different reasons, and both are
+    // handed to the app that owns them instead.
+    //
+    // YouTube's API Terms require their embedded player to stay visible and
+    // unobscured. A focus timer has nowhere to put a video, so the only way to
+    // keep one playing was to hide it - exactly what those terms forbid. The
+    // hidden player is gone and this is the assertion that keeps it gone.
+    expect(parseMusicLink('https://youtu.be/$videoId')!.playsInApp, isFalse);
+    expect(
+        parseMusicLink('https://www.youtube.com/playlist?list=$listId')!
+            .playsInApp,
+        isFalse);
     // Spotify has no mobile path that produces audio inside our process.
     expect(parseMusicLink('spotify:track:$spotifyId')!.playsInApp, isFalse);
   });

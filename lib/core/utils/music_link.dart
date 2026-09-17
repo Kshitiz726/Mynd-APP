@@ -47,21 +47,32 @@ class MusicLink {
 
   /// Whether we can play this inside Mynd, or can only hand it to another app.
   ///
-  /// YouTube exposes an embeddable player we are licensed to host, so a
-  /// YouTube link plays here. Spotify has no such thing on mobile: their
-  /// Web Playback SDK needs EME/Widevine and is unsupported in a webview, and
-  /// the App Remote SDK is a remote control for the Spotify app rather than a
-  /// source of audio. So a Spotify link can only ever be handed over.
-  bool get playsInApp => provider != MusicProvider.spotify;
+  /// Only audio we are actually entitled to stream: a direct audio URL, a file
+  /// on the device, or a track from the search catalogue, which resolves to a
+  /// direct URL.
+  ///
+  /// YouTube is handed over rather than embedded. Their API Terms require the
+  /// embedded player to stay visible and unobscured, and a focus timer has
+  /// nowhere to put a video - the only way to keep it playing under the timer
+  /// was to hide it, which is precisely what those terms forbid. Spotify
+  /// cannot be embedded at all on mobile: the Web Playback SDK needs
+  /// EME/Widevine and is unsupported in a webview, and the App Remote SDK is a
+  /// remote control for the Spotify app rather than a source of audio.
+  ///
+  /// Both therefore degrade honestly to a hand-off, and the bar says so rather
+  /// than letting someone find out by pressing play.
+  bool get playsInApp =>
+      provider != MusicProvider.spotify && provider != MusicProvider.youtube;
 
   /// Whether this can be shared with a room. A device file cannot.
   bool get shareable => provider != MusicProvider.file;
 
   /// Whether this plays with no video surface at all.
   ///
-  /// Only a direct audio URL can. YouTube's API Terms require their embedded
-  /// player to stay visible and unobscured, so a YouTube link always brings a
-  /// picture with it however much we would rather it did not.
+  /// The same set as [playsInApp], and deliberately still its own name: one
+  /// answers "are we allowed to play this here", the other "does playing it
+  /// need somewhere to put a picture". They coincide today because the only
+  /// thing we embed is audio.
   bool get audioOnly =>
       provider == MusicProvider.stream || provider == MusicProvider.file;
 

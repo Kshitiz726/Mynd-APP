@@ -5,7 +5,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 
 import '../../../core/constants/app_spacing.dart';
 import '../../../core/theme/app_colors.dart';
@@ -26,13 +25,14 @@ import '../../../widgets/om_tappable.dart';
 ///
 /// Two providers, two capabilities:
 ///
-///   Audio links, files on the device and YouTube all play HERE, out of Mynd.
+///   Searched tracks, direct audio links and files on the device all play
+///   HERE, out of Mynd.
 ///
-///   Spotify cannot play inside any third-party app on mobile. Their Web
-///   Playback SDK needs EME/Widevine and is unsupported in a webview, and the
-///   App Remote SDK is a remote control for the Spotify app rather than a
-///   source of audio. A Spotify link degrades honestly to a hand-off, and the
-///   line says so instead of letting someone find out by pressing play.
+///   YouTube and Spotify are handed to their own apps. Spotify cannot be
+///   embedded on mobile at all, and YouTube's API Terms require their player
+///   to stay visible and unobscured, which a focus timer has nowhere to put.
+///   Both degrade honestly to a hand-off, and the line says so instead of
+///   letting someone find out by pressing play.
 class MusicBar extends StatefulWidget {
   const MusicBar({
     super.key,
@@ -73,17 +73,7 @@ class MusicBar extends StatefulWidget {
   State<MusicBar> createState() => _MusicBarState();
 }
 
-/// The size the hidden YouTube player is laid out at.
-///
-/// Not zero, and that is the whole point: iOS throttles or suspends media in a
-/// webview with no area, so a 0x0 player is a player that stops playing. It is
-/// given a real box and then displaced out of a hard clip instead.
-const double _playerBox = 188;
-
 class _MusicBarState extends State<MusicBar> {
-  YoutubePlayerController? _yt;
-  StreamSubscription<YoutubePlayerValue>? _sub;
-
   /// What the controller currently holds, so an unrelated rebuild does not
   /// reload the track and restart it from zero.
   String? _loadedUri;
@@ -95,53 +85,14 @@ class _MusicBarState extends State<MusicBar> {
 
   Timer? _drift;
 
-  YoutubeError _ytError = YoutubeError.none;
   Duration _duration = Duration.zero;
 
-  /// The name the player itself reports, used only when the lookup that runs
-  /// on paste came back with nothing (no signal at the time, say). Display
-  /// only: it is whatever this device's player says, so it is never written
-  /// back to a room where it would race with everyone else's.
-  String _ytTitle = '';
-
-  /// The audio-only engine, used for direct stream URLs and device files.
-  ///
-  /// Separate from the YouTube controller rather than hidden behind one
-  /// interface, because they differ in the way that matters: this one has no
-  /// picture, and no terms attached to showing one.
+  /// The engine. Audio only, which is the whole of what this bar will play.
   ap.AudioPlayer? _audio;
   final List<StreamSubscription<dynamic>> _audioSubs = [];
   String? _audioError;
 
   bool get _isRoom => widget.onPausedChanged != null;
-
-  /// Whether YouTube refused this video outright, as opposed to still loading.
-  ///
-  /// Worth its own state because it is common and silent: a large share of
-  /// popular music videos, and most 24/7 study streams, are marked
-  /// "not embeddable" by their uploader. Without this the line would just say
-  /// the track name forever while nothing played.
-  bool get _refused => switch (_ytError) {
-        YoutubeError.notEmbeddable ||
-        YoutubeError.sameAsNotEmbeddable ||
-        YoutubeError.sameAsNotEmbeddable2 ||
-        YoutubeError.videoNotFound ||
-        YoutubeError.cannotFindVideo ||
-        YoutubeError.invalidParam ||
-        YoutubeError.html5Error =>
-          true,
-        _ => false,
-      };
-
-  String get _refusalReason => switch (_ytError) {
-        YoutubeError.videoNotFound || YoutubeError.cannotFindVideo =>
-          'that video is private or gone',
-        YoutubeError.notEmbeddable ||
-        YoutubeError.sameAsNotEmbeddable ||
-        YoutubeError.sameAsNotEmbeddable2 =>
-          "the uploader doesn't allow this one outside YouTube",
-        _ => "that one won't play here",
-      };
 
   @override
   void initState() {
@@ -164,8 +115,6 @@ class _MusicBarState extends State<MusicBar> {
   @override
   void dispose() {
     _drift?.cancel();
-    _sub?.cancel();
-    _yt?.close();
     _disposeAudio();
     super.dispose();
   }
@@ -220,21 +169,15 @@ class _MusicBarState extends State<MusicBar> {
     final music = widget.music;
     final link = music?.link;
 
-    // Nothing playable in-app: tear the webview down rather than leaving it
-    // parked. It is the most expensive thing on this screen.
+    // Nothing playable here: stop and let go of the engine rather than leaving
+    // it parked holding a track nobody is listening to.
     if (music == null || link == null || !music.playsInApp) {
       _disposeAudio();
       _drift?.cancel();
       _drift = null;
-      _sub?.cancel();
-      _sub = null;
-      _yt?.close();
-      _yt = null;
       _loadedUri = null;
       _commandedPlay = null;
-      _ytError = YoutubeError.none;
       _duration = Duration.zero;
-      _ytTitle = '';
       return;
     }
 
@@ -243,11 +186,9 @@ class _MusicBarState extends State<MusicBar> {
       return;
     }
     _loadedUri = music.uri;
-    // A new track gets a clean slate, or the previous one's refusal would hide
-    // a working track.
-    _ytError = YoutubeError.none;
+    // A new track gets a clean slate, or the previous one's length would be
+    // used to wrap this one's playhead.
     _duration = Duration.zero;
-    _ytTitle = '';
 
     // Where the room already is, not the beginning. Someone joining twenty
     // minutes in hears what everybody else hears.
@@ -255,84 +196,10 @@ class _MusicBarState extends State<MusicBar> {
     final shouldPlay = widget.sessionRunning && !music.paused;
     _commandedPlay = shouldPlay;
 
-    // A direct audio URL or a file has no picture and needs no webview.
-    if (link.audioOnly) {
-      _sub?.cancel();
-      _sub = null;
-      _yt?.close();
-      _yt = null;
-      // Seek only where there is a room clock to line up with. Solo has none,
-      // and seeking to a room position that does not exist is how the audio
-      // ended up starting past the end of the track.
-      _loadAudio(link, play: shouldPlay, at: _isRoom ? at : null);
-      _startDriftCorrection();
-      return;
-    }
-
-    _disposeAudio();
-    if (_yt == null) {
-      _yt = YoutubePlayerController(
-        params: const YoutubePlayerParams(
-          // The player is never seen, so its own chrome is pointless, and a
-          // WKWebView that accepts pointers would swallow drags meant for the
-          // screen behind it.
-          showControls: false,
-          pointerEvents: PointerEvents.none,
-          showFullscreenButton: false,
-          playsInline: true,
-          // Do not trail unrelated videos after a focus track ends.
-          strictRelatedVideos: true,
-          // youtube-nocookie.com: no cookie is set unless playback starts.
-          privacyEnhancedMode: true,
-          // Repeat rather than fall silent. This flag is what wraps a playlist
-          // round to its first video; a single video is handled by _loopAgain
-          // below, because the IFrame API only honours loop for a lone video
-          // when it was given as a one-item playlist, which is not how
-          // loadVideoById works.
-          loop: true,
-        ),
-      );
-      var wasEnded = false;
-      _sub = _yt!.stream.listen((v) {
-        if (!mounted) return;
-        // Only the transition into ended, never the state sitting there: the
-        // stream re-emits whenever anything on the value changes, and
-        // restarting on each of those would fight the seek.
-        final justEnded = v.playerState == PlayerState.ended && !wasEnded;
-        wasEnded = v.playerState == PlayerState.ended;
-        if (v.error != _ytError ||
-            v.metaData.duration != _duration ||
-            v.metaData.title != _ytTitle) {
-          setState(() {
-            _ytError = v.error;
-            _duration = v.metaData.duration;
-            _ytTitle = v.metaData.title;
-          });
-        }
-        if (justEnded) _loopAgain();
-      });
-    }
-
-    // load* autoplays, cue* only prepares. Choosing between them is what makes
-    // a fresh mount respect a paused session: switching the scene wraps the
-    // screen in a Stack, which rebuilds this from scratch, and a plain load
-    // would restart the music underneath a paused timer.
-    final start = at.inSeconds.toDouble();
-    _quietly(() => switch (playerLoadAction(
-          isPlaylist: link.kind == 'playlist',
-          sessionRunning: widget.sessionRunning,
-          roomPaused: music.paused,
-        )) {
-          PlayerLoadAction.loadPlaylist => _yt!.loadPlaylist(
-              list: [link.id], listType: ListType.playlist, startSeconds: start),
-          PlayerLoadAction.cuePlaylist => _yt!.cuePlaylist(
-              list: [link.id], listType: ListType.playlist, startSeconds: start),
-          PlayerLoadAction.loadVideo =>
-            _yt!.loadVideoById(videoId: link.id, startSeconds: start),
-          PlayerLoadAction.cueVideo =>
-            _yt!.cueVideoById(videoId: link.id, startSeconds: start),
-        });
-
+    // Seek only where there is a room clock to line up with. Solo has none,
+    // and seeking to a room position that does not exist is how the audio
+    // ended up starting past the end of the track.
+    _loadAudio(link, play: shouldPlay, at: _isRoom ? at : null);
     _startDriftCorrection();
   }
 
@@ -349,50 +216,8 @@ class _MusicBarState extends State<MusicBar> {
     _commandedPlay = play;
 
     final audio = _audio;
-    if (audio != null) {
-      play ? audio.resume() : audio.pause();
-      return;
-    }
-    final yt = _yt;
-    if (yt == null || _refused) return;
-    _quietly(play ? yt.playVideo : yt.pauseVideo);
-  }
-
-  /// Play the finished track again from the top.
-  ///
-  /// A focus session outlasts any one song, and silence twenty minutes in is
-  /// worse than hearing the same track twice - so a track repeats until
-  /// somebody chooses a different one. Nothing has to stop the loop: setting a
-  /// new link comes through _sync with a new uri and loads over the top of it.
-  void _loopAgain() {
-    final yt = _yt;
-    if (yt == null || _refused) return;
-    // Whatever was holding the music silent still holds. A track cannot
-    // normally reach the end while paused, but a race between a pause and the
-    // last second of a track should not restart it.
-    if (!widget.sessionRunning || (widget.music?.paused ?? false)) return;
-    // A playlist wraps on its own (loop is set on the player). Seeking to zero
-    // here would instead trap everyone on the last video forever.
-    if (widget.music?.link?.kind != 'video') return;
-    debugPrint('[focus-music] track ended, going round again');
-    _quietly(() async {
-      await yt.seekTo(seconds: 0, allowSeekAhead: true);
-      await yt.playVideo();
-    });
-  }
-
-  /// Run a player command without letting its failure become an unhandled
-  /// async error.
-  ///
-  /// Every command goes through the JS bridge, which waits for the iframe to
-  /// report ready and throws TimeoutException after 30 seconds. A webview that
-  /// never initialises - no network on a train, say - would otherwise throw
-  /// from a future nobody is awaiting. Music failing is not a reason to take
-  /// the focus session down with it.
-  void _quietly(Future<void> Function() command) {
-    command().catchError((Object e) {
-      debugPrint('[focus-music] player command failed: $e');
-    });
+    if (audio == null) return;
+    play ? audio.resume() : audio.pause();
   }
 
   /// Nudge back into line when a device falls behind.
@@ -407,26 +232,23 @@ class _MusicBarState extends State<MusicBar> {
     if (!_isRoom) return; // solo: nothing to sync to
     _drift = Timer.periodic(const Duration(seconds: 20), (_) async {
       final music = widget.music;
-      final yt = _yt;
-      if (music == null || yt == null || music.paused || !mounted) return;
-      // A playlist's playhead is per-video, so the room's elapsed time says
-      // nothing about where this device is inside the current track.
-      if (music.link?.kind != 'video') return;
+      final audio = _audio;
+      if (music == null || audio == null || music.paused || !mounted) return;
       try {
-        final actual = await yt.currentTime;
+        final actual = await audio.getCurrentPosition();
+        if (actual == null) return;
         // Wrapped by the track length, because the room's playhead keeps
-        // counting up across repeats. Without this, the first loop would put
-        // the target past the end of the track and every device would be
-        // yanked back to a position that does not exist.
+        // counting up across repeats while the engine loops back to zero.
+        // Without this, the first loop would put the target past the end of
+        // the track and every device would be yanked to a position that does
+        // not exist.
         final target =
-            loopedPosition(music.positionAt(DateTime.now()), _duration)
-                .inSeconds
-                .toDouble();
-        if ((actual - target).abs() > 4) {
-          await yt.seekTo(seconds: target, allowSeekAhead: true);
+            loopedPosition(music.positionAt(DateTime.now()), _duration);
+        if ((actual - target).abs() > const Duration(seconds: 4)) {
+          await audio.seek(target);
         }
       } catch (_) {
-        // The webview can be gone mid-await. Drift correction is a nicety.
+        // The engine can be torn down mid-await. Drift correction is a nicety.
       }
     });
   }
@@ -434,44 +256,12 @@ class _MusicBarState extends State<MusicBar> {
   @override
   Widget build(BuildContext context) {
     final music = widget.music;
-    final link = music?.link;
     final inApp = music != null && music.playsInApp;
-    final refused = inApp && !(link?.audioOnly ?? false) && _refused;
-    final external = music != null && (!inApp || refused);
+    // Anything we cannot play ourselves is handed to the app that owns it.
+    final external = music != null && !inApp;
 
     return Stack(
-      // Clips the player out of sight. Not decoration: see below.
-      clipBehavior: Clip.hardEdge,
       children: [
-        // The YouTube player, kept mounted and playing but moved outside the
-        // clip so nothing of it is seen.
-        //
-        // Laid out at full size and merely displaced, rather than sized to zero
-        // as the usual recipe suggests: iOS throttles or suspends media in a
-        // webview with no area. Painting an opaque layer over it does not work
-        // either - iOS composites a WKWebView in the native hierarchy, above
-        // Flutter's own content, so the cover was simply invisible.
-        //
-        // This is a deliberate departure from YouTube's API Terms, which
-        // require the embedded player to stay visible and unobscured. Anj asked
-        // for it explicitly and repeatedly, knowing the consequence: App Review
-        // can reject the build and YouTube can revoke API access. Confined to
-        // this one block so it is the first thing to undo if either happens.
-        if (inApp && !(link?.audioOnly ?? false) && _yt != null)
-          Positioned(
-            left: -_playerBox * 4,
-            top: 0,
-            width: _playerBox,
-            height: _playerBox,
-            child: IgnorePointer(
-              child: YoutubePlayer(
-                controller: _yt!,
-                aspectRatio: 1,
-                enableFullScreenOnVerticalDrag: false,
-                autoFullScreen: false,
-              ),
-            ),
-          ),
         Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -480,7 +270,7 @@ class _MusicBarState extends State<MusicBar> {
                 // A room needs its own pause, because a room has no shared
                 // timer to inherit one from: each person's clock is their own,
                 // so the music is the only thing everybody is actually on.
-                if (_isRoom && inApp && !refused) ...[
+                if (_isRoom && inApp) ...[
                   _RoundButton(
                     icon: (music.paused) ? LucideIcons.play : LucideIcons.pause,
                     onScene: widget.onScene,
@@ -502,7 +292,7 @@ class _MusicBarState extends State<MusicBar> {
                 ],
               ],
             ),
-            if (_note(refused: refused, inApp: inApp) case final note?) ...[
+            if (_note(inApp: inApp) case final note?) ...[
               const SizedBox(height: 6),
               Text(
                 note,
@@ -571,13 +361,11 @@ class _MusicBarState extends State<MusicBar> {
   /// What to call the track.
   ///
   /// The stored title first, because that is the one a room agrees on and the
-  /// one that survives a restart. The player's own is a fallback for when the
-  /// lookup failed, and the id-based label the last resort.
+  /// one that survives a restart. The id-based label is the last resort.
   String _label(RoomMusic? music) {
     if (music == null) return 'add music';
     final stored = music.title;
     if (stored != null && stored.isNotEmpty) return stored;
-    if (_ytTitle.isNotEmpty) return _ytTitle;
     return music.displayLabel;
   }
 
@@ -586,14 +374,15 @@ class _MusicBarState extends State<MusicBar> {
   /// Silence is the default on purpose: "playing here" under a track that is
   /// audibly playing is noise. This speaks only when something is wrong or
   /// about to surprise someone.
-  String? _note({required bool refused, required bool inApp}) {
+  String? _note({required bool inApp}) {
     if (widget.error != null) return widget.error;
     if (_audioError != null) return _audioError;
-    if (refused) return _refusalReason;
     if (widget.music != null && !inApp) {
+      // A hand-off cannot be kept in step: the other app has its own transport
+      // and nobody here can see where it got to.
       return _isRoom
-          ? 'everyone opens this in their own Spotify, so you will drift'
-          : 'opens in your Spotify app';
+          ? 'everyone opens this in their own app, so you will drift'
+          : 'opens in its own app';
     }
     return null;
   }
@@ -790,9 +579,9 @@ class _MusicLinkSheetState extends State<_MusicLinkSheet> {
               style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 4),
           Text(
-            'type what you want to hear and the closest match plays. or paste '
-            'a link: audio and YouTube play here, sound only, and Spotify '
-            'opens in Spotify.',
+            'type what you want to hear and the closest match plays. or '
+            'paste a link: an audio link plays here, while YouTube and '
+            'Spotify open in their own apps.',
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: AppSpacing.lg),
