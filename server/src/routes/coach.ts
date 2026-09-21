@@ -95,12 +95,22 @@ function dayKey(tz: string | undefined): string {
 }
 
 /**
- * The ISO week the user is currently in, as `2026-W38`.
+ * The week the user is currently in, named by its Monday as `YYYY-MM-DD`.
  *
- * Stored in the same `day` column as the old daily keys. That is deliberate:
- * the format cannot collide with `YYYY-MM-DD`, so the switch needs no schema
- * change and no migration, and the historical daily rows simply stop being
- * read. Nobody's usage is retroactively recounted against the new window.
+ * A real date, because `coach_usage.day` is a DATE column. The first version of
+ * this wrote an ISO week label like `2026-W39` into it, which Postgres rejected
+ * outright: every meter call answered 500, the app caught it as a generic
+ * failure, and the chat said "something went wrong" with no way to tell that
+ * the cause was a type error in here. Type-checking the TypeScript does not
+ * type-check the column.
+ *
+ * Naming the week by its Monday keeps the column a date, needs no migration and
+ * no schema change, and reads correctly in the table.
+ *
+ * It does share a row with the old daily counter for any Monday that already
+ * had usage, so a week in progress at the moment of this change starts with
+ * that Monday's messages already counted. That is a one-off, it is bounded by
+ * the old daily cap, and those messages genuinely were sent in this week.
  *
  * Weeks start Monday, matching how the rest of the app talks about a week.
  */
@@ -109,16 +119,9 @@ function weekKey(tz: string | undefined): string {
   const [y, m, d] = local.split('-').map(Number);
   // Noon UTC, so a date built from a local calendar date cannot slip a day.
   const dt = new Date(Date.UTC(y, m - 1, d, 12));
-  // ISO: Thursday of the same week decides the year and the week number.
   const dayNum = (dt.getUTCDay() + 6) % 7; // Monday = 0
-  dt.setUTCDate(dt.getUTCDate() - dayNum + 3);
-  const isoYear = dt.getUTCFullYear();
-  const firstThursday = new Date(Date.UTC(isoYear, 0, 4, 12));
-  const firstDayNum = (firstThursday.getUTCDay() + 6) % 7;
-  firstThursday.setUTCDate(firstThursday.getUTCDate() - firstDayNum + 3);
-  const week =
-    1 + Math.round((dt.getTime() - firstThursday.getTime()) / (7 * 86400000));
-  return `${isoYear}-W${String(week).padStart(2, '0')}`;
+  dt.setUTCDate(dt.getUTCDate() - dayNum);
+  return dt.toISOString().slice(0, 10);
 }
 
 /** When the current week's allowance resets, for the app to show. */
