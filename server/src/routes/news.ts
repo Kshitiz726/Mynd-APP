@@ -69,9 +69,30 @@ function tag(block: string, name: string): string | null {
 async function fromRss(query: string, limit: number): Promise<NewsItem[]> {
   const q = encodeURIComponent(query);
   const url = `https://news.google.com/rss/search?q=${q}&hl=en&gl=US&ceid=US:en`;
-  const res = await fetch(url, { headers: { 'User-Agent': 'OurMynd/1.0' } });
-  if (!res.ok) return [];
+  // A browser-shaped User-Agent. Google answers a datacenter IP carrying an
+  // obviously-a-bot agent with a consent interstitial or a 429, and the body
+  // that comes back is HTML rather than RSS - which parses to zero items and
+  // looks exactly like a quiet news day.
+  const res = await fetch(url, {
+    headers: {
+      'User-Agent':
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
+        '(KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+      Accept: 'application/rss+xml, application/xml;q=0.9, */*;q=0.8',
+    },
+  });
+  if (!res.ok) {
+    console.warn(`[news] rss for "${query}" -> HTTP ${res.status}`);
+    return [];
+  }
   const xml = await res.text();
+  if (!xml.includes('<item>')) {
+    // Reached Google and got something that is not a feed.
+    console.warn(
+      `[news] rss for "${query}" -> ${xml.length} bytes with no <item>`,
+    );
+    return [];
+  }
 
   const items: NewsItem[] = [];
   for (const m of xml.matchAll(/<item>([\s\S]*?)<\/item>/g)) {
@@ -143,11 +164,29 @@ r.get('/news', requireAuth, async (req, res) => {
     // Falls through on an empty keyed result too, not just a missing key: a
     // quota that ran out mid-day should cost pictures, not the whole feed.
     if (items.length === 0) items = await fromRss(q, limit);
-    cache.set(key, { at: Date.now(), items });
-    res.json({ items, cached: false });
-  } catch {
+    // Only cache a real answer. Caching an empty list pins the failure in
+    // place for ten minutes, so one bad moment upstream becomes an empty feed
+    // for everybody until the TTL expires.
+    if (items.length > 0) cache.set(key, { at: Date.now(), items });
+    res.json({
+      items,
+      cached: false,
+      // Said out loud so the client can tell "nothing today" from "the source
+      // would not talk to us". An empty feed with no explanation cost a whole
+      // afternoon of guessing once already.
+      ...(items.length === 0
+        ? { reason: 'the news source returned nothing for that query' }
+        : {}),
+    });
+  } catch (e) {
+    console.error('[news] failed', e);
     // Serve something stale rather than nothing.
-    res.json({ items: hit?.items ?? [], items_stale: Boolean(hit), cached: false });
+    res.json({
+      items: hit?.items ?? [],
+      items_stale: Boolean(hit),
+      cached: false,
+      reason: 'could not reach the news source',
+    });
   }
 });
 
