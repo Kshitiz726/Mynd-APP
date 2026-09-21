@@ -424,7 +424,13 @@ const ExtractRequest = z.object({
   // day, which does not fit in the extraction ceiling. It used to go through
   // /coach/completions, so setting a goal spent a coaching message and a
   // 30-day goal could be refused outright.
-  task: z.enum(['extract', 'plan']).default('extract'),
+  //
+  // 'feed' is the same shape again: the Feed's own instructions and today's
+  // articles in, a few written-up posts out. It gets its own ceiling because
+  // its answer is prose rather than a field list, and the extraction ceiling
+  // truncates it mid-JSON - which reaches the phone as a feed that silently
+  // never writes an edition.
+  task: z.enum(['extract', 'plan', 'feed']).default('extract'),
   messages: z
     .array(
       z.object({
@@ -439,7 +445,7 @@ const ExtractRequest = z.object({
 /// Room for the answer, per job. A plan is one object per day for up to a
 /// couple of months; the extraction ceiling would truncate it mid-JSON, which
 /// surfaces as "could not read that" rather than as a short plan.
-const EXTRACT_CEILING = { extract: 1500, plan: 4000 } as const;
+const EXTRACT_CEILING = { extract: 1500, plan: 4000, feed: 2600 } as const;
 
 r.post('/coach/extract', requireAuth, async (req, res, next) => {
   try {
