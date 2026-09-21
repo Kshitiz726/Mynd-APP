@@ -21,6 +21,7 @@ import consentRouter from './routes/consent.js';
 import accountRouter from './routes/account.js';
 import coachRouter from './routes/coach.js';
 import musicRouter from './routes/music.js';
+import newsRouter from './routes/news.js';
 import { authRouter, requireAuth } from './auth.js';
 import { sessionsRouter } from './routes/sessions.js';
 import { roomsRouter } from './routes/rooms.js';
@@ -131,6 +132,7 @@ app.use('/api', chat);
 app.use('/api', moderationRouter);
 // Search music by name. /music/stream is deliberately open; see the route.
 app.use('/api', musicRouter);
+app.use('/api', newsRouter);
 app.use('/api', notifications);
 app.use('/api', roomsRouter(io));
 app.use('/api', sessionsRouter);

@@ -1,0 +1,154 @@
+import { Router } from 'express';
+
+import { requireAuth } from '../auth.js';
+
+/**
+ * The Feed's news, fetched server side rather than on the phone.
+ *
+ * Two sources, in order of preference:
+ *
+ *   NewsAPI, when NEWS_API_KEY is set. Real editorial metadata: a summary, a
+ *   source name, and an article image, which is what the Feed's card layout
+ *   actually needs.
+ *
+ *   Google News RSS otherwise. No key, no quota, works today. It carries a
+ *   title, a link, a source and a date, but no image and only a scrap of
+ *   description, so cards fall back to a text-only treatment.
+ *
+ * Server side for three reasons. A NewsAPI key in the binary is a key anybody
+ * can pull out of it. NewsAPI's developer plan refuses browser and mobile
+ * origins outright, so the phone cannot call it even with a key. And parsing
+ * somebody's RSS is the kind of thing that breaks quietly, which is easier to
+ * fix in one deploy than in a release cycle.
+ *
+ * Only headlines, summaries and the publisher's own image are used, each
+ * linked back to the source. The body of a story is the publisher's
+ * copyrighted reporting and is never reproduced.
+ */
+const r = Router();
+
+const NEWS_API_KEY = process.env.NEWS_API_KEY;
+
+/** One shared cache. News is the same for everyone in a place. */
+type Cached = { at: number; items: NewsItem[] };
+const cache = new Map<string, Cached>();
+const TTL_MS = 10 * 60 * 1000;
+
+export type NewsItem = {
+  title: string;
+  summary: string | null;
+  url: string;
+  imageUrl: string | null;
+  source: string | null;
+  publishedAt: string | null;
+};
+
+/** Strip tags and decode the handful of entities RSS actually emits. */
+function plain(s: string): string {
+  return s
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&#(\d+);/g, (_, d) => String.fromCharCode(Number(d)))
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function tag(block: string, name: string): string | null {
+  const m = block.match(new RegExp(`<${name}[^>]*>([\\s\\S]*?)</${name}>`, 'i'));
+  if (!m) return null;
+  const raw = m[1].replace(/^<!\[CDATA\[([\s\S]*?)\]\]>$/, '$1');
+  const out = plain(raw);
+  return out || null;
+}
+
+async function fromRss(query: string, limit: number): Promise<NewsItem[]> {
+  const q = encodeURIComponent(query);
+  const url = `https://news.google.com/rss/search?q=${q}&hl=en&gl=US&ceid=US:en`;
+  const res = await fetch(url, { headers: { 'User-Agent': 'OurMynd/1.0' } });
+  if (!res.ok) return [];
+  const xml = await res.text();
+
+  const items: NewsItem[] = [];
+  for (const m of xml.matchAll(/<item>([\s\S]*?)<\/item>/g)) {
+    const block = m[1];
+    const title = tag(block, 'title');
+    if (!title) continue;
+    // Google wraps the publisher name into the title after a trailing dash.
+    const dash = title.lastIndexOf(' - ');
+    const source = tag(block, 'source') ?? (dash > 0 ? title.slice(dash + 3) : null);
+    items.push({
+      title: dash > 0 ? title.slice(0, dash) : title,
+      summary: tag(block, 'description'),
+      url: tag(block, 'link') ?? '',
+      imageUrl: null,
+      source,
+      publishedAt: tag(block, 'pubDate'),
+    });
+    if (items.length >= limit) break;
+  }
+  return items;
+}
+
+async function fromNewsApi(query: string, limit: number): Promise<NewsItem[]> {
+  const q = encodeURIComponent(query);
+  const url =
+    `https://newsapi.org/v2/everything?q=${q}&language=en&sortBy=publishedAt&pageSize=${limit}`;
+  const res = await fetch(url, { headers: { 'X-Api-Key': NEWS_API_KEY as string } });
+  if (!res.ok) return [];
+  const j = (await res.json()) as {
+    articles?: Array<{
+      title?: string;
+      description?: string;
+      url?: string;
+      urlToImage?: string;
+      publishedAt?: string;
+      source?: { name?: string };
+    }>;
+  };
+  return (j.articles ?? [])
+    .filter((a) => a.title && a.url && a.title !== '[Removed]')
+    .map((a) => ({
+      title: a.title as string,
+      summary: a.description ?? null,
+      url: a.url as string,
+      imageUrl: a.urlToImage ?? null,
+      source: a.source?.name ?? null,
+      publishedAt: a.publishedAt ?? null,
+    }));
+}
+
+/**
+ * GET /api/news?q=<topic or place>&limit=<n>
+ *
+ * Never throws at the caller. The Feed is glanceable content, so a source
+ * having a bad day degrades to fewer cards, never an error screen.
+ */
+r.get('/news', requireAuth, async (req, res) => {
+  const q = String(req.query.q ?? '').trim() || 'world';
+  const limit = Math.min(Math.max(Number(req.query.limit ?? 12) || 12, 1), 30);
+  const key = `${q}::${limit}`;
+
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.at < TTL_MS) {
+    return res.json({ items: hit.items, cached: true });
+  }
+
+  try {
+    let items = NEWS_API_KEY ? await fromNewsApi(q, limit) : [];
+    // Falls through on an empty keyed result too, not just a missing key: a
+    // quota that ran out mid-day should cost pictures, not the whole feed.
+    if (items.length === 0) items = await fromRss(q, limit);
+    cache.set(key, { at: Date.now(), items });
+    res.json({ items, cached: false });
+  } catch {
+    // Serve something stale rather than nothing.
+    res.json({ items: hit?.items ?? [], items_stale: Boolean(hit), cached: false });
+  }
+});
+
+export default r;
