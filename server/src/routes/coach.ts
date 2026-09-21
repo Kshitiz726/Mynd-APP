@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { config } from '../config.js';
 import { db } from '../db.js';
 import { requireAuth } from '../auth.js';
-import { billingStore, isPremium } from '../services/billing.js';
+import { billingStore, isPremium, type Tier } from '../services/billing.js';
 
 /**
  * The coach model, proxied.
@@ -27,8 +27,27 @@ const r = Router();
 
 const GROQ_ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions';
 
-/** Matches kFreeCoachMessageLimit in the app; this copy is the authoritative one. */
-const FREE_DAILY_LIMIT = 5;
+/**
+ * Coaching messages per WEEK, by tier. null means uncapped.
+ *
+ * Weekly rather than daily, and this is the point rather than a bigger number:
+ * a daily cap punishes exactly the use this app is for. Someone with ADHD does
+ * not need five messages every day - they need forty on the bad Tuesday and
+ * none for the rest of the week. A daily bucket refuses them on the one day
+ * they actually needed the thing, then expires unused for six days.
+ *
+ * Only conversation is metered. The Feed, the scheduling and every other piece
+ * of the app's own reasoning go through /coach/extract, which is deliberately
+ * unmetered: those are the app talking to itself, and charging a person's
+ * conversation budget for the app doing its own housekeeping is indefensible.
+ *
+ * Matches kCoachWeeklyLimit in the app; this copy is the authoritative one.
+ */
+const WEEKLY_LIMIT: Record<Tier, number | null> = {
+  free: 100,
+  plus: 1000,
+  pro: null,
+};
 
 /**
  * Models the app is allowed to ask for.
@@ -75,7 +94,49 @@ function dayKey(tz: string | undefined): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-async function usageToday(userId: string, day: string): Promise<number> {
+/**
+ * The ISO week the user is currently in, as `2026-W38`.
+ *
+ * Stored in the same `day` column as the old daily keys. That is deliberate:
+ * the format cannot collide with `YYYY-MM-DD`, so the switch needs no schema
+ * change and no migration, and the historical daily rows simply stop being
+ * read. Nobody's usage is retroactively recounted against the new window.
+ *
+ * Weeks start Monday, matching how the rest of the app talks about a week.
+ */
+function weekKey(tz: string | undefined): string {
+  const local = dayKey(tz); // YYYY-MM-DD in the user's own zone
+  const [y, m, d] = local.split('-').map(Number);
+  // Noon UTC, so a date built from a local calendar date cannot slip a day.
+  const dt = new Date(Date.UTC(y, m - 1, d, 12));
+  // ISO: Thursday of the same week decides the year and the week number.
+  const dayNum = (dt.getUTCDay() + 6) % 7; // Monday = 0
+  dt.setUTCDate(dt.getUTCDate() - dayNum + 3);
+  const isoYear = dt.getUTCFullYear();
+  const firstThursday = new Date(Date.UTC(isoYear, 0, 4, 12));
+  const firstDayNum = (firstThursday.getUTCDay() + 6) % 7;
+  firstThursday.setUTCDate(firstThursday.getUTCDate() - firstDayNum + 3);
+  const week =
+    1 + Math.round((dt.getTime() - firstThursday.getTime()) / (7 * 86400000));
+  return `${isoYear}-W${String(week).padStart(2, '0')}`;
+}
+
+/** When the current week's allowance resets, for the app to show. */
+function weekResetsAt(tz: string | undefined): string {
+  const local = dayKey(tz);
+  const [y, m, d] = local.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d, 0, 0, 0));
+  const dayNum = (dt.getUTCDay() + 6) % 7; // Monday = 0
+  dt.setUTCDate(dt.getUTCDate() + (7 - dayNum));
+  return dt.toISOString();
+}
+
+/** The tier's weekly allowance, or null when uncapped. */
+function limitFor(tier: Tier): number | null {
+  return WEEKLY_LIMIT[tier] ?? WEEKLY_LIMIT.free;
+}
+
+async function usageIn(userId: string, day: string): Promise<number> {
   if (!config.hasDb) return 0;
   const row = await db.oneOrNone(
     `select count from coach_usage where user_id = $1 and day = $2`,
@@ -108,49 +169,62 @@ async function bumpUsage(userId: string, day: string): Promise<void> {
  */
 r.post('/coach/turn', requireAuth, async (req, res, next) => {
   try {
-    const day = dayKey(req.headers['x-timezone'] as string | undefined);
+    const tz = req.headers['x-timezone'] as string | undefined;
+    const week = weekKey(tz);
     const sub = await billingStore.get(req.user.id);
     const premium = isPremium(sub);
+    const tier: Tier = premium ? sub.tier : 'free';
+    const limit = limitFor(tier);
 
     if (!config.hasDb) {
       // Dev without a database: no meter to keep, so allow the turn rather
       // than blocking local work on infrastructure that is not running.
-      return res.json({ allowed: true, premium, used: 0, remaining: null });
+      return res.json({
+        allowed: true, premium, tier, used: 0, limit, remaining: null,
+        resetsAt: weekResetsAt(tz),
+      });
     }
 
-    if (premium) {
+    if (limit === null) {
       // Still counted, so usage is visible, but never refused.
-      await bumpUsage(req.user.id, day);
-      return res.json({ allowed: true, premium: true, remaining: null });
+      await bumpUsage(req.user.id, week);
+      return res.json({
+        allowed: true, premium, tier, limit: null, remaining: null,
+        resetsAt: weekResetsAt(tz),
+      });
     }
 
     const row = await db.one(
       `insert into coach_usage (user_id, day, count) values ($1, $2, 1)
        on conflict (user_id, day) do update set count = coach_usage.count + 1
        returning count`,
-      [req.user.id, day],
+      [req.user.id, week],
     );
 
-    if (row.count > FREE_DAILY_LIMIT) {
+    if (row.count > limit) {
       // Over budget. The row was already incremented, which is deliberate:
       // leaving it means a client retrying in a loop cannot walk the counter
       // back down, and the count is only ever compared against the limit.
       return res.status(402).json({
         allowed: false,
         code: 'coach_limit_reached',
-        premium: false,
-        used: FREE_DAILY_LIMIT,
-        limit: FREE_DAILY_LIMIT,
+        premium,
+        tier,
+        used: limit,
+        limit,
         remaining: 0,
+        resetsAt: weekResetsAt(tz),
       });
     }
 
     res.json({
       allowed: true,
-      premium: false,
+      premium,
+      tier,
       used: row.count,
-      limit: FREE_DAILY_LIMIT,
-      remaining: Math.max(0, FREE_DAILY_LIMIT - row.count),
+      limit,
+      remaining: Math.max(0, limit - row.count),
+      resetsAt: weekResetsAt(tz),
     });
   } catch (err) {
     next(err);
@@ -160,17 +234,22 @@ r.post('/coach/turn', requireAuth, async (req, res, next) => {
 /** What the app shows on the composer without spending a turn to find out. */
 r.get('/coach/quota', requireAuth, async (req, res, next) => {
   try {
-    const day = dayKey(req.query.tz as string | undefined);
+    const tz = req.query.tz as string | undefined;
+    const week = weekKey(tz);
     const [used, sub] = await Promise.all([
-      usageToday(req.user.id, day),
+      usageIn(req.user.id, week),
       billingStore.get(req.user.id),
     ]);
     const premium = isPremium(sub);
+    const tier: Tier = premium ? sub.tier : 'free';
+    const limit = limitFor(tier);
     res.json({
       premium,
+      tier,
       used,
-      limit: premium ? null : FREE_DAILY_LIMIT,
-      remaining: premium ? null : Math.max(0, FREE_DAILY_LIMIT - used),
+      limit,
+      remaining: limit === null ? null : Math.max(0, limit - used),
+      resetsAt: weekResetsAt(tz),
     });
   } catch (err) {
     next(err);
@@ -198,15 +277,20 @@ r.post('/coach/completions', requireAuth, async (req, res, next) => {
     const body = parsed.data;
 
     // ── The cap, enforced where it cannot be edited ──
-    const day = dayKey(req.headers['x-timezone'] as string | undefined);
+    const tz = req.headers['x-timezone'] as string | undefined;
+    const week = weekKey(tz);
     const sub = await billingStore.get(req.user.id);
-    if (!isPremium(sub)) {
-      const used = await usageToday(req.user.id, day);
-      if (used >= FREE_DAILY_LIMIT) {
+    const tier: Tier = isPremium(sub) ? sub.tier : 'free';
+    const limit = limitFor(tier);
+    if (limit !== null) {
+      const used = await usageIn(req.user.id, week);
+      if (used >= limit) {
         return res.status(402).json({
-          error: 'daily free message limit reached',
+          error: 'weekly message limit reached',
           code: 'coach_limit_reached',
-          limit: FREE_DAILY_LIMIT,
+          limit,
+          tier,
+          resetsAt: weekResetsAt(tz),
         });
       }
     }
@@ -215,7 +299,7 @@ r.post('/coach/completions', requireAuth, async (req, res, next) => {
     // more to a user as a retry than a free message is worth to us, but
     // counting afterwards means a client that hangs up mid-stream never gets
     // counted at all - which is the whole cap, bypassed by disconnecting.
-    await bumpUsage(req.user.id, day);
+    await bumpUsage(req.user.id, week);
 
     const upstream = await fetch(GROQ_ENDPOINT, {
       method: 'POST',
