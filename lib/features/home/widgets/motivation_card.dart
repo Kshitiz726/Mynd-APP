@@ -18,7 +18,17 @@ import '../../motivation/motivation_card_view.dart';
 /// read again. A notification is gone the moment it is swiped, and the line
 /// somebody wanted was usually the one that arrived while they were busy.
 class MotivationCard extends StatefulWidget {
-  const MotivationCard({super.key});
+  const MotivationCard({super.key, this.onlyWhenWritten = false});
+
+  /// Take up no room at all until there is a line to show.
+  ///
+  /// The card's empty state is an invitation: a grey square and a line of
+  /// faint text offering to set the feature up. That belongs on Home, where
+  /// there is room to discover things. Above the Feed it reads as a panel that
+  /// failed to load, because a reader who has not set motivation up has no way
+  /// to tell the difference between "nothing written yet" and "broken", and it
+  /// pushes the thing they actually opened the screen for below the fold.
+  final bool onlyWhenWritten;
 
   @override
   State<MotivationCard> createState() => _MotivationCardState();
@@ -74,6 +84,12 @@ class _MotivationCardState extends State<MotivationCard>
     // 1200ms after the mood moves and can be over in a blink when the bank
     // answers. That left the loading state technically correct and never once
     // visible.
+    // Nothing written and nothing set up: on the Feed this is an empty box
+    // above the reading, so it takes no space at all there.
+    if (widget.onlyWhenWritten && line == null && !setUp) {
+      return const SizedBox.shrink();
+    }
+
     if (m.working && setUp) return const _LoadingCard();
 
     return Padding(
