@@ -115,4 +115,41 @@ void main() {
 
     focus.end();
   });
+
+  testWidgets('turning body doubling on does not overflow the screen',
+      (tester) async {
+    // Reported as "overflow by 37 pixels" with the yellow stripes on screen,
+    // the moment body doubling was switched on. Four rooms of icon plus word
+    // were laid out in a Row, which can neither wrap nor scroll, so on a phone
+    // narrower than their sum it painted the overflow indicator over the UI.
+    //
+    // A real phone's width, not the default 800x600 test surface where this
+    // cannot reproduce, and a tall one so the whole page lays out without
+    // scrolling: scrolling to the control changes the constraints it is being
+    // measured under, which is its own source of false results.
+    tester.view.physicalSize = const Size(393 * 3, 2200 * 3);
+    tester.view.devicePixelRatio = 3.0;
+    addTearDown(tester.view.reset);
+
+    final tasks = TaskProvider()..addTasks([inProgress()]);
+    await tester.pumpWidget(host(tasks, FocusProvider()));
+    await tester.pumpAndSettle();
+
+    expect(find.text('body doubling'), findsOneWidget);
+    expect(tester.takeException(), isNull,
+        reason: 'the screen overflowed before anything was even tapped');
+
+    await tester.tap(find.byWidgetPredicate((w) => w is Switch).last);
+    await tester.pumpAndSettle();
+
+    // Every room stays reachable, which is what wrapping buys over a scroll.
+    // Every room stays reachable, which is what wrapping buys over a
+    // horizontal scroll: nothing about a scroll says there is more to the
+    // right. The chips render their labels lowercased.
+    for (final room in ['café', 'library', 'rain', 'silence']) {
+      expect(find.text(room), findsOneWidget, reason: '$room went missing');
+    }
+    expect(tester.takeException(), isNull,
+        reason: 'the room chips overflowed when body doubling was turned on');
+  });
 }

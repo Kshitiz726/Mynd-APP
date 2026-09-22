@@ -27,6 +27,20 @@ final _mailRe = RegExp(
   caseSensitive: false,
 );
 
+/// A turn that is specifically about what has not been read yet.
+///
+/// Worth separating from the general mail question: "anything new?" wants the
+/// four unread ones, and answering it with the last twelve messages including
+/// eight they have already dealt with is the kind of answer that makes a
+/// feature feel like it is not listening.
+final _unreadRe = RegExp(
+  r'\b(unread|new (e-?mails?|mail|messages?)|anything new|'
+  r'not (yet )?read|haven.?t read)\b',
+  caseSensitive: false,
+);
+
+bool wantsUnreadOnly(String text) => _unreadRe.hasMatch(text);
+
 /// Words that mean "look at my day". "Schedule", "calendar", "meetings", and
 /// the day words people actually use.
 final _calendarRe = RegExp(
@@ -99,14 +113,32 @@ Future<TurnContext> gatherTurnContext(
           return;
         }
         try {
+          // Reading the mailbox is slow enough to need its own budget: IMAP
+          // opens a TLS socket, authenticates and fetches, which is seconds
+          // rather than milliseconds on a cold connection.
+          final onlyUnread = wantsUnreadOnly(text);
           final msgs = await MailService.instance
-              .recent()
-              .timeout(const Duration(seconds: 20));
-          mailBlock = msgs.isEmpty
-              ? 'THEIR INBOX\nNothing came back from the last seven days.'
-              : 'THEIR INBOX (last 7 days, newest first)\n'
-                  '${msgs.map((m) => m.promptLine).join('\n')}';
-          debugPrint('[turn] inbox: ${msgs.length} messages');
+              .recent(unreadOnly: onlyUnread)
+              .timeout(const Duration(seconds: 40));
+
+          if (msgs.isEmpty) {
+            mailBlock = onlyUnread
+                ? 'THEIR INBOX\nNothing unread. Say so in one short line, and '
+                    'do not pad it out.'
+                : 'THEIR INBOX\nNothing came back from their recent mail.';
+          } else {
+            final unread = msgs.where((m) => m.unread).length;
+            mailBlock = 'THEIR INBOX (${onlyUnread ? 'unread only' : 'recent'}, '
+                'newest first, $unread unread of ${msgs.length})\n'
+                '${msgs.map((m) => m.promptLine).join('\n')}\n\n'
+                'Lead with what actually needs them: anything asking a '
+                'question, anything with a deadline, anything from a person '
+                'rather than a system. Group the rest in a line. Say how many '
+                'there are before you start listing, so they know the shape of '
+                'it.';
+          }
+          debugPrint('[turn] inbox: ${msgs.length} messages '
+              '(unreadOnly=$onlyUnread)');
         } catch (e) {
           debugPrint('[turn] inbox failed: $e');
           mailBlock = 'THEIR INBOX\nGmail could not be reached just now. Say '

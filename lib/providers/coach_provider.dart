@@ -13,6 +13,7 @@ import '../core/services/coach_memory_service.dart';
 import '../core/services/coach_prompt_builder.dart';
 import '../core/services/feed_instructions_service.dart';
 import '../core/services/groq_service.dart';
+import '../core/services/email_approval.dart';
 import '../core/services/email_intent.dart';
 import '../core/services/mail_service.dart';
 import '../core/services/reminder_intent.dart';
@@ -764,6 +765,115 @@ class CoachProvider extends ChangeNotifier {
     unawaited(_sendAll(unique));
   }
 
+  // ─── Approving a send ─────────────────────────────────────────────────────
+
+  static const _kAlwaysSend = 'om_mail_always_send';
+
+  EmailIntent? _pendingEmail;
+  Completer<EmailDecision>? _emailDecision;
+  bool _alwaysSend = false;
+
+  /// The email waiting on an answer, or null. The chat screen watches this and
+  /// puts the approval sheet up.
+  EmailIntent? get pendingEmail => _pendingEmail;
+
+  /// They have said "never ask again". Shown in settings so it can be undone.
+  bool get alwaysSendMail => _alwaysSend;
+
+  Future<void> loadMailPrefs() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      _alwaysSend = p.getBool(_kAlwaysSend) ?? false;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('[coach] could not read mail prefs: $e');
+    }
+  }
+
+  Future<void> setAlwaysSendMail(bool v) async {
+    _alwaysSend = v;
+    notifyListeners();
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.setBool(_kAlwaysSend, v);
+    } catch (e) {
+      debugPrint('[coach] could not save mail prefs: $e');
+    }
+  }
+
+  /// Answer the pending approval. Called by the sheet.
+  void resolvePendingEmail(EmailDecision d) {
+    final c = _emailDecision;
+    _emailDecision = null;
+    _pendingEmail = null;
+    notifyListeners();
+    c?.complete(d);
+  }
+
+  /// Put an email in front of them and wait.
+  ///
+  /// Returns the decision. If the screen goes away without answering, the
+  /// completer is never completed and the send simply never happens, which is
+  /// the right way for this particular thing to fail.
+  Future<EmailDecision> _askApproval(EmailIntent i) {
+    final c = Completer<EmailDecision>();
+    _emailDecision = c;
+    _pendingEmail = i;
+    notifyListeners();
+    return c.future;
+  }
+
+  /// Rewrite a draft the way they asked, without sending anything.
+  ///
+  /// Goes through the unmetered extract route rather than the coach's own
+  /// conversation budget: this is the app editing a draft on their behalf, not
+  /// a message to their coach, and charging somebody a message for saying
+  /// "make it shorter" would be indefensible.
+  Future<EmailIntent> _reviseDraft(EmailIntent i, String instruction) async {
+    try {
+      final out = await GroqService.instance.extract([
+        {
+          'role': 'system',
+          'content': 'You are editing one email before it is sent. Apply the '
+              "change the sender asks for and change nothing else. Keep it in "
+              'their voice, signed off as them. Never invent a fact, a name, a '
+              'date or a number that is not already in the draft or in their '
+              'instruction.\n\n'
+              'Answer as JSON only: {"subject":"...","body":"..."}',
+        },
+        {
+          'role': 'user',
+          'content': jsonEncode({
+            'to': i.to,
+            'subject': i.subject,
+            'body': i.body,
+            'changeRequested': instruction,
+          }),
+        },
+      ]);
+      final j = jsonDecode(_jsonSlice(out)) as Map<String, dynamic>;
+      final subject = (j['subject'] as String?)?.trim();
+      final body = (j['body'] as String?)?.trim();
+      if (subject == null || subject.isEmpty || body == null || body.isEmpty) {
+        return i;
+      }
+      return EmailIntent(to: i.to, subject: subject, body: body);
+    } catch (e) {
+      // A failed rewrite returns the draft untouched rather than sending
+      // something mangled or nothing at all. They see it unchanged and can
+      // say so again.
+      debugPrint('[coach] could not revise the draft: $e');
+      return i;
+    }
+  }
+
+  static String _jsonSlice(String s) {
+    final a = s.indexOf('{');
+    final b = s.lastIndexOf('}');
+    if (a < 0 || b <= a) return s;
+    return s.substring(a, b + 1).replaceAll(RegExp(r'[\x00-\x1F]'), ' ');
+  }
+
   /// Send what the coach agreed to send, and say what happened either way.
   ///
   /// Awaited to completion per message, and reported per message. A send that
@@ -771,41 +881,85 @@ class CoachProvider extends ChangeNotifier {
   /// already reads as though the mail went, so saying nothing actively tells
   /// somebody a message was delivered when it was not.
   Future<void> _sendAll(List<EmailIntent> intents) async {
-    for (final i in intents) {
-      // The address is in here; the body and the credential are not.
-      debugPrint('[coach] sending mail to ${i.to}');
-
-      // A placeholder first, because an SMTP round trip is seconds long and
-      // an empty pause after "I'll send that" is indistinguishable from the
-      // feature having done nothing at all.
-      final note = ChatMessage(
-        id: 'm-${DateTime.now().microsecondsSinceEpoch}',
-        text: '✉️ Sending to ${i.to}…',
-        fromUser: false,
-      );
-      _messages.add(note);
-      notifyListeners();
-
-      MailResult r;
-      try {
-        r = await MailService.instance.send(
-          to: i.to,
-          subject: i.subject,
-          body: i.body,
-        );
-      } catch (e) {
-        // send() is documented not to throw, and an unhandled exception here
-        // would leave the bubble above saying "sending…" forever.
-        debugPrint('[coach] send threw: $e');
-        r = const MailResult.failure('Something broke while sending.');
-      }
-
-      debugPrint('[coach] send result: ok=${r.ok} ${r.message}');
-      note.text = r.ok
-          ? '✉️ Sent to ${i.to}.'
-          : "✉️ Didn't send to ${i.to}. ${r.message}";
-      notifyListeners();
+    for (final original in intents) {
+      final approved = await _approve(original);
+      if (approved == null) continue;
+      await _sendOne(approved);
     }
+  }
+
+  /// Put a draft in front of them until they settle it.
+  ///
+  /// Returns the email to send, or null if they said no. The loop is what
+  /// makes "change something" work: a revision is a new draft, and a new draft
+  /// gets approved on its own terms, as many times as they like.
+  Future<EmailIntent?> _approve(EmailIntent draft) async {
+    if (_alwaysSend) return draft;
+
+    var current = draft;
+    while (true) {
+      final d = await _askApproval(current);
+      switch (d.kind) {
+        case EmailApproval.allow:
+          return current;
+        case EmailApproval.always:
+          await setAlwaysSendMail(true);
+          return current;
+        case EmailApproval.cancel:
+          _say('✉️ Not sent. Say what you want changed and I will redo it.');
+          return null;
+        case EmailApproval.change:
+          final what = d.instruction?.trim() ?? '';
+          if (what.isEmpty) continue;
+          final note = _say('✉️ Rewriting that…');
+          current = await _reviseDraft(current, what);
+          _messages.remove(note);
+          notifyListeners();
+      }
+    }
+  }
+
+  Future<void> _sendOne(EmailIntent i) async {
+    // The address is in here; the body and the credential are not.
+    debugPrint('[coach] sending mail to ${i.to}');
+
+    // A placeholder first, because an SMTP round trip is seconds long and an
+    // empty pause after "I'll send that" is indistinguishable from the feature
+    // having done nothing at all. The same bubble is then edited, rather than
+    // a second one being added under it.
+    final note = _say('✉️ Sending to ${i.to}…');
+
+    MailResult r;
+    try {
+      r = await MailService.instance.send(
+        to: i.to,
+        subject: i.subject,
+        body: i.body,
+      );
+    } catch (e) {
+      // send() is documented not to throw, and an unhandled exception here
+      // would leave the bubble above saying "sending…" forever.
+      debugPrint('[coach] send threw: $e');
+      r = const MailResult.failure('Something broke while sending.');
+    }
+
+    debugPrint('[coach] send result: ok=${r.ok} ${r.message}');
+    note.text = r.ok
+        ? '✉️ Sent to ${i.to}.'
+        : "✉️ Didn't send to ${i.to}. ${r.message}";
+    notifyListeners();
+  }
+
+  /// Add a message from the coach and return it, so it can be edited in place.
+  ChatMessage _say(String text) {
+    final m = ChatMessage(
+      id: 'm-${DateTime.now().microsecondsSinceEpoch}-${_messages.length}',
+      text: text,
+      fromUser: false,
+    );
+    _messages.add(m);
+    notifyListeners();
+    return m;
   }
 
   /// A short, plain reason. Deliberately not the raw exception: those carry

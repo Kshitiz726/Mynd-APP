@@ -224,11 +224,18 @@ class _FocusScreenState extends State<FocusScreen> {
             Text('how long',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(fontSize: 16)),
             const Spacer(),
-            Text('${_minutes}m · ${_label.toLowerCase()}',
-                style: Theme.of(context)
-                    .textTheme
-                    .labelMedium
-                    ?.copyWith(color: c.primary, fontWeight: FontWeight.w700)),
+            // Flexible: the right hand side is the mode's own name, and a long
+            // one ran off the edge of a narrow phone.
+            Flexible(
+              child: Text('${_minutes}m · ${_label.toLowerCase()}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.end,
+                  style: Theme.of(context)
+                      .textTheme
+                      .labelMedium
+                      ?.copyWith(color: c.primary, fontWeight: FontWeight.w700)),
+            ),
           ],
         ),
         const SizedBox(height: AppSpacing.md),
@@ -270,8 +277,15 @@ class _FocusScreenState extends State<FocusScreen> {
             Text('scene',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(fontSize: 16)),
             const SizedBox(width: 8),
-            Text('sets the mood while you focus',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(color: c.text2)),
+            Flexible(
+              child: Text('sets the mood while you focus',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context)
+                      .textTheme
+                      .labelSmall
+                      ?.copyWith(color: c.text2)),
+            ),
           ],
         ),
         const SizedBox(height: AppSpacing.md),
@@ -328,11 +342,20 @@ class _FocusScreenState extends State<FocusScreen> {
                 children: [
                   Icon(OmIcons.byName('life-buoy'), size: 16, color: c.primary),
                   const SizedBox(width: 6),
-                  Text('Need help? Talk to Mynd',
-                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                            color: c.primary,
-                            fontWeight: FontWeight.w700,
-                          )),
+                  // Flexible even though the Row is min-sized: min means "as
+                  // narrow as the children", not "as wide as you like", and
+                  // when the surrounding column is tight this line is the one
+                  // that does not fit.
+                  Flexible(
+                    child: Text('Need help? Talk to Mynd',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style:
+                            Theme.of(context).textTheme.labelMedium?.copyWith(
+                                  color: c.primary,
+                                  fontWeight: FontWeight.w700,
+                                )),
+                  ),
                 ],
               ),
             ),
@@ -485,22 +508,32 @@ class _HeroStat extends StatelessWidget {
           children: [
             Icon(OmIcons.byName(icon), size: 18, color: Colors.white.withValues(alpha: 0.9)),
             const SizedBox(width: 10),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(value,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 20,
-                          height: 1,
-                        )),
-                Text(label,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: Colors.white.withValues(alpha: 0.6),
-                        )),
-              ],
+            // Expanded, and the label clipped rather than allowed to size the
+            // row. Two of these share the width of the phone, so the longest
+            // wording ("3h 20m focused") decides whether the card fits, and on
+            // a 320pt screen it did not.
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(value,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 20,
+                            height: 1,
+                          )),
+                  Text(label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: Colors.white.withValues(alpha: 0.6),
+                          )),
+                ],
+              ),
             ),
           ],
         ),
@@ -990,12 +1023,20 @@ class _BodyDoublingRow extends StatelessWidget {
                       .titleMedium
                       ?.copyWith(fontSize: 15.5)),
             ),
-            Text(
-              enabled ? 'on' : 'work alongside someone',
-              style: Theme.of(context)
-                  .textTheme
-                  .labelSmall
-                  ?.copyWith(color: c.text2),
+            // Flexible, because this label and the title are both variable
+            // width and the switch beside them is not. On a narrow phone an
+            // unbounded Text here is an overflow waiting for a longer word.
+            Flexible(
+              child: Text(
+                enabled ? 'on' : 'work alongside someone',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.end,
+                style: Theme.of(context)
+                    .textTheme
+                    .labelSmall
+                    ?.copyWith(color: c.text2),
+              ),
             ),
             const SizedBox(width: 8),
             Switch.adaptive(
@@ -1016,26 +1057,31 @@ class _BodyDoublingRow extends StatelessWidget {
           child: enabled
               ? Padding(
                   padding: const EdgeInsets.only(top: AppSpacing.sm),
-                  child: Row(
+                  // Wrap, not Row. Four chips of icon plus word do not fit
+                  // across a phone, and a Row cannot do anything about that
+                  // except paint the overflow stripes over the screen. Wrapping
+                  // to a second line is the honest answer: every room stays
+                  // reachable, which a horizontal scroll would not guarantee
+                  // since nothing about it says there is more to the right.
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
                     children: [
                       for (final room in _rooms)
-                        Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: _AmbientChip(
-                            label: room,
-                            icon: room == 'Café'
-                                ? 'coffee'
-                                : room == 'Library'
-                                    ? 'book'
-                                    : room == 'Rain'
-                                        ? 'cloud-rain'
-                                        : 'moon',
-                            selected: ambient == room,
-                            onTap: () {
-                              Haptics.select();
-                              onAmbient(room);
-                            },
-                          ),
+                        _AmbientChip(
+                          label: room,
+                          icon: room == 'Café'
+                              ? 'coffee'
+                              : room == 'Library'
+                                  ? 'book'
+                                  : room == 'Rain'
+                                      ? 'cloud-rain'
+                                      : 'moon',
+                          selected: ambient == room,
+                          onTap: () {
+                            Haptics.select();
+                            onAmbient(room);
+                          },
                         ),
                     ],
                   ),

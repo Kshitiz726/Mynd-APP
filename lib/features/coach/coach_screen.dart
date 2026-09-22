@@ -19,6 +19,8 @@ import '../../widgets/om_push_drawer.dart';
 import '../../widgets/om_tappable.dart';
 import '../onboarding/health_consent_screen.dart';
 import 'agent_picker_screen.dart';
+import 'widgets/email_approval_sheet.dart';
+import '../../core/services/email_approval.dart';
 
 /// "coach" - Mynd, the pocket coach. A calm chat with one-tap prompts for the
 /// moments words are hard to find ("i'm stuck", "i'm overwhelmed"…).
@@ -56,6 +58,10 @@ class _CoachScreenState extends State<CoachScreen> {
   final _controller = TextEditingController();
   final _scroll = ScrollController();
 
+  /// Stops a second sheet going up for the same draft while the first is still
+  /// on screen. The provider notifies more than once per pending email.
+  bool _approving = false;
+
   @override
   void initState() {
     super.initState();
@@ -69,6 +75,32 @@ class _CoachScreenState extends State<CoachScreen> {
       // Ask the server how many turns are left before the user finds out by
       // hitting the wall.
       coach.refreshQuota();
+      // Whether they have already said "never ask again" about sending mail.
+      coach.loadMailPrefs();
+    });
+  }
+
+  /// Put the approval sheet up when the coach has an email waiting.
+  ///
+  /// Driven from build rather than from the provider, because a provider that
+  /// reaches for a BuildContext to show a modal is a provider that cannot be
+  /// tested and cannot be shown anywhere else. Here the conversation owns its
+  /// own UI and the provider only says what is pending.
+  void _maybeAskApproval(CoachProvider coach) {
+    final pending = coach.pendingEmail;
+    if (pending == null || _approving) return;
+    _approving = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) {
+        _approving = false;
+        return;
+      }
+      final d = await EmailApprovalSheet.open(context, pending);
+      _approving = false;
+      if (!mounted) return;
+      // A sheet that somehow closed without an answer is treated as "do not
+      // send". Nothing irreversible should happen on a dismissal.
+      coach.resolvePendingEmail(d ?? const EmailDecision.cancel());
     });
   }
 
@@ -113,6 +145,7 @@ class _CoachScreenState extends State<CoachScreen> {
   @override
   Widget build(BuildContext context) {
     final c = context.omColors;
+    _maybeAskApproval(context.watch<CoachProvider>());
 
     // "Before any coach conversation" is enforced here rather than at the
     // places that navigate to the coach, because the coach is a tab inside an
