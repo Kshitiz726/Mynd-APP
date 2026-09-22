@@ -28,7 +28,28 @@ import 'google_auth.dart';
 /// it would not even work.
 class MailService {
   MailService._();
-  static final MailService instance = MailService._();
+
+  /// Constructible only by a test double. Everything real goes through
+  /// [instance].
+  @visibleForTesting
+  MailService.forTesting();
+
+  static MailService _instance = MailService._();
+
+  static MailService get instance => _instance;
+
+  /// Swap in a double for a test.
+  ///
+  /// The path from "send this to Sam" to a bubble saying whether it went is
+  /// the part that keeps being wrong, and it is untestable while the transport
+  /// is a hard-wired singleton: proving it needs a real credential and a real
+  /// message arriving in somebody's inbox.
+  @visibleForTesting
+  static set instance(MailService m) => _instance = m;
+
+  /// Put the real one back. Every test that sets [instance] calls this.
+  @visibleForTesting
+  static void resetInstance() => _instance = MailService._();
 
   // first_unlock rather than the default: the coach may be asked to send mail
   // from a notification action or straight after a cold start, and the stricter
@@ -113,6 +134,12 @@ class MailService {
       debugPrint('[mail] could not read the keychain: $e');
     }
     _loaded = true;
+    // Said out loud at every boot. Whether mail is connected decides which
+    // half of the coach's prompt it gets, and the symptom of getting it wrong
+    // is the coach politely offering to draft instead of sending, which looks
+    // like the model being unhelpful rather than a missing grant.
+    debugPrint('[mail] connected=$isConnected oauth=$_oauth '
+        'canSend=$canSend canRead=$canRead');
   }
 
   /// Save the account. [appPassword] goes to the keychain and is never logged,

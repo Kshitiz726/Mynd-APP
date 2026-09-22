@@ -737,6 +737,9 @@ class CoachProvider extends ChangeNotifier {
   /// coach's reply. Sending mail on somebody's behalf is the most consequential
   /// thing this app does, so whether it actually left has to be stated plainly
   /// and separately, not implied by a sentence the model wrote before it knew.
+  @visibleForTesting
+  void runEmailIntents(ChatMessage msg) => _runEmailIntents(msg);
+
   void _runEmailIntents(ChatMessage msg) {
     final intents = parseEmailIntents(msg.text);
     if (intents.isEmpty) return;
@@ -744,20 +747,46 @@ class CoachProvider extends ChangeNotifier {
     unawaited(_sendAll(intents));
   }
 
+  /// Send what the coach agreed to send, and say what happened either way.
+  ///
+  /// Awaited to completion per message, and reported per message. A send that
+  /// fails silently is the worst outcome available here: the reply above it
+  /// already reads as though the mail went, so saying nothing actively tells
+  /// somebody a message was delivered when it was not.
   Future<void> _sendAll(List<EmailIntent> intents) async {
     for (final i in intents) {
       // The address is in here; the body and the credential are not.
       debugPrint('[coach] sending mail to ${i.to}');
-      final r = await MailService.instance.send(
-        to: i.to,
-        subject: i.subject,
-        body: i.body,
-      );
-      _messages.add(ChatMessage(
+
+      // A placeholder first, because an SMTP round trip is seconds long and
+      // an empty pause after "I'll send that" is indistinguishable from the
+      // feature having done nothing at all.
+      final note = ChatMessage(
         id: 'm-${DateTime.now().microsecondsSinceEpoch}',
-        text: r.ok ? '✉️ ${r.message}' : "✉️ Didn't send. ${r.message}",
+        text: '✉️ Sending to ${i.to}…',
         fromUser: false,
-      ));
+      );
+      _messages.add(note);
+      notifyListeners();
+
+      MailResult r;
+      try {
+        r = await MailService.instance.send(
+          to: i.to,
+          subject: i.subject,
+          body: i.body,
+        );
+      } catch (e) {
+        // send() is documented not to throw, and an unhandled exception here
+        // would leave the bubble above saying "sending…" forever.
+        debugPrint('[coach] send threw: $e');
+        r = const MailResult.failure('Something broke while sending.');
+      }
+
+      debugPrint('[coach] send result: ok=${r.ok} ${r.message}');
+      note.text = r.ok
+          ? '✉️ Sent to ${i.to}.'
+          : "✉️ Didn't send to ${i.to}. ${r.message}";
       notifyListeners();
     }
   }

@@ -183,10 +183,15 @@ You cannot read their inbox. That permission was not granted, only the one to
 send. If they ask what is in their mail, say that plainly in one line and
 offer what you can do instead. Never guess at what might be in there.'''}'''
         : '''
-You cannot send email. No account is connected. If they ask you to send
-something, say plainly that they can connect a Gmail account in Settings under
-Connections, and offer to draft the message in the meantime. Never pretend to
-have sent anything.''';
+You cannot send email. No account is connected to send it from.
+
+If they ask you to send something, say so in one line and tell them where to
+fix it: Settings, then Connections, then Connect Gmail. If Google refuses that,
+the same screen has "use an app password instead", which works without Google
+having to approve anything.
+
+Then write the message anyway and show it to them, so it is ready to paste and
+the ask was not wasted. Never pretend to have sent anything.''';
 
     final brevityLine = ctx.userPreferences.prefersBrevity
         ? 'This user has asked for brief responses, so lean short by default. '
