@@ -1,12 +1,9 @@
-import 'dart:convert';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:http/http.dart' as http;
+import 'package:enough_mail/enough_mail.dart';
 import 'package:mailer/mailer.dart' as mailer;
 import 'package:mailer/smtp_server.dart';
 
-import 'google_auth.dart';
 
 /// Sending mail as the user, from the user's own device.
 ///
@@ -66,45 +63,23 @@ class MailService {
   /// Set when the account was connected with one tap rather than a password.
   static const _kOauth = 'om_mail_oauth';
 
-  /// Set when Gmail granted the read scope. Sending and reading are asked for
-  /// separately, so one can be granted without the other.
+  /// Left only so a connection made by the withdrawn one-tap route can be
+  /// recognised and retired. Nothing writes it any more.
   static const _kCanRead = 'om_mail_can_read';
-
-  /// Sending. A Google *sensitive* scope: it needs the OAuth client verified
-  /// before it works for the public, and nothing more than that.
-  static const sendScope = 'https://www.googleapis.com/auth/gmail.send';
-
-  /// Reading enough of the inbox to summarise it. A Google *restricted* scope,
-  /// which is a considerably higher bar: verification plus an annual
-  /// third-party security assessment (CASA).
-  static const readScope = 'https://www.googleapis.com/auth/gmail.readonly';
-
-  /// Asked for separately, and this is the point rather than tidiness.
-  ///
-  /// They used to be requested as one list, so the harder permission decided
-  /// the outcome of the easier one: an account that could not have the
-  /// restricted read scope was refused the sensitive send scope with it, and
-  /// the connection failed as a whole. Sending is the thing people ask the
-  /// coach to do, and it is the half that clears the lower bar, so it is now
-  /// asked for first and kept whatever happens to the other.
-  static const gmailScopes = <String>[sendScope, readScope];
 
   String? _address;
   String? _displayName;
   bool _oauth = false;
-  bool _canRead = false;
   bool _loaded = false;
 
-  /// The coach can put mail in somebody's outbox.
+  /// The coach can put mail in somebody's outbox, and read the inbox.
   ///
-  /// An app password connection can always send; that is all it is for. An
-  /// OAuth connection can send because the send scope was granted, which is
-  /// the only reason an address was stored at all.
+  /// One credential does both now. An app password authenticates SMTP and
+  /// IMAP alike, so there is no longer a state where the coach can send but
+  /// cannot look, and no Google approval standing between somebody and either
+  /// half of it.
   bool get canSend => isConnected;
-
-  /// The coach can look at the inbox. False on an app password connection,
-  /// which is SMTP only, and false when Google refused the restricted scope.
-  bool get canRead => isConnected && _oauth && _canRead;
+  bool get canRead => isConnected;
 
   /// True when this account is connected through the Google sign-in the user
   /// already did, rather than by typing an app password.
@@ -128,7 +103,15 @@ class MailService {
       _address = await _storage.read(key: _kAddress);
       _displayName = await _storage.read(key: _kName);
       _oauth = (await _storage.read(key: _kOauth)) == '1';
-      _canRead = (await _storage.read(key: _kCanRead)) == '1';
+      // A connection made by the withdrawn one-tap route has no credential
+      // this app can still use: its access token came from a Google grant
+      // that is no longer requested. Retiring it here means somebody meets
+      // "not connected" and reconnects, rather than a send that fails at the
+      // SMTP handshake with nothing useful to say.
+      if (_oauth) {
+        debugPrint('[mail] retiring a one-tap connection; app password now');
+        await disconnect();
+      }
     } catch (e) {
       // A locked or unavailable keychain must not stop the app booting.
       debugPrint('[mail] could not read the keychain: $e');
@@ -164,93 +147,6 @@ class MailService {
     _address = addr;
   }
 
-  /// Connect the account the user already signed in with, in one tap.
-  ///
-  /// No password to find, generate, copy or paste. They granted us their
-  /// identity at sign-in; this asks for two more permissions on the same
-  /// account and nothing else.
-  ///
-  /// Nothing secret is stored. The access token is short lived and is fetched
-  /// fresh from the Google session at the moment of each send, so there is no
-  /// long-lived credential of ours sitting on the device to leak, and
-  /// revoking the grant in the Google account page takes effect immediately
-  /// rather than whenever we happen to notice.
-  Future<MailResult> connectWithGoogle() async {
-    if (!GoogleAuth.supported) {
-      return const MailResult.failure(
-          'Google sign-in is not available on this device.');
-    }
-    try {
-      var account = GoogleAuth.instance.currentUser ??
-          await GoogleAuth.instance.signInSilently();
-      account ??= await GoogleAuth.instance.signIn();
-      if (account == null) {
-        return const MailResult.failure('Cancelled.');
-      }
-
-      // Sending first, and on its own. This is the half that only needs the
-      // client verified, and the half people actually ask for.
-      final canSend = await GoogleAuth.instance.requestScopes([sendScope]);
-      if (!canSend) {
-        return const MailResult.failure(
-            'Google did not grant permission to send. Until this app is '
-            'verified, that permission is only given to accounts on its test '
-            'list in the Google Cloud console.');
-      }
-
-      // Reading is asked for separately and is allowed to fail. It is a
-      // restricted scope, so it needs an annual security assessment on top of
-      // verification, and refusing it must not cost the connection.
-      var canRead = false;
-      try {
-        canRead = await GoogleAuth.instance.requestScopes([readScope]);
-      } catch (e) {
-        debugPrint('[mail] read scope refused: $e');
-      }
-
-      await _storage.write(key: _kAddress, value: account.email);
-      await _storage.write(key: _kOauth, value: '1');
-      await _storage.write(key: _kCanRead, value: canRead ? '1' : '0');
-      _canRead = canRead;
-      // No app password in play any more; make sure an old one cannot be
-      // picked up by the send path in preference to the grant.
-      await _storage.delete(key: _kPassword);
-      final name = account.displayName;
-      if (name != null && name.trim().isNotEmpty) {
-        await _storage.write(key: _kName, value: name.trim());
-        _displayName = name.trim();
-      }
-      _address = account.email;
-      _oauth = true;
-
-      // The message says what was actually granted. "Connected" on its own is
-      // how somebody ends up asking why their coach cannot see an inbox it
-      // was never given permission to look at.
-      return MailResult.success(canRead
-          ? 'Connected as ${account.email}. Your coach can send mail and read '
-              'your recent inbox.'
-          : 'Connected as ${account.email}. Your coach can send mail. Reading '
-              'your inbox was not granted, so it cannot summarise it yet.');
-    } catch (e) {
-      debugPrint('[mail] one-tap connect failed: $e');
-      return MailResult.failure(_explain(e));
-    }
-  }
-
-  /// A live Gmail access token for the signed-in account, or null.
-  Future<String?> _accessToken() async {
-    try {
-      final account = GoogleAuth.instance.currentUser ??
-          await GoogleAuth.instance.signInSilently();
-      if (account == null) return null;
-      final auth = await account.authentication;
-      return auth.accessToken;
-    } catch (e) {
-      debugPrint('[mail] could not get an access token: $e');
-      return null;
-    }
-  }
-
   /// Forget the account entirely. Does not revoke anything at Google - only
   /// the user can do that, and the disconnect screen says so.
   Future<void> disconnect() async {
@@ -262,7 +158,6 @@ class MailService {
     _address = null;
     _displayName = null;
     _oauth = false;
-    _canRead = false;
   }
 
   /// The last few messages, as headers and snippets only.
@@ -271,76 +166,99 @@ class MailService {
   /// know who wrote, about what and roughly what it said, and pulling whole
   /// message bodies into a model prompt would send far more of somebody's
   /// private mail to a third party than the job requires.
-  Future<List<MailSummary>> recent({int limit = 12}) async {
+  Future<List<MailSummary>> recent({int limit = 12, bool unreadOnly = false}) async {
     if (!canRead) {
-      debugPrint('[mail] no read grant on this account');
+      debugPrint('[mail] this account cannot read mail');
       return const [];
     }
-    final token = await _accessToken();
-    if (token == null || !isConnected) return const [];
-    final headers = {'Authorization': 'Bearer $token'};
+    final addr = _address;
+    final pass = await _storage.read(key: _kPassword);
+    if (addr == null || pass == null || pass.isEmpty) return const [];
+
+    // IMAP rather than the Gmail API, and that is the whole reason an app
+    // password is enough to summarise somebody's inbox.
+    //
+    // The Gmail REST API needs gmail.readonly, which is a Google *restricted*
+    // scope: OAuth verification plus an annual third-party security
+    // assessment before any account outside the project's test list can grant
+    // it. The same app password that authenticates SMTP authenticates IMAP,
+    // so reading costs the user nothing they have not already set up for
+    // sending, and costs this app no approval process at all.
+    final client = ImapClient(isLogEnabled: false);
     try {
-      final listRes = await http
-          .get(
-            Uri.https('gmail.googleapis.com', '/gmail/v1/users/me/messages', {
-              'maxResults': '$limit',
-              // Recent and actually in the inbox. Promotions and social are
-              // noise in a summary somebody asked for.
-              'q': 'in:inbox newer_than:7d -category:promotions -category:social',
-            }),
-            headers: headers,
-          )
-          .timeout(const Duration(seconds: 15));
-      if (listRes.statusCode != 200) {
-        debugPrint('[mail] list failed: ${listRes.statusCode}');
-        return const [];
-      }
-      final ids = ((jsonDecode(listRes.body)['messages'] as List?) ?? const [])
-          .whereType<Map>()
-          .map((m) => m['id'] as String?)
-          .whereType<String>()
-          .toList();
+      await client
+          .connectToServer('imap.gmail.com', 993, isSecure: true)
+          .timeout(const Duration(seconds: 20));
+      await client.login(addr, pass).timeout(const Duration(seconds: 20));
+      final box = await client.selectInbox();
+
+      final count = box.messagesExists;
+      if (count == 0) return const [];
+
+      // Newest first, and only the last stretch of the mailbox: fetching the
+      // whole inbox to show twelve lines would be minutes of transfer on a
+      // busy account.
+      final from = count - (limit * 3) + 1;
+      final sequence = MessageSequence.fromRange(from < 1 ? 1 : from, count);
+      final fetch = await client
+          .fetchMessages(sequence, 'ENVELOPE FLAGS BODY.PEEK[TEXT]<0.400>')
+          .timeout(const Duration(seconds: 30));
 
       final out = <MailSummary>[];
-      await Future.wait(ids.map((id) async {
-        try {
-          final r = await http
-              .get(
-                Uri.https(
-                  'gmail.googleapis.com',
-                  '/gmail/v1/users/me/messages/$id',
-                  {
-                    'format': 'metadata',
-                    'metadataHeaders': 'From,Subject,Date',
-                  },
-                ),
-                headers: headers,
-              )
-              .timeout(const Duration(seconds: 15));
-          if (r.statusCode != 200) return;
-          final j = jsonDecode(r.body) as Map<String, dynamic>;
-          final hs = ((j['payload']?['headers'] as List?) ?? const [])
-              .whereType<Map>();
-          String head(String name) =>
-              (hs.firstWhere((h) => (h['name'] as String?)?.toLowerCase() == name.toLowerCase(),
-                          orElse: () => const {})['value'] as String?) ??
-                  '';
-          out.add(MailSummary(
-            from: head('From'),
-            subject: head('Subject'),
-            date: head('Date'),
-            snippet: (j['snippet'] as String?) ?? '',
-            unread: ((j['labelIds'] as List?) ?? const []).contains('UNREAD'),
-          ));
-        } catch (_) {
-          /* one unreadable message costs that message */
-        }
-      }));
+      for (final m in fetch.messages.reversed) {
+        final unread = !m.isSeen;
+        if (unreadOnly && !unread) continue;
+        final env = m.envelope;
+        final sender = env?.from?.isNotEmpty == true
+            ? (env!.from!.first.personalName ?? env.from!.first.email)
+            : '';
+        out.add(MailSummary(
+          from: sender.isEmpty ? 'unknown sender' : sender,
+          subject: env?.subject ?? '(no subject)',
+          date: env?.date?.toIso8601String() ?? '',
+          // BODY.PEEK leaves the message unread. Summarising somebody's inbox
+          // must not mark it as read: that silently destroys the one piece of
+          // state they were asking about.
+          snippet: _snippetOf(m),
+          unread: unread,
+        ));
+        if (out.length >= limit) break;
+      }
+      debugPrint('[mail] imap: ${out.length} messages '
+          '(${out.where((m) => m.unread).length} unread)');
       return out;
     } catch (e) {
-      debugPrint('[mail] recent failed: $e');
+      debugPrint('[mail] imap read failed: $e');
       return const [];
+    } finally {
+      try {
+        await client.logout();
+      } catch (_) {/* the socket is going away regardless */}
     }
+  }
+
+  /// Just the unread ones. What "anything new?" actually means.
+  Future<List<MailSummary>> unread({int limit = 12}) =>
+      recent(limit: limit, unreadOnly: true);
+
+  /// A readable first line or two of a message, from whatever it turned out
+  /// to be. Never the whole body: a summary needs the gist, and a full body in
+  /// a model prompt sends far more of somebody's private mail than the job
+  /// requires.
+  static String _snippetOf(MimeMessage m) {
+    String raw;
+    try {
+      raw = m.decodeTextPlainPart() ?? m.decodeContentText() ?? '';
+    } catch (_) {
+      raw = '';
+    }
+    final flat = raw
+        .replaceAll(RegExp(r'<[^>]*>'), ' ')
+        .replaceAll(RegExp(r'https?://\S+'), '')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    if (flat.isEmpty) return '';
+    return flat.length > 200 ? '${flat.substring(0, 200)}…' : flat;
   }
 
   /// Prove the credential works before telling anyone they are connected, by
@@ -389,25 +307,14 @@ class MailService {
       return MailResult.failure('"$to" does not look like an email address.');
     }
 
-    // The grant first, a stored app password only if this account was
-    // connected the old way. Both end at the same SMTP server; only the
-    // credential differs.
-    SmtpServer server;
-    if (_oauth) {
-      final token = await _accessToken();
-      if (token == null) {
-        return const MailResult.failure(
-            'Your Google session expired. Open Connections and reconnect.');
-      }
-      server = gmailSaslXoauth2(addr, token);
-    } else {
-      final pass = await _storage.read(key: _kPassword);
-      if (pass == null || pass.isEmpty) {
-        return const MailResult.failure(
-            'No credential saved for this account. Reconnect it in Settings.');
-      }
-      server = gmail(addr, pass);
+    // Read at the moment of sending and dropped again, never held in a field:
+    // a heap dump of a running app should not contain somebody's credential.
+    final pass = await _storage.read(key: _kPassword);
+    if (pass == null || pass.isEmpty) {
+      return const MailResult.failure(
+          'No credential saved for this account. Reconnect it in Settings.');
     }
+    final SmtpServer server = gmail(addr, pass);
 
     try {
       final message = mailer.Message()

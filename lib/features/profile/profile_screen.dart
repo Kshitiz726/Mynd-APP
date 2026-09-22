@@ -19,8 +19,10 @@ import '../../providers/premium_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../widgets/om_switch.dart';
 import '../../widgets/om_tappable.dart';
+import '../coach/agent_picker_screen.dart';
 import '../memory/memory_screen.dart';
 import 'about_screen.dart';
+import 'connections_screen.dart';
 import 'account_data_screen.dart';
 import 'blocked_accounts_screen.dart';
 import 'health_data_screen.dart';
@@ -104,7 +106,7 @@ class ProfileScreen extends StatelessWidget {
                     if (Navigator.of(context).canPop()) {
                       Navigator.of(context).pop();
                     } else {
-                      context.read<NavProvider>().select(AppTab.today);
+                      context.read<NavProvider>().select(AppTab.coach);
                     }
                   },
                 ),
@@ -169,6 +171,20 @@ class ProfileScreen extends StatelessWidget {
                 label: 'Reminders',
                 onTap: () =>
                     Navigator.of(context).pushNamed(AppRoutes.reminders),
+              ),
+              // Calendar and Gmail, together. The calendar switch used to live
+              // at the top of the Schedule tab, which meant "what has access to
+              // what" was answered in two different places, and the one people
+              // go looking for when they have second thoughts is this one.
+              _Row(
+                icon: Icons.hub_outlined,
+                label: 'Connections',
+                onTap: () => ConnectionsScreen.open(context),
+              ),
+              _Row(
+                icon: Icons.face_retouching_natural_outlined,
+                label: 'Your coach',
+                onTap: () => AgentPickerScreen.open(context),
               ),
               _Row(
                 icon: Icons.psychology_outlined,

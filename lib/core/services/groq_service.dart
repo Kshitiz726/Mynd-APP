@@ -57,7 +57,16 @@ class GroqService {
   /// See the note above - this is what keeps a reply in the reply.
   static const _reasoningEffort = 'low';
 
-  static const _chatMaxTokens = 512;
+  // Raised from 512, and not for longer replies.
+  //
+  // These models spend completion tokens thinking before they answer, out of
+  // this same budget. At 512 a turn could be consumed entirely by reasoning
+  // and come back with an EMPTY content string: a coach that says nothing,
+  // with no error to explain it. The system prompt grew when the agent
+  // personas and the email instructions landed, which pushed ordinary turns
+  // into that margin. The replies are still capped by the prompt telling the
+  // agent how long to be, not by this number.
+  static const _chatMaxTokens = 1024;
   static const _summaryMaxTokens = 300;
 
   final _client = http.Client();

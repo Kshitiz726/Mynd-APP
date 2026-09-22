@@ -176,4 +176,39 @@ void main() {
 
     expect(mail.sent, isEmpty, reason: 'something here sent a real email');
   });
+
+  test('the same email written twice in one reply is sent once', () async {
+    // Reported: "the sent to ... message keeps sending twice". A model told
+    // to write a marker will sometimes write it once mid-sentence and again
+    // at the end as a summary. Nothing downstream could tell that apart from
+    // somebody genuinely asking for two emails, so the recipient got two.
+    final mail = _FakeMail();
+    MailService.instance = mail;
+    final coach = buildCoach();
+
+    coach.runEmailIntents(reply(
+      "Sending that now. [[email: sam@example.com | Hi | Just saying hello.]] "
+      'All done. [[email: sam@example.com | Hi | Just saying hello.]]',
+    ));
+    await Future<void>.delayed(Duration.zero);
+
+    expect(mail.sent, hasLength(1));
+    expect(coach.messages.where((m) => m.text.contains('✉️')), hasLength(1));
+  });
+
+  test('two genuinely different emails are still both sent', () async {
+    // The dedupe must key on the whole message, not just the recipient: two
+    // notes to one person in a single turn is a real thing to ask for.
+    final mail = _FakeMail();
+    MailService.instance = mail;
+    final coach = buildCoach();
+
+    coach.runEmailIntents(reply(
+      '[[email: sam@example.com | Running late | Be there at ten past.]]'
+      '[[email: sam@example.com | One more thing | Bringing the file.]]',
+    ));
+    await Future<void>.delayed(Duration.zero);
+
+    expect(mail.sent, hasLength(2));
+  });
 }

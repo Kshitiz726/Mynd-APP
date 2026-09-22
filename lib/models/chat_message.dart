@@ -45,11 +45,17 @@ class ChatMessage {
   ///
   /// With no name it stays nameless rather than guessing one. Inventing a name
   /// for someone is worse than not using one.
-  factory ChatMessage.welcome(String userName) => ChatMessage(
+  ///
+  /// [agentName] is who is coaching. It used to be hard-coded to "Mynd", which
+  /// after the agent picker landed meant the penguin introducing itself as
+  /// somebody else in its own first sentence.
+  factory ChatMessage.welcome(String userName, {String agentName = 'Mynd'}) =>
+      ChatMessage(
         id: 'welcome',
         text: userName.trim().isNotEmpty
-            ? "hey ${userName.trim()}. i'm Mynd. what's going on right now?"
-            : "hey. i'm Mynd, your pocket coach. what's going on right now?",
+            ? "hey ${userName.trim()}. i'm $agentName. what's going on right now?"
+            : "hey. i'm $agentName, your pocket coach. what's going on right "
+                "now?",
         fromUser: false,
       );
 }

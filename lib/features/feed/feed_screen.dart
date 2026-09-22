@@ -92,10 +92,11 @@ class _FeedScreenState extends State<FeedScreen> {
                     ],
 
                     // The day's line. The one thing here that is about the
-                    // reader rather than about the world, and it earns its
-                    // place only once there is a line: before that it is a
-                    // grey box between the header and the reading.
-                    const MotivationCard(onlyWhenWritten: true),
+                    // reader rather than about the world, so it stays at the
+                    // top whether or not it has been set up: its empty state
+                    // is the way in to setting it up.
+                    const MotivationCard(),
+                    const SizedBox(height: AppSpacing.lg),
 
                     if (feed.writing) const _WritingNote(),
 
@@ -399,40 +400,45 @@ class _PostCard extends StatelessWidget {
                       const SizedBox(height: AppSpacing.lg),
                       _HighlightBlock(highlight: post.highlight!),
                     ],
+
+                    // The picture sits inside the text column, so its left
+                    // edge lines up with the headline and the prose rather
+                    // than starting back under the emoji. Full width across
+                    // the card left it hanging a gutter further left than
+                    // every other thing in the post, which is what made it
+                    // look pasted on.
+                    //
+                    // After the writing, not before it: this feed is the coach
+                    // telling you something, so the sentence it wrote is what
+                    // you meet first. It also means a slow or missing image
+                    // can never push the writing down the screen.
+                    if (post.imageUrl != null && post.imageUrl!.isNotEmpty) ...[
+                      const SizedBox(height: AppSpacing.lg),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(AppRadius.control),
+                        child: AspectRatio(
+                          aspectRatio: 16 / 9,
+                          child: Image.network(
+                            post.imageUrl!,
+                            fit: BoxFit.cover,
+                            // A publisher's image can 404 or refuse to be
+                            // hotlinked. The post reads perfectly without one,
+                            // so a failure collapses the picture rather than
+                            // leaving a broken glyph under real writing.
+                            errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                            loadingBuilder: (ctx, child, progress) =>
+                                progress == null
+                                    ? child
+                                    : Container(color: c.surfaceAlt),
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
             ],
           ),
-
-          // The picture comes after the writing, not before it.
-          //
-          // A card led by a stock photograph is a news app; this one is the
-          // coach telling you something, so the sentence it wrote is the thing
-          // to meet first and the photograph is what the story looked like.
-          // It also means a slow or missing image can never push the writing
-          // down the screen or leave a gap above it.
-          if (post.imageUrl != null && post.imageUrl!.isNotEmpty) ...[
-            const SizedBox(height: AppSpacing.lg),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(AppRadius.control),
-              child: AspectRatio(
-                aspectRatio: 16 / 9,
-                child: Image.network(
-                  post.imageUrl!,
-                  fit: BoxFit.cover,
-                  // A publisher's image can 404 or refuse to be hotlinked. The
-                  // post reads perfectly without one, so a failure collapses
-                  // the picture rather than leaving a broken glyph under real
-                  // writing.
-                  errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-                  loadingBuilder: (ctx, child, progress) => progress == null
-                      ? child
-                      : Container(color: c.surfaceAlt),
-                ),
-              ),
-            ),
-          ],
 
           const SizedBox(height: AppSpacing.lg),
           Row(

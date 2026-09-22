@@ -11,11 +11,14 @@ import 'core/services/api_client.dart';
 import 'core/services/api_config.dart';
 import 'core/services/alarm_service.dart';
 import 'core/services/coach_memory_service.dart';
+import 'core/services/feed_instructions_service.dart';
+import 'core/services/mail_service.dart';
 import 'core/services/realtime_service.dart';
 import 'core/services/session_store.dart';
 import 'core/theme/app_theme.dart';
 import 'core/utils/om_scroll_behavior.dart';
 import 'features/splash/splash_screen.dart';
+import 'providers/agent_provider.dart';
 import 'providers/alerts_provider.dart';
 import 'providers/alarms_provider.dart';
 import 'providers/coach_provider.dart';
@@ -31,6 +34,7 @@ import 'providers/memory_provider.dart';
 import 'providers/calendar_provider.dart';
 import 'providers/motivation_provider.dart';
 import 'providers/mood_provider.dart';
+import 'providers/feed_provider.dart';
 import 'providers/nav_provider.dart';
 import 'providers/premium_provider.dart';
 import 'providers/reminders_provider.dart';
@@ -82,6 +86,12 @@ void main() async {
   // Coach memory (parked thoughts + rolling summary) is app-wide; load it once
   // up front so parking a thought outside the coach screen merges, not clobbers.
   await _bootStep('coach memory', CoachMemoryService.instance.init);
+  // The Feed is written against this document, so it has to be on disk before
+  // the Feed tab can ask for an edition.
+  await _bootStep('feed instructions', FeedInstructionsService.instance.init);
+  // Reads the connected address out of the keychain so the coach knows whether
+  // it can offer to send mail on the very first turn.
+  await _bootStep('mail account', MailService.instance.init);
 
   // The health-data consent answer, from this device's cache, before anything
   // can consult it. Nothing here gates on a network call: the provider fails
@@ -236,6 +246,10 @@ class OurMyndApp extends StatelessWidget {
         // drives the paywall checkout. Refreshed after sign-in / on the paywall.
         ChangeNotifierProvider(create: (_) => PremiumProvider()..refresh()),
         ChangeNotifierProvider(create: (_) => NavProvider()),
+        ChangeNotifierProvider(create: (_) => FeedProvider()),
+        // Which agent is coaching, and how each one has been tuned. Eager, not
+        // lazy: the avatar is on the first frame of the first tab.
+        ChangeNotifierProvider(create: (_) => AgentProvider()..init()),
         // A singleton behind a provider: the gate is consulted from plain
         // static code as well as from the widget tree, and both have to see
         // the same answer. See HealthConsentProvider.
@@ -348,7 +362,11 @@ class OurMyndApp extends StatelessWidget {
             // runApp, so this is populated by the time the coach is built; if
             // it is not, the coach stays nameless rather than inventing one.
             userName: ApiConfig.instance.displayName ?? '',
-          ),
+          )
+            // Read once for the same reason as mood: one long-lived instance,
+            // and the coach only touches it when a reply asks for a reminder.
+            ..bindReminders(ctx.read<RemindersProvider>())
+            ..bindCalendar(ctx.read<CalendarProvider>()),
           update: (_, energy, tasks, habits, focus, settings, previous) {
             // Provider instances are long-lived; the ProxyProvider just
             // notifies on dependency changes. The coach reads state directly

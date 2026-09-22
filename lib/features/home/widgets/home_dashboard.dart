@@ -21,7 +21,8 @@ import '../search/global_search_screen.dart';
 import '../../../providers/streak_provider.dart';
 import 'streak_calendar.dart';
 import 'goal_sheet.dart';
-import 'home_illustrations.dart';
+// AllCaughtUpArt is parked - see the note at the top of that file.
+// import 'home_illustrations.dart';
 import 'brain_dump_sheet.dart';
 import 'edit_task_sheet.dart';
 
@@ -504,9 +505,15 @@ class _QuickActionsState extends State<QuickActions> {
         curve: Curves.easeOutCubic,
         child: AnimatedSwitcher(
           duration: const Duration(milliseconds: 300),
+          // Nothing, rather than "you're all caught up".
+          //
+          // This sits at the top of the Schedule tab now, and a congratulation
+          // occupying the first screenful every time the backlog happens to be
+          // empty is a banner celebrating an ordinary state. AnimatedSize
+          // collapses the gap, so the sections below simply move up.
           child: _displayTask != null
               ? _ActionCard(key: ValueKey(_displayTask!.id), task: _displayTask!)
-              : const AllCaughtUpArt(key: ValueKey('empty')),
+              : const SizedBox(width: double.infinity, key: ValueKey('empty')),
         ),
       ),
     );

@@ -20,7 +20,6 @@ import '../../widgets/om_button.dart';
 import '../../widgets/om_form_page.dart';
 import '../../widgets/om_minute_dial.dart';
 import '../../widgets/om_glass.dart';
-import '../../widgets/om_switch.dart';
 import '../../widgets/om_tappable.dart';
 import '../../widgets/text_editing_scope.dart';
 import 'body_doubling_screen.dart';
@@ -209,131 +208,59 @@ class _FocusScreenState extends State<FocusScreen> {
         ),
         const SizedBox(height: AppSpacing.xl),
 
-        Center(
-          child: Text(
-            'focus time in mins',
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(color: c.text2),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.md),
-
-        // The dial: the duration is the decision, so it gets the largest type on
-        // the screen and a gesture of its own.
-        SizedBox(
-          height: 116,
-          child: PageView.builder(
-            controller: _dial,
-            itemCount: _steps.length,
-            physics: const BouncingScrollPhysics(),
-            onPageChanged: (i) {
-              Haptics.light();
-              setState(() {
-                _minutes = _steps[i];
-                _label = FocusMode.presets
-                        .where((m) => m.minutes == _steps[i])
-                        .map((m) => m.name)
-                        .firstOrNull ??
-                    'Custom';
-              });
-            },
-            itemBuilder: (context, i) {
-              final value = _steps[i];
-              final selected = value == _minutes;
-              // A glassy tile: the selected one is a brand-lit slab with a soft
-              // top sheen and glow; the rest are frosted, translucent chips that
-              // pick up the app's surface. Three-digit lengths shrink to fit.
-              return Center(
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 240),
-                  curve: Curves.easeOutCubic,
-                  width: selected ? 96 : 66,
-                  height: selected ? 96 : 66,
-                  decoration: BoxDecoration(
-                    gradient: selected
-                        ? LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              Color.lerp(c.primary, Colors.white, 0.14)!,
-                              c.primary,
-                            ],
-                          )
-                        : LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              c.surface.withValues(alpha: context.isDark ? 0.5 : 0.8),
-                              c.surfaceAlt.withValues(alpha: context.isDark ? 0.35 : 0.6),
-                            ],
-                          ),
-                    borderRadius: BorderRadius.circular(selected ? 30 : 22),
-                    border: Border.all(
-                      color: selected
-                          ? Colors.white.withValues(alpha: 0.35)
-                          : c.border.withValues(alpha: 0.7),
-                      width: selected ? 1.2 : 1,
-                    ),
-                    boxShadow: selected
-                        ? [
-                            BoxShadow(
-                              color: c.primary.withValues(alpha: 0.38),
-                              blurRadius: 26,
-                              offset: const Offset(0, 12),
-                            ),
-                          ]
-                        : [
-                            BoxShadow(
-                              color: c.shadow.withValues(alpha: context.isDark ? 0.28 : 0.05),
-                              blurRadius: 12,
-                              offset: const Offset(0, 6),
-                            ),
-                          ],
-                  ),
-                  alignment: Alignment.center,
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: Text(
-                        '$value',
-                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                              color: selected ? Colors.white : c.text2,
-                              fontSize: selected ? 34 : 22,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: -0.5,
-                            ),
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Center(
-          child: Text(
-            _label.toLowerCase(),
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(color: c.primary),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.lg),
-
-        // Presets stay: they are the "how do I feel" shortcut into the dial.
+        // One control for one value.
+        //
+        // This was a 22-stop dial you swiped through, and *underneath it* a row
+        // of named presets. Both set the same minutes. Two controls for one
+        // number, stacked, took a third of the screen and made the page scroll
+        // for no reason - and having set 45 on the dial, "Deep Work" below it
+        // still looked unselected, so the screen contradicted itself.
+        //
+        // Now: the named lengths lead, because "how do I feel" is the easier
+        // question, and the plain numbers follow for anyone who wants a
+        // specific one. One row, one selected state, one source of truth.
         Row(
           children: [
-            for (final mode in FocusMode.presets)
-              Expanded(
-                child: Padding(
+            Text('how long',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontSize: 16)),
+            const Spacer(),
+            Text('${_minutes}m · ${_label.toLowerCase()}',
+                style: Theme.of(context)
+                    .textTheme
+                    .labelMedium
+                    ?.copyWith(color: c.primary, fontWeight: FontWeight.w700)),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        SizedBox(
+          height: 58,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            children: [
+              for (final mode in FocusMode.presets)
+                Padding(
                   padding: const EdgeInsets.only(right: 8),
-                  child: _PresetChip(
-                    mode: mode,
+                  child: _LengthChip(
+                    label: mode.name.toLowerCase(),
+                    minutes: mode.minutes,
+                    icon: mode.iconName,
                     selected: _minutes == mode.minutes,
                     onTap: () => _selectMinutes(mode.minutes),
                   ),
                 ),
-              ),
-          ],
+              for (final value in _steps)
+                if (!FocusMode.presets.any((m) => m.minutes == value))
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: _LengthChip(
+                      minutes: value,
+                      selected: _minutes == value,
+                      onTap: () => _selectMinutes(value),
+                    ),
+                  ),
+            ],
+          ),
         ),
         const SizedBox(height: AppSpacing.lg),
 
@@ -370,15 +297,20 @@ class _FocusScreenState extends State<FocusScreen> {
             ],
           ),
         ),
-        const SizedBox(height: AppSpacing.lg),
+        const SizedBox(height: AppSpacing.md),
 
-        _BodyDoublingTile(
+        // Body doubling belongs with the scene: both are "what is it like while
+        // I work", both are optional, and neither is the decision this screen
+        // is for. It used to be a full card at the very bottom, which put the
+        // least important choice in the most prominent place and pushed the
+        // start button off the fold.
+        _BodyDoublingRow(
           enabled: _bodyDoubling,
           ambient: _ambient,
           onToggle: (v) => setState(() => _bodyDoubling = v),
           onAmbient: (name) => setState(() => _ambient = name),
         ),
-        const SizedBox(height: AppSpacing.xl),
+        const SizedBox(height: AppSpacing.lg),
         OmButton(
           label: 'start ${_label.toLowerCase()} · ${_minutes}m',
           onPressed: () => _startSession(_mode),
@@ -956,13 +888,27 @@ Future<void> showNewFocusSheet(
   );
 }
 
-/// A preset shortcut: the minutes lead, the feeling explains.
-class _PresetChip extends StatelessWidget {
-  const _PresetChip({required this.mode, required this.selected, required this.onTap});
+/// A professional body-doubling control: a clean switch row (no checkmarks) and,
+/// when on, a soft explanation that we'll match the user with someone currently
+/// focusing - or keep searching in the background - plus an ambience selector.
+/// One length. Named ones carry their name, the rest carry their number.
+///
+/// The same chip for both, so a preset and a plain length cannot look like two
+/// different kinds of thing when they set exactly the same value.
+class _LengthChip extends StatelessWidget {
+  const _LengthChip({
+    required this.minutes,
+    required this.selected,
+    required this.onTap,
+    this.label,
+    this.icon,
+  });
 
-  final FocusMode mode;
+  final int minutes;
   final bool selected;
   final VoidCallback onTap;
+  final String? label;
+  final String? icon;
 
   @override
   Widget build(BuildContext context) {
@@ -972,37 +918,32 @@ class _PresetChip extends StatelessWidget {
       feedback: OmTapFeedback.none,
       pressedScale: 0.94,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+        padding: EdgeInsets.symmetric(horizontal: label == null ? 18 : 14),
+        alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: selected ? c.primaryTint : c.surface,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: selected ? c.primary.withValues(alpha: 0.5) : c.border),
+          color: selected ? c.primary : c.surfaceAlt,
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+          border: Border.all(
+            color: selected ? c.primary : c.border.withValues(alpha: 0.7),
+          ),
         ),
-        child: Column(
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              OmIcons.byName(mode.iconName),
-              size: 18,
-              color: selected ? c.primary : c.text2,
-            ),
-            const SizedBox(height: 6),
+            if (icon != null) ...[
+              Icon(OmIcons.byName(icon!),
+                  size: 15, color: selected ? Colors.white : c.text2),
+              const SizedBox(width: 7),
+            ],
             Text(
-              '${mode.minutes}',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: selected ? c.primary : c.text,
-                  ),
-            ),
-            Text(
-              mode.name.toLowerCase(),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    fontSize: 10,
-                    color: selected ? c.primary : c.text2,
-                  ),
+              label == null ? '${minutes}m' : '$label  ${minutes}m',
+              style: TextStyle(
+                color: selected ? Colors.white : c.text,
+                fontWeight: FontWeight.w700,
+                fontSize: 14.5,
+              ),
             ),
           ],
         ),
@@ -1011,11 +952,13 @@ class _PresetChip extends StatelessWidget {
   }
 }
 
-/// A professional body-doubling control: a clean switch row (no checkmarks) and,
-/// when on, a soft explanation that we'll match the user with someone currently
-/// focusing - or keep searching in the background - plus an ambience selector.
-class _BodyDoublingTile extends StatelessWidget {
-  const _BodyDoublingTile({
+/// Body doubling, as one row rather than a slab.
+///
+/// The toggle is the whole decision. The ambience picker only appears once it
+/// is on, because choosing a room to sit in is meaningless until you have said
+/// you want to sit with anyone.
+class _BodyDoublingRow extends StatelessWidget {
+  const _BodyDoublingRow({
     required this.enabled,
     required this.ambient,
     required this.onToggle,
@@ -1027,85 +970,79 @@ class _BodyDoublingTile extends StatelessWidget {
   final ValueChanged<bool> onToggle;
   final ValueChanged<String> onAmbient;
 
+  static const _rooms = ['Café', 'Library', 'Rain', 'Silence'];
+
   @override
   Widget build(BuildContext context) {
     final c = context.omColors;
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOutCubic,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: enabled ? c.primaryTint.withValues(alpha: 0.5) : c.surfaceAlt,
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        border: Border.all(color: enabled ? c.primary.withValues(alpha: 0.4) : c.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(color: c.surface, borderRadius: BorderRadius.circular(12)),
-                child: Icon(OmIcons.byName('users'), size: 19, color: c.primary),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('body doubling',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(fontSize: 16)),
-                    const SizedBox(height: 2),
-                    Text('focus alongside someone else who’s working right now',
-                        style: Theme.of(context).textTheme.bodySmall),
-                  ],
-                ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              OmSwitch(value: enabled, onChanged: onToggle),
-            ],
-          ),
-          AnimatedSize(
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOutCubic,
-            child: enabled
-                ? Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(OmIcons.byName('users'),
+                size: 18, color: enabled ? c.primary : c.text2),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text('body doubling',
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleMedium
+                      ?.copyWith(fontSize: 15.5)),
+            ),
+            Text(
+              enabled ? 'on' : 'work alongside someone',
+              style: Theme.of(context)
+                  .textTheme
+                  .labelSmall
+                  ?.copyWith(color: c.text2),
+            ),
+            const SizedBox(width: 8),
+            Switch.adaptive(
+              value: enabled,
+              activeTrackColor: c.primary,
+              onChanged: (v) {
+                Haptics.select();
+                onToggle(v);
+              },
+            ),
+          ],
+        ),
+        // Collapses to nothing when off, so the screen does not reserve space
+        // for a choice that is not being offered.
+        AnimatedSize(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOutCubic,
+          child: enabled
+              ? Padding(
+                  padding: const EdgeInsets.only(top: AppSpacing.sm),
+                  child: Row(
                     children: [
-                      const SizedBox(height: AppSpacing.md),
-                      Text("we'll pair you with someone in a session - if no one's free yet, "
-                          'we keep matching quietly while your timer runs.',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: c.text2)),
-                      const SizedBox(height: AppSpacing.md),
-                      Text('AMBIENCE',
-                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                color: c.text2,
-                                fontSize: 9,
-                                letterSpacing: 1,
-                                fontWeight: FontWeight.w800,
-                              )),
-                      const SizedBox(height: AppSpacing.sm),
-                      Wrap(
-                        spacing: AppSpacing.sm,
-                        runSpacing: AppSpacing.sm,
-                        children: [
-                          for (final (name, icon) in const [('Café', 'coffee'), ('Library', 'book'), ('Typing', 'keyboard')])
-                            _AmbientChip(
-                              label: name,
-                              icon: icon,
-                              selected: ambient == name,
-                              onTap: () => onAmbient(name),
-                            ),
-                        ],
-                      ),
+                      for (final room in _rooms)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: _AmbientChip(
+                            label: room,
+                            icon: room == 'Café'
+                                ? 'coffee'
+                                : room == 'Library'
+                                    ? 'book'
+                                    : room == 'Rain'
+                                        ? 'cloud-rain'
+                                        : 'moon',
+                            selected: ambient == room,
+                            onTap: () {
+                              Haptics.select();
+                              onAmbient(room);
+                            },
+                          ),
+                        ),
                     ],
-                  )
-                : const SizedBox.shrink(),
-          ),
-        ],
-      ),
+                  ),
+                )
+              : const SizedBox(width: double.infinity),
+        ),
+      ],
     );
   }
 }

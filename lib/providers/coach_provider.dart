@@ -744,7 +744,24 @@ class CoachProvider extends ChangeNotifier {
     final intents = parseEmailIntents(msg.text);
     if (intents.isEmpty) return;
     msg.text = stripEmailMarkers(msg.text);
-    unawaited(_sendAll(intents));
+
+    // The same message twice is one message.
+    //
+    // A model that has been told to write a marker will now and then write it
+    // twice in one reply, once mid-sentence and once at the end as a summary.
+    // Nothing downstream could tell that apart from somebody genuinely asking
+    // for two emails, so the recipient got two identical messages and the
+    // conversation reported it twice.
+    final seen = <String>{};
+    final unique = [
+      for (final i in intents)
+        if (seen.add('${i.to}\u0000${i.subject}\u0000${i.body}')) i,
+    ];
+    if (unique.length != intents.length) {
+      debugPrint('[coach] dropped ${intents.length - unique.length} '
+          'duplicate email intent(s)');
+    }
+    unawaited(_sendAll(unique));
   }
 
   /// Send what the coach agreed to send, and say what happened either way.

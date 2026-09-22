@@ -37,6 +37,7 @@ abstract final class AppRadius {
 abstract final class AppSizes {
   static const double minTouchTarget = 48;
   static const double avatar = 40;
-  static const double navBarHeight = 64;
+  /// The flat icon row. No capsule any more, so this is the glyph row itself.
+  static const double navBarHeight = 58;
   static const double habitTile = 66;
 }

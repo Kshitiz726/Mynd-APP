@@ -10,14 +10,15 @@ import '../../models/chat_message.dart';
 import '../../providers/coach_provider.dart';
 import '../../providers/health_consent_provider.dart';
 import '../../providers/memory_provider.dart';
-import '../../providers/nav_provider.dart';
 import '../../providers/premium_provider.dart';
-import '../../widgets/fluid_orb.dart';
+import '../../providers/agent_provider.dart';
+import '../../widgets/agent_avatar.dart';
 import '../../widgets/om_back_button.dart';
 import '../../widgets/om_glass.dart';
+import '../../widgets/om_push_drawer.dart';
 import '../../widgets/om_tappable.dart';
 import '../onboarding/health_consent_screen.dart';
-import 'coach_history_screen.dart';
+import 'agent_picker_screen.dart';
 
 /// "coach" - Mynd, the pocket coach. A calm chat with one-tap prompts for the
 /// moments words are hard to find ("i'm stuck", "i'm overwhelmed"…).
@@ -31,8 +32,16 @@ class CoachScreen extends StatefulWidget {
   State<CoachScreen> createState() => _CoachScreenState();
 }
 
-/// Free users get this many coach messages per day before the paywall.
-const int kFreeCoachMessageLimit = 5;
+/// Free users get this many coach messages per WEEK before the paywall.
+///
+/// Weekly, not daily, and that is the point rather than the bigger number. A
+/// daily cap refuses somebody on the one bad day they actually needed forty
+/// messages, then expires unused for the other six. Mirrors WEEKLY_LIMIT in
+/// server/src/routes/coach.ts, where the authoritative copy lives.
+///
+/// Only conversation is metered. The Feed, the scheduling and the app's other
+/// reasoning run through the unmetered extract route and are never affected.
+const int kCoachWeeklyLimit = 100;
 
 class _CoachScreenState extends State<CoachScreen> {
   static const _prompts = [
@@ -61,6 +70,17 @@ class _CoachScreenState extends State<CoachScreen> {
       // hitting the wall.
       coach.refreshQuota();
     });
+  }
+
+  /// What the face should be doing.
+  ///
+  /// Two distinct states rather than one "busy": waiting on the first token and
+  /// watching text arrive feel completely different to sit through, and a
+  /// character that keeps thinking while it is visibly talking reads as broken.
+  static AgentMood _moodFor(CoachProvider coach) {
+    if (coach.isStreaming) return AgentMood.speaking;
+    if (coach.isLoading) return AgentMood.thinking;
+    return AgentMood.idle;
   }
 
   void _send(String raw) {
@@ -135,6 +155,13 @@ class _CoachScreenState extends State<CoachScreen> {
   Widget _buildChat(BuildContext context, OmColors c) {
     final memory = context.watch<MemoryProvider>();
     final isPremium = context.watch<PremiumProvider>().isPremium;
+    final agents = context.watch<AgentProvider>();
+    // Who is coaching goes in before the next turn is built. Watched rather
+    // than read once, so changing agent or nudging a slider takes effect on the
+    // next message rather than at next launch.
+    context.read<CoachProvider>()
+      ..setAgentBlock(agents.promptBlock)
+      ..setAgentName(agents.agent.name);
     return Consumer<CoachProvider>(
       builder: (context, coach, _) {
         // Free tier: after the daily message budget the composer locks behind
@@ -144,15 +171,26 @@ class _CoachScreenState extends State<CoachScreen> {
         // kept as a fallback for the offline case, but it is no longer the
         // thing that decides - it could be reset by clearing app data, which
         // made the cap advisory. See CoachProvider.refreshQuota.
-        final locked = !isPremium &&
-            (coach.limitReached ||
-                coach.messagesSentToday >= kFreeCoachMessageLimit);
+        // A refusal from the server locks the composer whatever the local
+        // premium flag says. The two can disagree - an entitlement that has
+        // lapsed or not yet synced leaves isPremium true here while the server
+        // says no - and when they did, the composer stayed open, every send
+        // was refused, and the message vanished with no explanation anywhere.
+        // The server is the authority on whether a turn is allowed.
+        // The server's refusal is the authority; the device counter is only a
+        // rough offline guard. It counts a day against a weekly allowance, so
+        // it can never be more permissive than the server - only slower to
+        // notice - which is the safe direction for a fallback to be wrong in.
+        final locked = coach.limitReached ||
+            (!isPremium && coach.messagesSentToday >= kCoachWeeklyLimit);
         // Auto-scroll whenever a new token arrives.
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (coach.isStreaming) _scrollToEnd();
         });
 
-        return Column(
+        return Scaffold(
+          backgroundColor: Colors.transparent,
+          body: Column(
           children: [
             // Messenger-style header: back to the previous tab, Mynd's avatar
             // with a live "active" dot, name + subtitle, and the connect chip.
@@ -165,39 +203,27 @@ class _CoachScreenState extends State<CoachScreen> {
                   // way out. If it was pushed (from history or a deep link) the
                   // arrow pops that route; on the tab there is nothing to pop, so
                   // it returns to whichever tab you came from instead.
-                  OmBackButton(onTap: () {
-                    if (Navigator.of(context).canPop()) {
-                      Navigator.of(context).maybePop();
-                    } else {
-                      context.read<NavProvider>().back();
-                    }
-                  }),
+                  // Chat is the first tab and the app opens on it, so there is
+                  // usually nothing to go back to: the control is the drawer,
+                  // which is the only route to side chats and to Profile. It
+                  // stays a back arrow when this screen was pushed from
+                  // somewhere, where popping is what the user means.
+                  if (Navigator.of(context).canPop())
+                    OmBackButton(onTap: () => Navigator.of(context).maybePop())
+                  else
+                    // The panel belongs to the shell, not to this screen: it
+                    // pushes the bottom bar aside too, and that bar is a level
+                    // above here.
+                    _DrawerButton(
+                        onTap: () => OmPushDrawer.of(context)?.open()),
                   const SizedBox(width: 4),
-                  Stack(
-                    children: [
-                      // The same living orb as the hero, small. One face for
-                      // Mynd everywhere, not a mascot up here and a blob below.
-                      //
-                      // This plays. It used to be .still(), which skips the
-                      // video and paints the gradient fallback, so the header
-                      // showed a peach blob that read as a missing image rather
-                      // than as Mynd. The avatar is the one place the face has
-                      // to be recognisable, so it gets the decoder.
-                      const FluidOrb(size: 42, glow: false),
-                      Positioned(
-                        right: 0,
-                        bottom: 0,
-                        child: Container(
-                          width: 12,
-                          height: 12,
-                          decoration: BoxDecoration(
-                            color: c.success,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: c.bg, width: 2),
-                          ),
-                        ),
-                      ),
-                    ],
+                  // The agent's face, and it is a button: tapping it is the
+                  // fastest route to switching who you are talking to.
+                  AgentAvatar(
+                    agent: agents.agent,
+                    size: 44,
+                    mood: _moodFor(coach),
+                    onTap: () => AgentPickerScreen.open(context),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
@@ -205,7 +231,7 @@ class _CoachScreenState extends State<CoachScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text('Mynd',
+                        Text(agents.agent.name,
                             style: Theme.of(context)
                                 .textTheme
                                 .titleLarge
@@ -215,45 +241,10 @@ class _CoachScreenState extends State<CoachScreen> {
                       ],
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  // Mid-conversation, the orb and its history button are
-                  // scrolled far above, so the way back to an old chat lives
-                  // up here too.
-                  OmTappable(
-                    onTap: () {
-                      Haptics.light();
-                      Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                            builder: (_) => const CoachHistoryScreen()),
-                      );
-                    },
-                    feedback: OmTapFeedback.none,
-                    pressedScale: 0.86,
-                    child: Container(
-                      width: 38,
-                      height: 38,
-                      margin: const EdgeInsets.only(right: 6),
-                      decoration: BoxDecoration(
-                          color: c.surfaceAlt, shape: BoxShape.circle),
-                      child: Icon(OmIcons.byName('history'),
-                          size: 17, color: c.text2),
-                    ),
-                  ),
-                  OmTappable(
-                    onTap: () {
-                      Haptics.light();
-                      context.read<CoachProvider>().startNewChat();
-                    },
-                    feedback: OmTapFeedback.none,
-                    pressedScale: 0.86,
-                    child: Container(
-                      width: 38,
-                      height: 38,
-                      decoration: BoxDecoration(
-                          color: c.surfaceAlt, shape: BoxShape.circle),
-                      child: Icon(Icons.add_rounded, size: 20, color: c.text2),
-                    ),
-                  ),
+                  // History and new chat used to sit here. Both are in the side
+                  // panel now, which is one tap away on the left of this very
+                  // row, and a control that exists twice on one screen is a
+                  // control somebody has to think about twice.
                 ],
               ),
             ),
@@ -278,12 +269,9 @@ class _CoachScreenState extends State<CoachScreen> {
                   if (coach.messages.length <= 1) {
                     if (i == 0) {
                       // The orb, then one way back into everything before it.
-                      return Column(
-                        children: [
-                          const _CoachHero(),
-                          _HistoryButton(count: coach.threads.length),
-                        ],
-                      );
+                      // Just the hero. The way back to an old chat is the
+                      // side panel, and this was the third place it appeared.
+                      return const _CoachHero();
                     }
                     i -= 1;
                     // Before anything else is asked of them, the one question
@@ -300,14 +288,32 @@ class _CoachScreenState extends State<CoachScreen> {
                 },
               ),
             ),
+            // SafeArea alone, and nothing added to it.
+            //
+            // The shell sets extendBody: true, and Flutter folds the bottom bar
+            // height INTO this body's MediaQuery bottom padding so content can
+            // clear it. So SafeArea already steps over the whole bar plus the
+            // home indicator. Every version of this that also added
+            // navBarHeight was counting the bar twice, which is where the band
+            // of dead page between the composer and the bar came from.
             SafeArea(
               bottom: true,
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(
+                // Clear the nav bar, which now runs underneath this screen.
+                // The shell uses extendBody so the glass bar has something to
+                // blur, which means the composer has to reserve that height
+                // itself or it sits behind the bar. The bar is hidden while the
+                // keyboard is up, so the room is given back then rather than
+                // leaving a strip of dead space above the keyboard.
+                padding: EdgeInsets.fromLTRB(
                   AppSpacing.screenH,
                   0,
                   AppSpacing.screenH,
-                  8,
+                  // SafeArea above has already stepped over the whole bar, so
+                  // this is only the breathing room between the composer and
+                  // the glyph row - which the reference has, rather than the
+                  // two being welded together.
+                  MediaQuery.of(context).viewInsets.bottom > 0 ? 8 : 10,
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -315,6 +321,9 @@ class _CoachScreenState extends State<CoachScreen> {
                     if (locked)
                       const _LimitReachedCard()
                     else ...[
+                      // Said before the wall, not at it. Silence followed by a
+                      // hard stop is what made running out feel like a bug.
+                      if (coach.quotaRunningLow) const _QuotaWarning(),
                       // Only show quick prompts if the user hasn't sent a message
                       // yet (messages.length <= 1 = only the welcome message).
                       if (coach.messages.length <= 1) ...[
@@ -341,8 +350,78 @@ class _CoachScreenState extends State<CoachScreen> {
               ),
             ), // Close SafeArea
           ],
+          ),
         );
       },
+    );
+  }
+}
+
+/// "12 messages left this week." Shown only near the end of the allowance.
+class _QuotaWarning extends StatelessWidget {
+  const _QuotaWarning();
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.omColors;
+    final coach = context.watch<CoachProvider>();
+    final left = coach.remainingToday;
+    if (left == null) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: OmTappable(
+        onTap: () => Navigator.of(context).pushNamed(AppRoutes.paywall),
+        feedback: OmTapFeedback.light,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          decoration: BoxDecoration(
+            color: c.attention.withValues(alpha: 0.14),
+            borderRadius: BorderRadius.circular(AppRadius.pill),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.info_outline_rounded, size: 15, color: c.attention),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  left <= 0
+                      ? 'No messages left this week'
+                      : '$left message${left == 1 ? '' : 's'} left this week',
+                  style: TextStyle(
+                      color: c.text,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The hamburger. Its own widget so the header row stays readable, and so the
+/// tap target is the full 46px the rest of the app's round controls use.
+class _DrawerButton extends StatelessWidget {
+  const _DrawerButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.omColors;
+    return OmTappable(
+      onTap: onTap,
+      feedback: OmTapFeedback.light,
+      child: Container(
+        width: 46,
+        height: 46,
+        alignment: Alignment.center,
+        child: Icon(OmIcons.byName('menu'), size: 22, color: c.text),
+      ),
     );
   }
 }
@@ -365,61 +444,6 @@ class _CoachSubtitle extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         style: Theme.of(context).textTheme.bodySmall,
       );
-}
-
-/// One quiet row under the orb that opens everything you have said before.
-///
-/// The whole list used to sit here. That made the first thing a new
-/// conversation showed you every old one, which is the opposite of a fresh
-/// start, and it grew without limit. One button with a count says the same
-/// thing in a line, and the searching happens on the screen it opens.
-class _HistoryButton extends StatelessWidget {
-  const _HistoryButton({required this.count});
-
-  final int count;
-
-  @override
-  Widget build(BuildContext context) {
-    if (count == 0) return const SizedBox.shrink();
-    final c = context.omColors;
-    return Padding(
-      padding: const EdgeInsets.only(top: AppSpacing.md),
-      child: OmTappable(
-        onTap: () {
-          Haptics.light();
-          Navigator.of(context).push(
-            MaterialPageRoute<void>(builder: (_) => const CoachHistoryScreen()),
-          );
-        },
-        feedback: OmTapFeedback.none,
-        pressedScale: 0.97,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-          decoration: BoxDecoration(
-            color: c.surface,
-            borderRadius: BorderRadius.circular(AppRadius.pill),
-            border: Border.all(color: c.border),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(OmIcons.byName('history'), size: 16, color: c.primary),
-              const SizedBox(width: 10),
-              Text(
-                count == 1 ? '1 earlier chat' : '$count earlier chats',
-                style: Theme.of(context)
-                    .textTheme
-                    .bodyMedium
-                    ?.copyWith(fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(width: 8),
-              Icon(OmIcons.byName('chevR'), size: 14, color: c.text2),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 class _ChatBubble extends StatelessWidget {
@@ -501,13 +525,47 @@ class _CoachHero extends StatelessWidget {
     final c = context.omColors;
     final name = context.watch<MemoryProvider>().preferredName;
     final greeting = (name != null && name.isNotEmpty) ? 'hey $name,' : 'hey,';
+    final agent = context.watch<AgentProvider>().agent;
 
     return Padding(
       padding: const EdgeInsets.only(top: 8, bottom: 30),
       child: Column(
         children: [
-          const FluidOrb(size: 132),
-          const SizedBox(height: 28),
+          AgentAvatar(
+            agent: agent,
+            size: 128,
+            mood: AgentMood.idle,
+            onTap: () => AgentPickerScreen.open(context),
+          ),
+          const SizedBox(height: 22),
+          // Who they are, said out loud, with the way to change it right there.
+          // The face alone does not tell somebody that the personality behind
+          // it is a choice.
+          OmTappable(
+            onTap: () => AgentPickerScreen.open(context),
+            feedback: OmTapFeedback.light,
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+              decoration: BoxDecoration(
+                color: c.surfaceAlt,
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(agent.name,
+                      style: const TextStyle(fontWeight: FontWeight.w800)),
+                  const SizedBox(width: 6),
+                  Text(agent.tagline,
+                      style: TextStyle(color: c.text2, fontSize: 13)),
+                  const SizedBox(width: 6),
+                  Icon(OmIcons.byName('chevR'), size: 15, color: c.text2),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 22),
           Text(
             greeting,
             textAlign: TextAlign.center,
@@ -655,8 +713,9 @@ class _NameCardState extends State<_NameCard> {
   }
 }
 
-/// Thinking. The orb is the indicator - it is already alive, so it says
-/// "someone is there" better than the words "Mynd is typing" ever did.
+/// Thinking. The agent's own face is the indicator: it is already animated,
+/// so it says "someone is there" better than the words "Mynd is typing" ever
+/// did, and it is the same character that is about to answer.
 class _TypingBubble extends StatelessWidget {
   const _TypingBubble();
 
@@ -667,7 +726,12 @@ class _TypingBubble extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 12, left: 2),
       child: Row(
         children: [
-          const FluidOrb.still(size: 26),
+          AgentAvatar(
+            agent: context.watch<AgentProvider>().agent,
+            size: 26,
+            mood: AgentMood.thinking,
+            showRing: false,
+          ),
           const SizedBox(width: 10),
           Text(
             'thinking…',
@@ -764,7 +828,8 @@ class _LimitReachedCard extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'Free plan includes $kFreeCoachMessageLimit messages a day. Upgrade to Plus to keep talking to Mynd without limits.',
+            'Free includes $kCoachWeeklyLimit messages a week, and they reset '
+            'every Monday. Plus raises it to 1,000 and Pro removes the cap.',
             style:
                 Theme.of(context).textTheme.bodySmall?.copyWith(color: c.text2, height: 1.4),
           ),
@@ -793,6 +858,65 @@ class _LimitReachedCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// The send key.
+///
+/// It was a gradient square with a coloured drop shadow, which is three effects
+/// doing one job and read as a decal stuck on the composer. A flat circle in
+/// the brand colour is what a send key looks like in every app anybody has used
+/// this decade, and the circle matches the round controls in the header rather
+/// than introducing a fourth corner radius.
+///
+/// It also goes quiet when there is nothing to send, which the old one did not:
+/// a permanently bright button on an empty field is an invitation to press
+/// something that cannot do anything.
+class _SendKey extends StatelessWidget {
+  const _SendKey({required this.controller, required this.onSend});
+
+  final TextEditingController controller;
+  final ValueChanged<String> onSend;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.omColors;
+    // Listens to the field itself rather than lifting the text into the
+    // screen's state, so typing does not rebuild the message list on every
+    // keystroke.
+    return ValueListenableBuilder<TextEditingValue>(
+      valueListenable: controller,
+      builder: (context, value, _) {
+        final ready = value.text.trim().isNotEmpty;
+        return Semantics(
+          label: 'send',
+          button: true,
+          enabled: ready,
+          child: OmTappable(
+            onTap: ready ? () => onSend(controller.text) : null,
+            enabled: ready,
+            feedback: OmTapFeedback.none,
+            pressedScale: 0.9,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              curve: Curves.easeOut,
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: ready ? c.primary : c.text2.withValues(alpha: 0.16),
+                shape: BoxShape.circle,
+              ),
+              alignment: Alignment.center,
+              child: Icon(
+                Icons.arrow_upward_rounded,
+                size: 20,
+                color: ready ? Colors.white : c.text2,
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -847,39 +971,7 @@ class _CoachInput extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 6),
-            // The send key from the reference: a soft brand-tinted square with an
-            // arrow, not a hard coral disc. It belongs to the same family as the
-            // orb above it, which is the point.
-            OmTappable(
-              onTap: () => onSend(controller.text),
-              feedback: OmTapFeedback.none,
-              pressedScale: 0.88,
-              child: Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(15),
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Color.lerp(c.primary, Colors.white, 0.62)!,
-                      Color.lerp(c.primary, c.accent, 0.30)!,
-                    ],
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: c.primary.withValues(alpha: 0.30),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                alignment: Alignment.center,
-                child: const Icon(Icons.arrow_upward_rounded,
-                    color: Colors.white, size: 20),
-              ),
-            ),
+            _SendKey(controller: controller, onSend: onSend),
           ],
         ),
       ),

@@ -1,10 +1,13 @@
 import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
 import 'dart:typed_data' show Uint8List;
 import 'package:http/http.dart' as http;
 
 import 'account_scope.dart';
 import 'api_config.dart';
 import 'session_store.dart';
+import '../../models/news_item.dart';
 import '../../models/community/blocked_user.dart';
 import '../../models/music_search_result.dart';
 import '../../models/community/post.dart';
@@ -309,6 +312,38 @@ class ApiClient {
         if (snapshot != null && snapshot.isNotEmpty) 'snapshot': snapshot,
       });
 
+  /// Stories for the Feed, for a topic or a place.
+  ///
+  /// Fetched through our server rather than here: a news provider's key must
+  /// not sit in the binary, the keyed plans refuse mobile origins anyway, and
+  /// parsing somebody else's feed format is easier to repair in a deploy than
+  /// in a release. Returns empty rather than throwing, because the Feed should
+  /// lose cards on a bad day, not become an error screen.
+  Future<List<NewsItem>> fetchNews(String query, {int limit = 12}) async {
+    try {
+      final j = await _get(
+        '/api/news?q=${Uri.encodeQueryComponent(query)}&limit=$limit',
+      );
+      final items = ((j['items'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((m) => NewsItem.fromJson(m.cast<String, dynamic>()))
+          .whereType<NewsItem>()
+          .toList();
+      if (items.isEmpty) {
+        // The server says why when it can.
+        final why = j['reason'] as String? ?? 'no reason given';
+        debugPrint('[news] "$query" returned 0 items: $why');
+      }
+      return items;
+    } catch (e) {
+      // Logged, not swallowed silently. An empty Feed used to be
+      // indistinguishable from a failing one, which cost an afternoon working
+      // out that the route did not exist in production.
+      debugPrint('[news] "$query" failed: $e');
+      return const [];
+    }
+  }
+
   /// Find music by name. Best match first.
   ///
   /// The search runs on our server rather than here so the app carries no
@@ -441,10 +476,16 @@ class ApiClient {
   /// The coach reply itself is generated on the device by Puter, so this is the
   /// only point at which the server can enforce the cap - which is exactly why
   /// it exists rather than the count being kept locally.
-  Future<({bool premium, int? remaining})> spendCoachTurn() async {
+  Future<({bool premium, int? remaining, int? used, int? limit})>
+      spendCoachTurn() async {
     try {
       final j = await _post('/api/coach/turn', {});
-      return (premium: j['premium'] == true, remaining: j['remaining'] as int?);
+      return (
+        premium: j['premium'] == true,
+        remaining: j['remaining'] as int?,
+        used: j['used'] as int?,
+        limit: j['limit'] as int?,
+      );
     } on ApiException catch (e) {
       if (e.statusCode == 402) throw const CoachTurnRefused();
       rethrow;

@@ -148,7 +148,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   onTap: () {
                     Haptics.select();
                     context.read<AlertsProvider>().markAllRead();
-                    context.read<NavProvider>().select(AppTab.today /* community parked */);
+                    context.read<NavProvider>().select(AppTab.feed /* community parked */);
                   },
                 ),
                 const SizedBox(height: 10),

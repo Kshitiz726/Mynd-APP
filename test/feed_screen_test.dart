@@ -305,12 +305,16 @@ void main() {
 
     expect(image.dy, greaterThan(title.dy),
         reason: 'the picture is above the writing again');
+    // And flush with the writing rather than a gutter further left, which is
+    // what made it look pasted onto the card.
+    expect(image.dx, closeTo(title.dx, 0.5),
+        reason: 'the picture is not aligned with the text column');
   });
 
-  testWidgets('nothing is reserved at the top for a motivation line that does '
-      'not exist yet', (tester) async {
-    // The reported symptom was "there is nothing, and huge gap": the card's
-    // own empty state, which is an invitation on Home and dead space here.
+  testWidgets('the day line stays at the top of the feed', (tester) async {
+    // Taken out once, when its empty state read as a panel that had failed to
+    // load, and asked for back. It is the one thing on this screen that is
+    // about the reader rather than about the world.
     SharedPreferences.setMockInitialValues(storedWith([
       edition('2026-09-22:morning', 'Tuesday morning', '2026-09-22T09:00:00'),
     ]));
@@ -319,7 +323,8 @@ void main() {
     await tester.pumpWidget(host());
     await settle(tester);
 
-    expect(find.text('a few words a day, for where you are'), findsNothing,
-        reason: 'the empty motivation panel is back at the top of the feed');
+    expect(find.text('a few words a day, for where you are'), findsOneWidget,
+        reason: 'the day line belongs at the top of the feed, and its empty '
+            'state is the way in to setting it up');
   });
 }

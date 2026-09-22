@@ -18,6 +18,14 @@ import '../../../core/theme/app_colors.dart';
 /// there is nothing to do, and that should read as permission rather than as a
 /// gap where content failed to arrive.
 
+/// PARKED. Nothing builds this today.
+///
+/// "do this now" is the top of the Schedule tab, and a congratulation filling
+/// the first screenful whenever the backlog happens to be empty is a banner for
+/// an ordinary state. The empty case collapses to nothing instead. Kept because
+/// the drawing is fine and the decision was about where it appeared, not about
+/// the art.
+///
 /// "You're all caught up" - the do-this-now empty state.
 ///
 /// A low sun over a horizon, in the app's own coral and lilac.

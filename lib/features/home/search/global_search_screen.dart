@@ -95,7 +95,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
         title: t.title,
         subtitle: t.done ? 'task · done' : 'task · ${t.energy.label} energy',
         icon: 'list',
-        onTap: () => _go(() => nav.select(AppTab.today)),
+        onTap: () => _go(() => nav.select(AppTab.feed)),
       ));
     }
     if (taskHits.isNotEmpty) {
@@ -118,7 +118,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
           title: s.title,
           subtitle: 'step · ${g.title}',
           icon: 'activity',
-          onTap: () => _go(() => nav.select(AppTab.today)),
+          onTap: () => _go(() => nav.select(AppTab.feed)),
         ));
       }
     }
@@ -134,7 +134,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
         subtitle: cv.isGroup ? 'group chat' : 'direct message',
         icon: cv.isGroup ? 'users' : 'user',
         onTap: () => _go(() {
-          nav.select(AppTab.today /* community parked */);
+          nav.select(AppTab.feed /* community parked */);
           chat.openChat(
             id: cv.id,
             title: cv.title,
@@ -150,7 +150,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
         title: g.name,
         subtitle: 'group · ${g.membersLabel}',
         icon: 'users',
-        onTap: () => _go(() => nav.select(AppTab.today /* community parked */)),
+        onTap: () => _go(() => nav.select(AppTab.feed /* community parked */)),
       ));
     }
     if (chatHits.isNotEmpty) {
@@ -164,7 +164,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
         title: p.body,
         subtitle: 'post · ${p.authorName}',
         icon: 'message',
-        onTap: () => _go(() => nav.select(AppTab.today /* community parked */)),
+        onTap: () => _go(() => nav.select(AppTab.feed /* community parked */)),
       ));
     }
     if (postHits.isNotEmpty) {
@@ -178,7 +178,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
         title: '${req.displayName} wants to follow you',
         subtitle: 'follow request',
         icon: 'userPlus',
-        onTap: () => _go(() => nav.select(AppTab.today)),
+        onTap: () => _go(() => nav.select(AppTab.feed)),
       ));
     }
     for (final n in alerts.allNotifications.where((n) {
@@ -189,7 +189,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
         title: (n.payload['name'] ?? n.payload['body'] ?? n.kind).toString(),
         subtitle: 'notification',
         icon: 'bell',
-        onTap: () => _go(() => nav.select(AppTab.today)),
+        onTap: () => _go(() => nav.select(AppTab.feed)),
       ));
     }
     if (notifHits.isNotEmpty) {

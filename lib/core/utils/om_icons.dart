@@ -46,6 +46,9 @@ abstract final class OmIcons {
     'plus': LucideIcons.plus,
     'plus-circle': LucideIcons.circlePlus,
     'search': LucideIcons.search,
+    'menu': LucideIcons.menu,
+    'archive': LucideIcons.archive,
+    'newspaper': LucideIcons.newspaper,
     'star': LucideIcons.star,
     'heart': LucideIcons.heart,
     'mic': LucideIcons.mic,
@@ -62,6 +65,8 @@ abstract final class OmIcons {
     'send': LucideIcons.send,
     'calendar': LucideIcons.calendarDays,
     'settings': LucideIcons.settings,
+    'sliders': LucideIcons.slidersHorizontal,
+    'info': LucideIcons.info,
     'play': LucideIcons.play,
     'pause': LucideIcons.pause,
     // Chrome / community.

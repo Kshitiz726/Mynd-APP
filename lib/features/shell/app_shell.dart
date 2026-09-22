@@ -7,6 +7,7 @@ import '../../providers/alerts_provider.dart';
 import '../../providers/chat_provider.dart';
 import '../../providers/settings_provider.dart';
 import 'widgets/animated_index_stack.dart';
+import '../../providers/feed_provider.dart';
 import '../../providers/focus_provider.dart';
 import '../../providers/nav_provider.dart';
 // app_colors only served the parked (+) create sheet.
@@ -14,19 +15,21 @@ import '../../providers/nav_provider.dart';
 import '../../widgets/low_stim_filter.dart';
 import '../../widgets/memory_autopilot.dart';
 import '../../widgets/notification_primer.dart';
+import '../../widgets/om_push_drawer.dart';
 // Community and Profile are parked as tabs (see _tabs); imports kept commented
 // so the wiring is one line away when they come back.
 // import '../community/community_screen.dart';
 // import '../profile/profile_screen.dart';
 import '../coach/coach_screen.dart';
+import '../coach/widgets/chat_drawer.dart';
 import '../focus/focus_active_screen.dart';
 import '../focus/focus_room_screen.dart';
 import '../focus/focus_screen.dart';
 import '../schedule/schedule_screen.dart';
 import '../../core/routes/app_routes.dart';
 import '../../providers/focus_room_provider.dart';
-import '../home/home_screen.dart';
 import '../../widgets/focus_invite_listener.dart';
+import '../feed/feed_screen.dart';
 import 'widgets/live_focus_pill.dart';
 import 'widgets/om_nav_bar.dart';
 import '../home/widgets/quick_add_sheet.dart';
@@ -40,18 +43,24 @@ class AppShell extends StatefulWidget {
 }
 
 class _AppShellState extends State<AppShell> {
-  /// Tab order must match [AppTab.values]: home · schedule · focus · chat.
+  /// Tab order must match [AppTab.values]: chat · feed · schedule · focus.
   ///
-  /// Focus and the coach are full destinations now, not routes behind a (+).
-  /// [FocusTabShell] swaps between the setup screen and the running timer so the
-  /// tab is always "where focus is" rather than a dead form while a session
-  /// runs. Community and Profile are parked - the screens still exist, they are
-  /// just no longer tabs (Profile opens from the Home avatar).
+  /// Chat is first and is where the app opens: it is the thing people come back
+  /// for, and putting a dashboard in front of it made them navigate to reach it.
+  /// Home is parked as a result, its pieces redistributed rather than dropped -
+  /// the day's line, the one actionable task and the mood check-in are the top
+  /// of Feed, and goals sit with the rest of the plan on Schedule.
+  ///
+  /// Profile moved with it, to the chat drawer's gear. Home's avatar was the
+  /// only route to account deletion, blocked accounts and support, so parking
+  /// the tab without moving that first would have taken three App Store
+  /// requirements off the map.
   static const List<Widget> _tabs = [
-    HomeScreen(),
+    CoachScreen(),
+    FeedScreen(),
     ScheduleScreen(),
     FocusTabShell(),
-    CoachScreen(),
+    // HomeScreen(),      -> its pieces live on Feed and Schedule now
     // CommunityScreen(),
     // ProfileScreen(),
   ];
@@ -70,6 +79,12 @@ class _AppShellState extends State<AppShell> {
       context.read<AlertsProvider>()
         ..init()
         ..load();
+      // The Feed is written, not fetched, and writing takes a few seconds.
+      // Starting it here rather than in the tab's own initState means it is
+      // ready when somebody opens it instead of making them watch it compose.
+      // Rate limited to one edition per day-part, so this is at most a handful
+      // of calls a day however often the app is opened.
+      context.read<FeedProvider>().load();
       _askForNotifications();
     });
   }
@@ -113,18 +128,29 @@ class _AppShellState extends State<AppShell> {
     // A running solo session is immersive too: on the Focus tab the timer owns
     // the screen and the only way out is its own back button (which confirms).
     final inFocusSession = focus.isActive && nav.tab == AppTab.focus;
-    // The coach is a conversation, and a conversation owns the screen. The bar
-    // sat under the composer stealing thumb-room and breaking the one flow the
-    // app is named for. CoachScreen carries its own back arrow precisely
-    // because the bar is not here, so nothing is stranded by this.
-    final inCoach = nav.tab == AppTab.coach;
-    final hideNav =
-        inFocusRoom || inChat || keyboardUp || inFocusSession || inCoach;
+    // The coach used to hide the bar: it was a destination you navigated to,
+    // it owned the screen, and its own back arrow was the way out.
+    //
+    // It is the first tab now, and the app opens on it, so hiding the bar there
+    // means launching with no navigation at all and no way to reach Feed,
+    // Schedule or Focus. The reference design keeps the bar on the chat screen
+    // for exactly this reason. The keyboard case below still hides it, which is
+    // what was actually costing thumb-room while typing.
+    final hideNav = inFocusRoom || inChat || keyboardUp || inFocusSession;
 
     return MemoryAutopilot(
       child: FocusInviteListener(
         child: LowStimFilter(
-        child: Scaffold(
+        // The chat's index lives out here rather than inside CoachScreen
+        // because the panel pushes the whole app aside, bottom bar included,
+        // and the bottom bar belongs to this Scaffold. An edge drag only opens
+        // it on the chat tab - elsewhere a horizontal swipe means the week
+        // rail or a carousel, and stealing that would be worse than the panel
+        // being one button away.
+        child: OmPushDrawer(
+          panel: const ChatDrawer(),
+          dragEnabled: nav.tab == AppTab.coach && !inFocusRoom && !inChat,
+          child: Scaffold(
           // The nav bar is glass, and glass needs something behind it. Without
           // extendBody the Scaffold reserves a strip of its own background colour
           // under the bar, so the capsule floats on an opaque slab and the blur
@@ -204,6 +230,7 @@ class _AppShellState extends State<AppShell> {
                   onAdd: () => showQuickAddSheet(context),
                 ),
           ),
+        ),
         ),
       ),
     );

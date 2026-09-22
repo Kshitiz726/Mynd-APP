@@ -79,6 +79,11 @@ dependencies:
   geolocator: ^14.0.3
   geocoding: ^5.0.0
   device_calendar: ^4.3.3
+  mailer: ^7.2.0
+  # Reading the inbox. An app password authenticates SMTP and IMAP both, so
+  # this is what lets the coach summarise mail without Google having to verify
+  # and annually re-assess the app for a restricted API scope.
+  enough_mail: ^2.1.6
 
 dev_dependencies:
   flutter_lints: ^4.0.0
@@ -101,6 +106,10 @@ flutter:
   assets:
     - assets/audio/
     - assets/puter/
+    # The agent faces. Shipped rather than fetched: the avatar is on screen
+    # before anything else has loaded, and a coach with a missing face is worse
+    # than a coach with a plain one.
+    - assets/agents/
     # The app icon, bundled so the splash and login screens can show the same
     # mark the user tapped. flutter_launcher_icons only reads it at build time;
     # displaying it inside the app needs it shipped as well.

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 
-/// The primary bottom-navigation destinations: home · schedule · focus · chat.
+/// The primary bottom-navigation destinations: chat · feed · schedule · focus.
 ///
 /// Focus and the coach used to be things you *started* from a centre (+) and
 /// opened as full-screen routes; they are first-class destinations now, and the
@@ -15,23 +14,39 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 /// only changes colour is easy to lose at a glance, and a filled shape reads as
 /// "you are here" from the corner of the eye, which is the whole job of a tab
 /// bar. The pair is drawn as a cross-fade so nothing pops.
+///
+/// Both halves of every pair are the SAME glyph, outlined and filled, which is
+/// why these are Material rather than the Lucide set used everywhere else in
+/// the app. Lucide is outline-only, so each tab had to borrow a filled Material
+/// icon for its selected state, and the two were never the same drawing: the
+/// calendar changed from a dotted page to a grid and the newspaper to a sheet
+/// of lines. A cross-fade can hide a change of weight. It cannot hide a change
+/// of shape, so selecting a tab looked like the icon being swapped for a
+/// different one.
 enum AppTab {
-  today(label: 'home', icon: LucideIcons.house, activeIcon: Icons.home_rounded),
+  // Chat's pair is drawn by hand in the nav bar - Material has no circular
+  // filled bubble - so these two are only the fallback for anywhere else that
+  // reads them.
+  coach(
+      label: 'chat',
+      icon: Icons.chat_bubble_outline_rounded,
+      activeIcon: Icons.chat_bubble_rounded),
+  feed(
+      label: 'feed',
+      icon: Icons.newspaper_outlined,
+      activeIcon: Icons.newspaper_rounded),
   schedule(
       label: 'schedule',
-      icon: LucideIcons.calendarDays,
+      icon: Icons.calendar_month_outlined,
       activeIcon: Icons.calendar_month_rounded),
   focus(
       label: 'focus',
-      icon: LucideIcons.timer,
-      activeIcon: Icons.timer_rounded),
-  coach(
-      label: 'chat',
-      icon: LucideIcons.messageCircle,
-      activeIcon: Icons.chat_bubble_rounded);
-  // Parked for now - keep the code, off the bar:
-  // community(label: 'community', icon: LucideIcons.users, activeIcon: Icons.people_rounded),
-  // settings(label: 'settings', icon: LucideIcons.settings, activeIcon: Icons.settings_rounded);
+      icon: Icons.timer_outlined,
+      activeIcon: Icons.timer_rounded);
+  // Parked - the screens still exist, they are just off the bar:
+  // today   -> its pieces moved to Feed (quote, do-this-now, mood) and
+  //            Schedule (goals); Profile opens from the chat drawer's gear.
+  // community(label: 'community', icon: Icons.groups_outlined, ...)
 
   const AppTab({required this.label, required this.icon, required this.activeIcon});
 
@@ -47,8 +62,8 @@ enum AppTab {
 /// Holds the selected tab so both the nav bar and in-content shortcuts (e.g.
 /// the Home avatar opening "you") can drive navigation without prop-drilling.
 class NavProvider extends ChangeNotifier {
-  AppTab _tab = AppTab.today;
-  AppTab _prev = AppTab.today;
+  AppTab _tab = AppTab.coach;
+  AppTab _prev = AppTab.coach;
 
   AppTab get tab => _tab;
 
@@ -65,7 +80,7 @@ class NavProvider extends ChangeNotifier {
   }
 
   /// Return to the previously-selected tab (defaults to Today).
-  void back() => select(_prev == _tab ? AppTab.today : _prev);
+  void back() => select(_prev == _tab ? AppTab.coach : _prev);
 
   void selectIndex(int index) => select(AppTab.values[index]);
 }

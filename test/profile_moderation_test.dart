@@ -54,6 +54,10 @@ void main() {
     await tester.pump();
 
     await tester.ensureVisible(find.text('Blocked accounts'));
+    // The settings list grew, so this row now needs a real scroll to reach.
+    // ensureVisible only *starts* it; without settling, the tap fires at the
+    // coordinates the row had before the list moved.
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Blocked accounts'));
     await tester.pumpAndSettle();
 
