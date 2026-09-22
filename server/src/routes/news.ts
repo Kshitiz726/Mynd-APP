@@ -301,6 +301,83 @@ async function fromNewsApi(query: string, limit: number): Promise<NewsItem[]> {
     }));
 }
 
+/** Same story from two sources is still one story. */
+function dedupeKey(u: string): string {
+  try {
+    const x = new URL(u);
+    return x.hostname.replace(/^www\./, '') + x.pathname.replace(/\/$/, '');
+  } catch {
+    return u;
+  }
+}
+
+/** How much of a headline survives in another one. 1 means every word of it. */
+function titleOverlap(a: string, b: string): number {
+  const words = (t: string) =>
+    new Set(
+      t.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter((w) => w.length > 3),
+    );
+  const A = words(a);
+  const B = words(b);
+  if (A.size < 3) return 0;
+  let n = 0;
+  for (const w of A) if (B.has(w)) n++;
+  return n / A.size;
+}
+
+const realUrlCache = new Map<string, { at: number; url: string | null }>();
+
+/**
+ * The real article behind a Google News headline.
+ *
+ * Google's links are opaque redirects: they never reach the publisher server
+ * side, so they can carry no picture, and the "read the original" button on a
+ * card opens a Google page rather than the reporting. Searching Bing for the
+ * headline finds the same story on the publisher's own site about a third of
+ * the time, which is a third of the feed's cards gaining both.
+ *
+ * The title gate is the whole safety of this. Bing answers almost any headline
+ * with something, and without the gate it quietly returned a different article
+ * on most queries - measured, 7 of 10. A real picture under somebody else's
+ * headline is a worse failure than no picture, so anything below a near total
+ * word match is refused.
+ */
+async function realArticleFor(headline: string): Promise<string | null> {
+  const head = plainAttr(headline).replace(/\s+-\s+[^-]{2,40}$/, '').trim();
+  if (head.length < 15) return null;
+
+  const hit = realUrlCache.get(head);
+  if (hit && Date.now() - hit.at < IMAGE_TTL_MS) return hit.url;
+
+  let found: string | null = null;
+  try {
+    const res = await fetch(
+      `https://www.bing.com/news/search?q=${encodeURIComponent(head)}&format=RSS`,
+      {
+        headers: { 'User-Agent': BROWSER_UA, Accept: 'application/rss+xml, */*' },
+        signal: AbortSignal.timeout(6000),
+      },
+    );
+    if (res.ok) {
+      const xml = await res.text();
+      for (const m of xml.matchAll(/<item>([\s\S]*?)<\/item>/g)) {
+        const block = m[1];
+        const title = tag(block, 'title');
+        const link = block.match(/<link>([\s\S]*?)<\/link>/)?.[1]?.trim();
+        if (!title || !link) continue;
+        if (titleOverlap(head, title) < 0.8) continue;
+        found = bingRealUrl(link);
+        break;
+      }
+    }
+  } catch {
+    /* no better link, which is a supported state */
+  }
+
+  realUrlCache.set(head, { at: Date.now(), url: found });
+  return found;
+}
+
 /**
  * GET /api/news?q=<topic or place>&limit=<n>
  *
@@ -318,25 +395,62 @@ r.get('/news', requireAuth, async (req, res) => {
   }
 
   try {
-    // Three sources, in descending order of what they can give a card.
-    //
     // NewsAPI first when a key is configured: it returns a real image field
     // outright, so no page has to be fetched at all.
-    //
-    // Bing second, and it is the one that makes a keyless feed look like
-    // anything: real publisher URLs, so og:image can find real pictures.
-    //
-    // Google News last, as the thing that always answers. It can never carry
-    // a picture, so those editions are text-only - better than empty.
-    let items = NEWS_API_KEY ? await fromNewsApi(q, limit) : [];
-    if (items.length === 0) {
-      try {
-        items = await fromBing(q, limit);
-      } catch (e) {
-        console.warn('[news] bing failed', e);
+    const items: NewsItem[] = NEWS_API_KEY ? await fromNewsApi(q, limit) : [];
+
+    if (items.length < limit) {
+      // Bing and Google are asked together, and their answers are merged.
+      //
+      // This used to stop at the first source that returned anything, and that
+      // is why the feed had no pictures. Bing is the only keyless source whose
+      // links reach a publisher, so it is the only one og:image can work from,
+      // but on any given query it may return two items or none. Falling
+      // through on empty meant one thin moment at Bing sent the whole edition
+      // to Google News, which can never carry a picture at all. Asking both
+      // costs one parallel request, and a thin Bing answer gets topped up
+      // instead of thrown away.
+      const [bing, google] = await Promise.all([
+        fromBing(q, limit).catch((e) => {
+          console.warn('[news] bing failed', e);
+          return [] as NewsItem[];
+        }),
+        fromRss(q, limit).catch((e) => {
+          console.warn('[news] google failed', e);
+          return [] as NewsItem[];
+        }),
+      ]);
+
+      // Bing first: those are the ones that can carry a picture.
+      const seen = new Set(items.map((i) => dedupeKey(i.url)));
+      for (const i of [...bing, ...google]) {
+        const k = dedupeKey(i.url);
+        if (seen.has(k)) continue;
+        seen.add(k);
+        items.push(i);
+        if (items.length >= limit) break;
       }
+      console.log(
+        `[news] "${q}": bing=${bing.length} google=${google.length} -> ${items.length}`,
+      );
     }
-    if (items.length === 0) items = await fromRss(q, limit);
+
+    // Swap Google's redirects for the publisher's own page where the same
+    // headline can be found on Bing. Bounded, because it is a request each.
+    const opaque = items.filter((i) => i.url.includes('news.google.com')).slice(0, 6);
+    if (opaque.length > 0) {
+      const real = await Promise.all(opaque.map((i) => realArticleFor(i.title)));
+      opaque.forEach((item, n) => {
+        const better = real[n];
+        if (better) {
+          item.url = better;
+          item.source = item.source ?? hostOf(better);
+        }
+      });
+      console.log(
+        `[news] "${q}": resolved ${real.filter(Boolean).length} of ${opaque.length} google links`,
+      );
+    }
 
     // Pictures, in parallel, for whatever has none. Parallel because this is
     // the slow part and doing it in series would put ten seconds on a feed
@@ -352,6 +466,9 @@ r.get('/news', requireAuth, async (req, res) => {
     // Only cache a real answer. Caching an empty list pins the failure in
     // place for ten minutes, so one bad moment upstream becomes an empty feed
     // for everybody until the TTL expires.
+    console.log(
+      `[news] "${q}": ${items.filter((i) => i.imageUrl).length} of ${items.length} have a picture`,
+    );
     if (items.length > 0) cache.set(key, { at: Date.now(), items });
     res.json({
       items,
