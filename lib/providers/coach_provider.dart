@@ -11,12 +11,19 @@ import '../core/services/api_config.dart';
 import '../core/services/coach_context_builder.dart';
 import '../core/services/coach_memory_service.dart';
 import '../core/services/coach_prompt_builder.dart';
+import '../core/services/feed_instructions_service.dart';
 import '../core/services/groq_service.dart';
+import '../core/services/email_intent.dart';
+import '../core/services/mail_service.dart';
+import '../core/services/reminder_intent.dart';
+import '../core/services/turn_context.dart';
+import 'calendar_provider.dart';
 import 'energy_provider.dart';
 import 'focus_provider.dart';
 import 'habit_provider.dart';
 import 'health_consent_provider.dart';
 import 'mood_provider.dart';
+import 'reminders_provider.dart';
 import 'settings_provider.dart';
 import 'task_provider.dart';
 
@@ -36,6 +43,45 @@ import 'task_provider.dart';
 ///     ├─ GroqService          Groq messages → SSE stream
 ///     └─ CoachMemoryService   persistence (summary + brain dumps)
 class CoachProvider extends ChangeNotifier {
+  /// Late-bound so main.dart can build the providers in any order, and so the
+  /// coach stays constructible in a test host with no reminder store.
+  RemindersProvider? _reminders;
+
+  void bindReminders(RemindersProvider r) => _reminders = r;
+
+  /// Who is coaching, and how they have been tuned, as prompt text.
+  ///
+  /// Pushed in from the widget tree rather than read from a provider here: this
+  /// class has no BuildContext, and a hard dependency on AgentProvider would
+  /// mean every test that builds a coach has to build an agent too.
+  ///
+  /// Deliberately does not notify: it is read at the top of the next turn, and
+  /// notifying from the build that sets it would loop.
+  String _agentBlock = '';
+
+  /// Who is coaching, by name, for the opening line.
+  String _agentName = 'Mynd';
+
+  void setAgentBlock(String block) => _agentBlock = block;
+
+  /// The phone's calendar, for turns that ask about the day. Late-bound like
+  /// the reminder store, so the coach stays constructible without one.
+  CalendarProvider? _calendar;
+  void bindCalendar(CalendarProvider c) => _calendar = c;
+
+  /// Set alongside the block. Changing agent rewrites the opening line of a
+  /// conversation that has not started yet, so the greeting is never from
+  /// somebody who is no longer there. An exchange already under way is left
+  /// alone: rewriting history would be worse than an old name in it.
+  void setAgentName(String name) {
+    if (_agentName == name) return;
+    _agentName = name;
+    if (_messages.length == 1 && _messages.first.id == 'welcome') {
+      _messages[0] = ChatMessage.welcome(_name, agentName: _agentName);
+      notifyListeners();
+    }
+  }
+
   CoachProvider({
     required EnergyProvider energy,
     required TaskProvider tasks,
@@ -106,7 +152,7 @@ class CoachProvider extends ChangeNotifier {
     if (value == _preferredName) return;
     _preferredName = value;
     if (_messages.length == 1 && _messages.first.id == 'welcome') {
-      _messages[0] = ChatMessage.welcome(_name);
+      _messages[0] = ChatMessage.welcome(_name, agentName: _agentName);
       notifyListeners();
     }
   }
@@ -114,16 +160,40 @@ class CoachProvider extends ChangeNotifier {
   final _contextBuilder = CoachContextBuilder.instance;
   final _promptBuilder = CoachPromptBuilder.instance;
 
-  /// True when the server has refused this turn because today's free-tier
-  /// budget is spent. Drives the paywall, and is cleared by an upgrade or by
-  /// the next local midnight.
+  /// True when the server has refused this turn because the week's budget is
+  /// spent. Drives the paywall, and is cleared by an upgrade or by the reset.
   bool _limitReached = false;
   bool get limitReached => _limitReached;
 
-  /// How many turns are left today, as the *server* counts them. Null means
-  /// unlimited (premium) or not yet known.
+  /// How many messages are left this week, as the *server* counts them. Null
+  /// means uncapped (Pro) or not yet known.
   int? _remainingToday;
   int? get remainingToday => _remainingToday;
+
+  /// Used and allowed this week, straight from the server. Null until a quota
+  /// call has come back.
+  int? _usedThisWeek;
+  int? _weeklyLimit;
+  DateTime? _resetsAt;
+
+  int? get usedThisWeek => _usedThisWeek;
+  int? get weeklyLimit => _weeklyLimit;
+
+  /// When the allowance rolls over. Shown rather than implied: "you have run
+  /// out" without "and it comes back on Monday" reads as permanent.
+  DateTime? get quotaResetsAt => _resetsAt;
+
+  /// True once enough of the week's budget is gone to be worth warning about.
+  ///
+  /// Silence until the wall, then a hard stop, is the pattern that made this
+  /// feel broken. A number that appears with a fifth of the budget left gives
+  /// somebody the chance to spend the rest deliberately.
+  bool get quotaRunningLow {
+    final limit = _weeklyLimit;
+    final left = _remainingToday;
+    if (limit == null || left == null) return false;
+    return left <= (limit * 0.2).ceil();
+  }
 
   /// Ask the server where this account stands, without spending a turn.
   ///
@@ -133,11 +203,18 @@ class CoachProvider extends ChangeNotifier {
     if (ApiConfig.instance.authToken == null) return;
     try {
       final j = await ApiClient.instance.coachQuota();
-      final premium = j['premium'] == true;
-      _remainingToday = premium ? null : (j['remaining'] as int?);
-      _limitReached = !premium && (_remainingToday ?? 1) <= 0;
+      _weeklyLimit = j['limit'] as int?;
+      _usedThisWeek = j['used'] as int?;
+      _remainingToday = j['remaining'] as int?;
+      _resetsAt = DateTime.tryParse((j['resetsAt'] as String?) ?? '');
+      // Uncapped tiers report a null limit, and must never read as "0 left".
+      _limitReached = _weeklyLimit != null && (_remainingToday ?? 1) <= 0;
+      debugPrint('[coach] quota: used=$_usedThisWeek limit=$_weeklyLimit '
+          'remaining=$_remainingToday locked=$_limitReached '
+          'resets=$_resetsAt');
       notifyListeners();
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[coach] quota check failed: $e');
       // A quota we cannot read must not lock the composer: the turn itself is
       // still checked server side, so the worst case is one refused send with
       // a clear message rather than a coach that looks broken while offline.
@@ -249,7 +326,7 @@ class CoachProvider extends ChangeNotifier {
     _archiveCurrent();
     _messages
       ..clear()
-      ..add(ChatMessage.welcome(_name));
+      ..add(ChatMessage.welcome(_name, agentName: _agentName));
     _sinceCondense = 0;
     notifyListeners();
     await _persistThreads();
@@ -316,7 +393,7 @@ class CoachProvider extends ChangeNotifier {
   Future<void> _init() async {
     await _memory.init();
     await _restore();
-    if (_messages.isEmpty) _messages.add(ChatMessage.welcome(_name));
+    if (_messages.isEmpty) _messages.add(ChatMessage.welcome(_name, agentName: _agentName));
     notifyListeners();
   }
 
@@ -373,7 +450,7 @@ class CoachProvider extends ChangeNotifier {
   Future<void> clearConversation() async {
     _messages
       ..clear()
-      ..add(ChatMessage.welcome(_name));
+      ..add(ChatMessage.welcome(_name, agentName: _agentName));
     _sinceCondense = 0;
     notifyListeners();
     final p = await SharedPreferences.getInstance();
@@ -421,6 +498,10 @@ class CoachProvider extends ChangeNotifier {
     _messages.add(userMsg);
     // Count it against today's free-tier budget (persisted, device-local day).
     unawaited(_bumpDailyCount());
+    // What somebody keeps bringing up is what their feed should be about, and
+    // making them go and type it into the feed as well would be asking the
+    // same thing twice. Only their own words are kept, and only on the device.
+    unawaited(FeedInstructionsService.instance.noteUserMessage(text));
 
     // Placeholder assistant message (streaming = true).
     final assistantMsg = ChatMessage(
@@ -443,13 +524,28 @@ class CoachProvider extends ChangeNotifier {
     // replaced lived in SharedPreferences and reset with app data.
     try {
       final turn = await ApiClient.instance.spendCoachTurn();
-      _remainingToday = turn.premium ? null : turn.remaining;
+      _remainingToday = turn.remaining;
+      _usedThisWeek = turn.used ?? _usedThisWeek;
+      _weeklyLimit = turn.limit;
       _limitReached = false;
     } on CoachTurnRefused {
-      // Out of turns. Roll back the optimistic UI and let the screen offer the
-      // paywall instead of leaving a placeholder that never fills in.
-      _messages.remove(assistantMsg);
-      _messages.remove(userMsg);
+      // Out of turns for today.
+      //
+      // The user's own message STAYS. Removing it was the old behaviour and it
+      // was the worst possible answer: you typed a sentence, pressed send, and
+      // watched it disappear with nothing said. That is indistinguishable from
+      // the app being broken, and it is why this was reported as "the chat
+      // doesn't work" rather than as "I ran out of messages". Words somebody
+      // typed are theirs; the app does not get to take them back.
+      //
+      // Only the empty placeholder is replaced, with the reason, so the answer
+      // is in the conversation where they are already looking rather than
+      // depending on a banner elsewhere on the screen rendering correctly.
+      debugPrint('[coach] turn refused: out of free messages for today');
+      assistantMsg
+        ..isStreaming = false
+        ..text = "That's this week's messages used up. They reset "
+            '${_resetsAtPhrase()}, or Plus raises the limit.';
       _limitReached = true;
       _remainingToday = 0;
       _isLoading = false;
@@ -485,11 +581,32 @@ class CoachProvider extends ChangeNotifier {
         _messages.where((m) => !m.isStreaming && m.id != 'welcome').toList(),
       );
 
+      // Inbox and calendar, but only when the turn is actually about them.
+      // Fetched here rather than bundled into the standing context because
+      // both are expensive and private: nobody asking for a pep talk should
+      // have their last twelve emails sent to a model as a side effect.
+      final extra = await gatherTurnContext(
+        text,
+        tasks: _tasks,
+        calendar: _calendar ?? CalendarProvider(),
+      );
+
       final messages = _promptBuilder.build(
         context: context,
         history: historyForPrompt,
         userMessage: text,
+        agentBlock: _agentBlock,
+        mailConnected: MailService.instance.canSend,
+        mailCanRead: MailService.instance.canRead,
       );
+      if (!extra.isEmpty) {
+        // Immediately before the user's turn, so it is the freshest thing the
+        // model has when it answers the question that asked for it.
+        messages.insert(
+          messages.length - 1,
+          {'role': 'system', 'content': extra.promptBlock},
+        );
+      }
 
       // Stream the response.
       final stream = _ai.streamCompletion(messages);
@@ -505,10 +622,16 @@ class CoachProvider extends ChangeNotifier {
         onError: (Object e) {
           assistantMsg.isStreaming = false;
           _isLoading = false;
+          debugPrint('[coach] stream failed: $e');
           if (assistantMsg.text.isEmpty) {
-            assistantMsg.text =
-                "I'm having a bit of trouble connecting right now. "
-                "Give it a moment and try again.";
+            assistantMsg.text = e is CoachLimitException
+                ? "That's this week's messages used up. They reset "
+                    '${_resetsAtPhrase()}, or Plus raises the limit.'
+                : "That didn't go through: ${_explain(e)}";
+            if (e is CoachLimitException) {
+              _limitReached = true;
+              _remainingToday = 0;
+            }
           }
           _errorMessage = e.toString();
           notifyListeners();
@@ -519,6 +642,24 @@ class CoachProvider extends ChangeNotifier {
           assistantMsg.isStreaming = false;
           _isLoading = false;
           _streamSub = null;
+
+          // A completed stream that produced nothing.
+          //
+          // Not hypothetical: these are reasoning models and the thinking comes
+          // out of the same token budget as the reply, so a turn can finish
+          // successfully having written no content at all. Left alone it
+          // renders as an empty bubble that sits there forever, which reads as
+          // the app being broken rather than as one turn failing.
+          if (assistantMsg.text.trim().isEmpty) {
+            debugPrint('[coach] the model returned an empty reply');
+            assistantMsg.text =
+                'That one came back empty on me. Say it again?';
+          }
+          // Only once the reply is whole. A marker arrives a few tokens at a
+          // time, so acting mid-stream would read half of one and set an alarm
+          // for a time the coach had not finished writing.
+          _runReminderIntents(assistantMsg);
+          _runEmailIntents(assistantMsg);
           notifyListeners();
           _turnDone?.complete(assistantMsg.text);
           _turnDone = null;
@@ -526,16 +667,136 @@ class CoachProvider extends ChangeNotifier {
         },
         cancelOnError: true,
       );
-    } catch (e) {
-      assistantMsg.isStreaming = false;
-      assistantMsg.text =
-          "Something went wrong on my end. You can try sending that again.";
+    } on CoachLimitException {
+      // The completions route enforces the cap too, and it can refuse even
+      // when /coach/turn allowed the turn. Handled by name so it reads as
+      // running out rather than as a fault.
+      debugPrint('[coach] completions refused: over the weekly limit');
+      assistantMsg
+        ..isStreaming = false
+        ..text = "That's this week's messages used up. They reset "
+            '${_resetsAtPhrase()}, or Plus raises the limit.';
+      _limitReached = true;
+      _remainingToday = 0;
+      _isLoading = false;
+      notifyListeners();
+      _turnDone?.complete(assistantMsg.text);
+      _turnDone = null;
+    } catch (e, st) {
+      // Logged in full, and the reason is put in front of the user.
+      //
+      // "Something went wrong on my end" with the cause captured into a field
+      // nothing ever reads is how one broken turn became a whole afternoon of
+      // guessing. The exception text is ours, not the model's, so there is
+      // nothing of the conversation in it to leak.
+      debugPrint('[coach] turn failed: $e');
+      debugPrintStack(stackTrace: st, label: 'coach');
+      assistantMsg
+        ..isStreaming = false
+        ..text = "That didn't go through: ${_explain(e)}";
       _isLoading = false;
       _errorMessage = e.toString();
       notifyListeners();
       _turnDone?.complete(assistantMsg.text);
       _turnDone = null;
     }
+  }
+
+  /// Set whatever the coach just agreed to set, and hide the machinery.
+  ///
+  /// The marker is stripped from the message whether or not the reminder is
+  /// actually created: if something goes wrong scheduling it, the user should
+  /// see the coach's sentence and a failure they can act on, never a line of
+  /// brackets in the middle of a conversation.
+  void _runReminderIntents(ChatMessage msg) {
+    final intents = parseReminderIntents(msg.text);
+    if (intents.isEmpty) return;
+    msg.text = stripReminderMarkers(msg.text);
+
+    final reminders = _reminders;
+    if (reminders == null) {
+      // Nothing is bound in a test host or before the tree is up. Say so rather
+      // than letting the coach claim it set something that went nowhere.
+      debugPrint('[coach] ${intents.length} reminder(s) asked for, '
+          'but no RemindersProvider is bound');
+      return;
+    }
+    for (final i in intents) {
+      debugPrint('[coach] setting reminder $i');
+      reminders.add(i.toReminder());
+    }
+  }
+
+  /// Send whatever the coach just agreed to send.
+  ///
+  /// Async and unawaited, unlike the reminder path: SMTP is a network round
+  /// trip of a second or two and the reply is already on screen. Blocking the
+  /// turn on it would freeze a finished message mid-conversation.
+  ///
+  /// The outcome is appended as its own message rather than folded into the
+  /// coach's reply. Sending mail on somebody's behalf is the most consequential
+  /// thing this app does, so whether it actually left has to be stated plainly
+  /// and separately, not implied by a sentence the model wrote before it knew.
+  void _runEmailIntents(ChatMessage msg) {
+    final intents = parseEmailIntents(msg.text);
+    if (intents.isEmpty) return;
+    msg.text = stripEmailMarkers(msg.text);
+    unawaited(_sendAll(intents));
+  }
+
+  Future<void> _sendAll(List<EmailIntent> intents) async {
+    for (final i in intents) {
+      // The address is in here; the body and the credential are not.
+      debugPrint('[coach] sending mail to ${i.to}');
+      final r = await MailService.instance.send(
+        to: i.to,
+        subject: i.subject,
+        body: i.body,
+      );
+      _messages.add(ChatMessage(
+        id: 'm-${DateTime.now().microsecondsSinceEpoch}',
+        text: r.ok ? '✉️ ${r.message}' : "✉️ Didn't send. ${r.message}",
+        fromUser: false,
+      ));
+      notifyListeners();
+    }
+  }
+
+  /// A short, plain reason. Deliberately not the raw exception: those carry
+  /// stack frames and URLs, and this goes straight into a chat bubble.
+  static String _explain(Object e) {
+    final s = e.toString();
+    if (e is GroqException) {
+      final code = e.statusCode;
+      if (code == null) return 'the coach could not be reached.';
+      if (code == 503) return 'the coach is not configured on the server.';
+      if (code == 400) return 'the server rejected that message.';
+      if (code == 401 || code == 403) {
+        return 'your session expired. Sign in again.';
+      }
+      if (code >= 500) return 'the server is having a moment. Try again shortly.';
+      return 'the server answered $code.';
+    }
+    if (s.contains('SocketException') ||
+        s.contains('Failed host lookup') ||
+        s.contains('Connection')) {
+      return 'no connection to the server.';
+    }
+    if (s.contains('TimeoutException') || s.contains('took too long')) {
+      return 'the server took too long to answer.';
+    }
+    return 'something broke on our side, and it is now in the logs.';
+  }
+
+  /// "on Monday", or "soon" when the server did not say.
+  String _resetsAtPhrase() {
+    final at = _resetsAt;
+    if (at == null) return 'at the start of next week';
+    const days = [
+      'Monday', 'Tuesday', 'Wednesday', 'Thursday',
+      'Friday', 'Saturday', 'Sunday',
+    ];
+    return 'on ${days[at.toLocal().weekday - 1]}';
   }
 
   /// Strips em and en dashes, keeping the sentence readable rather than just

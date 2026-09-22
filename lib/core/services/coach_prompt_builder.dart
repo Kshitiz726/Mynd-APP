@@ -26,13 +26,31 @@ class CoachPromptBuilder {
     required CoachContext context,
     required List<ChatMessage> history,
     required String userMessage,
+    String agentBlock = '',
+    bool mailConnected = false,
+    bool mailCanRead = false,
   }) {
     final messages = <Map<String, String>>[];
 
     final personal = _isAboutThem(userMessage, history);
 
-    // 1. Static system identity - defines who Mynd IS.
-    messages.add({'role': 'system', 'content': _systemPrompt(context)});
+    // 1. Static system identity - defines who the coach IS.
+    messages.add({
+      'role': 'system',
+      'content': _systemPrompt(context,
+          mailConnected: mailConnected, mailCanRead: mailCanRead),
+    });
+
+    // 1b. Which agent is on, and how the user has tuned it.
+    //
+    // A separate message, immediately after the base identity and before any
+    // context, because it *overrides* the house voice rather than adding to it.
+    // Blitz is supposed to contradict the "calm and slightly dry" default, and
+    // a model reads the later instruction as the winner. Folding it into the
+    // block above would leave the two fighting.
+    if (agentBlock.isNotEmpty) {
+      messages.add({'role': 'system', 'content': agentBlock});
+    }
 
     if (personal) {
       // 2. Memory recall - what was talked about before this session.
@@ -112,7 +130,11 @@ class CoachPromptBuilder {
 
   // ─── System Prompt ────────────────────────────────────────────────────────
 
-  String _systemPrompt(CoachContext ctx) {
+  String _systemPrompt(
+    CoachContext ctx, {
+    bool mailConnected = false,
+    bool mailCanRead = false,
+  }) {
     final name = ctx.userPreferences.preferredName;
     final nameLine = (name != null && name.isNotEmpty)
         ? "The user's name is $name. That is the ONLY name you may call them. "
@@ -120,6 +142,51 @@ class CoachPromptBuilder {
             "feels grounding and warm. Never invent or guess a different name."
         : "You do not know the user's name yet. Do NOT make one up and do NOT "
             "guess. Address them without a name until they tell you one.";
+
+    // The email block is conditional on an account actually being connected.
+    // Teaching the marker unconditionally would mean the coach cheerfully
+    // agreeing to send mail it has no way to send, which is the worst of both:
+    // the user believes it went, and nothing happened.
+    final mailLine = mailConnected
+        ? '''
+You can actually send email, from their own connected account. When they ask
+you to send something to somebody, write the line below anywhere in your reply
+and the app sends it. Do not describe the line and do not show it to them.
+
+[[email: someone@example.com | subject | the whole message]]
+
+Write the body as they would send it, signed off as them, not as you. Never
+put your own commentary inside the body.
+
+You must have a real address. If they said "send it to Sam" and you do not know
+Sam's address, ask for it and do not write the line until you have it. Guessing
+an address means sending somebody's words to a stranger.
+
+Sending is the default, not the exception. If they asked you to send something
+and you have an address, write the line and send it. Do not offer to draft it
+instead, do not show them the draft first and do not ask them to confirm a
+routine message: they asked, and waiting for a second yes is the behaviour that
+made this feature feel broken.
+
+Two things still stop you, and only these two. You do not have a real address.
+Or the message is angry, or a resignation, or something they are clearly upset
+while writing, in which case read it back and ask once.
+
+Then say one short sentence confirming who it went to, in your own voice.
+
+${mailCanRead ? '''
+You can also READ their recent mail. When a turn is about their inbox you are
+given the last week of it as headers and snippets. Summarise what is there:
+what needs an answer, what can wait, anything with a deadline in it. Do not
+read the list back line by line, and never quote a whole message.''' : '''
+You cannot read their inbox. That permission was not granted, only the one to
+send. If they ask what is in their mail, say that plainly in one line and
+offer what you can do instead. Never guess at what might be in there.'''}'''
+        : '''
+You cannot send email. No account is connected. If they ask you to send
+something, say plainly that they can connect a Gmail account in Settings under
+Connections, and offer to draft the message in the meantime. Never pretend to
+have sent anything.''';
 
     final brevityLine = ctx.userPreferences.prefersBrevity
         ? 'This user has asked for brief responses, so lean short by default. '
@@ -188,6 +255,35 @@ would read the same to any other user is a failure, even if it is warm.
   context, or something they said in this conversation.
 - Never recite the memory back at them, never list it, never say you have it.
   It is what a friend remembers, not a file you are quoting.
+
+SETTING A REMINDER
+You can actually set reminders. When they ask to be reminded of something at a
+time, set it: write the line below anywhere in your reply and the app creates
+it. Do not describe the line, do not show it to them, do not offer to set one
+and then not write it.
+
+[[remind: HH:MM | what it is about | once]]
+
+Use `daily` in place of `once` only when they asked for something repeating.
+HH:MM is a 24-hour clock in their local time, so "half eight tonight" is 20:30.
+Convert relative times ("in 20 minutes", "after lunch") to a clock reading
+yourself using the current time in the context note.
+
+Then say one short human sentence confirming it, in your own voice, with the
+time in it. Never mention the line, brackets or the app's machinery.
+
+If they were vague about when, ask for the time first and do not write the line
+until you have it. A reminder set at a guessed time is worse than no reminder.
+
+SENDING AN EMAIL
+$mailLine
+
+THEIR DAY
+When a turn is about their calendar or their schedule you are given the day as
+it actually stands: what they planned in the app, and the real meetings from
+their phone's calendar where it is connected. Answer from that. Say what the
+shape of the day is, where the free stretches are, and what is unrealistic,
+rather than reciting the list back.
 
 PLANNING
 When they want to plan, plan with what is actually on their plate: their real
