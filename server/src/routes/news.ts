@@ -43,6 +43,84 @@ export type NewsItem = {
   publishedAt: string | null;
 };
 
+const BROWSER_UA =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
+  '(KHTML, like Gecko) Chrome/124.0 Safari/537.36';
+
+/**
+ * The publisher's own share image, read off the article page.
+ *
+ * Google News RSS carries no images whatsoever - no media:content, no
+ * thumbnail, no enclosure, not even an img tag in the description - so a feed
+ * built on it is text-only no matter how the cards are written. The picture has
+ * to come from the article itself.
+ *
+ * og:image is the right thing to take: it is the image the publisher chose for
+ * exactly this purpose, it is meant to be hotlinked, and reading one meta tag
+ * is not scraping their reporting.
+ *
+ * Bounded hard, because this runs per article: one request, four seconds, only
+ * the first 60KB of the page (og:image lives in the head), and any failure at
+ * all resolves to null. A missing picture costs a picture.
+ */
+const imageCache = new Map<string, { at: number; url: string | null }>();
+const IMAGE_TTL_MS = 6 * 60 * 60 * 1000;
+
+async function ogImage(articleUrl: string): Promise<string | null> {
+  // Google News links are opaque redirects that never reach the publisher
+  // server side: the page they serve is Google's own, and its og:image is the
+  // same grey Google News card for every article in the feed. Measured, not
+  // assumed - four different stories returned one identical URL. Asking is a
+  // wasted round trip per item, so they are skipped and those cards are
+  // text-only until a keyed source is configured.
+  if (articleUrl.includes('news.google.com')) return null;
+
+  const hit = imageCache.get(articleUrl);
+  if (hit && Date.now() - hit.at < IMAGE_TTL_MS) return hit.url;
+
+  let found: string | null = null;
+  try {
+    const res = await fetch(articleUrl, {
+      headers: { 'User-Agent': BROWSER_UA, Accept: 'text/html' },
+      signal: AbortSignal.timeout(4000),
+      redirect: 'follow',
+    });
+    if (res.ok) {
+      // The head is all that matters, and some articles are megabytes.
+      const reader = res.body?.getReader();
+      let html = '';
+      if (reader) {
+        const dec = new TextDecoder();
+        while (html.length < 60_000) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          html += dec.decode(value, { stream: true });
+        }
+        await reader.cancel().catch(() => {});
+      }
+      const m =
+        html.match(
+          /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i,
+        ) ??
+        html.match(
+          /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i,
+        ) ??
+        html.match(
+          /<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i,
+        );
+      const raw = m?.[1]?.trim();
+      // Only absolute https. A relative path would need the resolved article
+      // host, and an http image is blocked by App Transport Security anyway.
+      if (raw && raw.startsWith('https://')) found = raw;
+    }
+  } catch {
+    /* no picture, which is a supported state */
+  }
+
+  imageCache.set(articleUrl, { at: Date.now(), url: found });
+  return found;
+}
+
 /** Strip tags and decode the handful of entities RSS actually emits. */
 function plain(s: string): string {
   return s
@@ -75,9 +153,7 @@ async function fromRss(query: string, limit: number): Promise<NewsItem[]> {
   // looks exactly like a quiet news day.
   const res = await fetch(url, {
     headers: {
-      'User-Agent':
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
-        '(KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+      'User-Agent': BROWSER_UA,
       Accept: 'application/rss+xml, application/xml;q=0.9, */*;q=0.8',
     },
   });
@@ -164,6 +240,18 @@ r.get('/news', requireAuth, async (req, res) => {
     // Falls through on an empty keyed result too, not just a missing key: a
     // quota that ran out mid-day should cost pictures, not the whole feed.
     if (items.length === 0) items = await fromRss(q, limit);
+
+    // Pictures, in parallel, for whatever has none. Parallel because this is
+    // the slow part and doing it in series would put ten seconds on a feed
+    // somebody is waiting for; Promise.all is safe because ogImage never
+    // rejects.
+    const missing = items.filter((i) => !i.imageUrl && i.url);
+    if (missing.length > 0) {
+      const found = await Promise.all(missing.map((i) => ogImage(i.url)));
+      missing.forEach((item, n) => {
+        item.imageUrl = found[n];
+      });
+    }
     // Only cache a real answer. Caching an empty list pins the failure in
     // place for ten minutes, so one bad moment upstream becomes an empty feed
     // for everybody until the TTL expires.
