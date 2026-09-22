@@ -12,15 +12,23 @@ import 'mail_service.dart';
 /// Both halves are the same shape: something the user asked for in
 /// conversation that has to happen when they are not looking at the screen.
 ///
+/// Nothing here polls. There was a three minute repeating timer and it is gone:
+/// a timer that runs forever whether or not anything is happening drains a
+/// battery for nothing, keeps a mail socket opening all day, and is the kind of
+/// thing that draws an App Review question nobody wants to be answering during
+/// a release. Both halves are event driven instead. The watch looks when the
+/// app launches and when it comes back to the foreground. A queued send arms
+/// one timer, for that one message, at that one moment, and nothing ticks in
+/// between.
+///
 /// The honest limit, stated once here rather than implied everywhere: iOS does
-/// not let an app like this run on a schedule in the background. So the watch
-/// polls while the app is alive and catches up the moment it is reopened, and
-/// a scheduled send fires on time if the app is running and on the next open
-/// if it is not. A local notification is registered for a scheduled send as
-/// well, so the user is told at the right moment even when the send itself has
-/// to wait for them to come back. Anything more than that needs a server that
-/// holds a mail credential, which is a considerably bigger promise than this
-/// app currently makes about where that credential lives.
+/// not let an app like this wake itself up on a schedule. So a queued message
+/// goes out exactly on time when the app is open, and at the first moment it
+/// is next opened otherwise. A local notification is registered for the due
+/// time either way, so the user is told at the right moment even when the send
+/// itself has to wait for them to come back. Doing better means a server
+/// holding a mail credential, which is a much bigger promise than this app
+/// makes about where that credential lives.
 class MailWatch extends ChangeNotifier {
   MailWatch._();
   static final MailWatch instance = MailWatch._();
@@ -29,14 +37,12 @@ class MailWatch extends ChangeNotifier {
   static const _kLastSeen = 'om_mail_last_seen';
   static const _kQueue = 'om_mail_queue';
 
-  /// Long enough not to hammer the mailbox, short enough that "tell me when
-  /// something lands" is not a lie. IMAP IDLE would be better and is a much
-  /// larger change: it needs a socket held open across lifecycle events.
-  static const _every = Duration(minutes: 3);
-
-  Timer? _poll;
+  /// The one-shot timer for the next queued message, or null when the queue is
+  /// empty. Armed for a single moment, never repeating.
+  Timer? _due;
   bool _watching = false;
   bool _busy = false;
+  bool _sending = false;
   String? _lastSeen;
   final List<ScheduledMail> _queue = [];
 
@@ -68,8 +74,8 @@ class MailWatch extends ChangeNotifier {
       debugPrint('[watch] could not restore: $e');
     }
     debugPrint('[watch] watching=$_watching queued=${_queue.length}');
-    if (_watching) _start();
-    unawaited(runDue());
+    if (_watching) unawaited(_check());
+    await runDue();
   }
 
   // ─── Watching ─────────────────────────────────────────────────────────────
@@ -83,19 +89,10 @@ class MailWatch extends ChangeNotifier {
       await p.setBool(_kWatching, on);
     } catch (_) {/* still on for this session */}
     if (on) {
-      _start();
       // Mark everything currently in the inbox as already seen, so turning the
       // watch on does not immediately announce mail from last Tuesday.
       unawaited(_check(announce: false));
-    } else {
-      _poll?.cancel();
-      _poll = null;
     }
-  }
-
-  void _start() {
-    _poll?.cancel();
-    _poll = Timer.periodic(_every, (_) => _check());
   }
 
   /// Called when the app comes back to the foreground.
@@ -161,16 +158,69 @@ class MailWatch extends ChangeNotifier {
     _queue.add(m);
     notifyListeners();
     await _persistQueue();
-    // A notification at the right moment, whether or not the app is alive to
-    // do the sending itself.
-    await NotificationService.instance.schedule(
-      id: m.id.hashCode & 0x7fffffff,
-      title: 'Email to ${m.to}',
-      body: 'Open OurMynd to let it go out: ${m.subject}',
-      at: m.at,
-    );
+    // A notification at the right moment, for the case where the app is not
+    // running then. Deliberately not phrased as "sent": at the moment this
+    // fires nothing has been sent, and a notification that claims otherwise is
+    // the worst possible lie for this feature to tell.
+    await _notify(() => NotificationService.instance.schedule(
+          id: _dueNotificationId(m.id),
+          title: 'Ready to send to ${m.to}',
+          body: 'Open OurMynd and it goes out: ${m.subject}',
+          at: m.at,
+        ));
     debugPrint('[watch] queued ${m.id} for ${m.at}');
-    unawaited(runDue());
+    await runDue();
+  }
+
+  /// Notifications are a courtesy, never a precondition.
+  ///
+  /// Permission can be refused, the plugin can be unavailable, and none of
+  /// that is a reason to abandon a message somebody asked to have sent. A send
+  /// that is skipped because a banner could not be drawn would be absurd.
+  static Future<void> _notify(Future<void> Function() f) async {
+    try {
+      await f();
+    } catch (e) {
+      debugPrint('[watch] notification failed: $e');
+    }
+  }
+
+  /// Two notifications per message, and they must not collide: one warning the
+  /// message is due, one confirming it went.
+  static int _dueNotificationId(String id) => id.hashCode & 0x7fffffff;
+  static int _sentNotificationId(String id) => '$id-sent'.hashCode & 0x7fffffff;
+
+  /// Wake up exactly once, for the next message that is due.
+  ///
+  /// One timer for one moment, rather than a repeating tick asking "is it time
+  /// yet" all day. Re-armed whenever the queue changes, and cancelled outright
+  /// when it empties.
+  void _armNext() {
+    _due?.cancel();
+    _due = null;
+    if (_queue.isEmpty) return;
+
+    // Only messages still in the future get a timer.
+    //
+    // Anything already past is either about to be sent by the runDue that is
+    // calling this, or has just failed to send and is being kept for another
+    // try. Re-arming for a past time would mean an immediate retry, and since
+    // that retry re-arms in its turn, one permanently failing message would
+    // spin against the mail server for as long as the app stayed open. A
+    // failure waits for the next launch or resume instead, which is a real
+    // change of circumstances rather than the same attempt again.
+    final now = DateTime.now();
+    final upcoming = _queue.map((m) => m.at).where((t) => t.isAfter(now));
+    if (upcoming.isEmpty) return;
+    final next = upcoming.reduce((a, b) => a.isBefore(b) ? a : b);
+    final wait = next.difference(now);
+    // Timer takes a 32 bit millisecond count on some platforms, and a message
+    // queued for next month would silently fire immediately. Anything beyond a
+    // day is left to the next launch or resume to pick up, which is the same
+    // path a cold start already takes.
+    if (wait > const Duration(days: 1)) return;
+    debugPrint('[watch] next send in ${wait.inMinutes}m');
+    _due = Timer(wait, () => unawaited(runDue()));
   }
 
   Future<bool> cancelSend(String id) async {
@@ -179,34 +229,58 @@ class MailWatch extends ChangeNotifier {
     if (_queue.length == before) return false;
     notifyListeners();
     await _persistQueue();
-    await NotificationService.instance.cancel(id.hashCode & 0x7fffffff);
+    await _notify(
+        () => NotificationService.instance.cancel(_dueNotificationId(id)));
+    _armNext();
     return true;
   }
 
-  /// Send anything whose time has come, and arm a timer for the next one.
+  /// Send anything whose time has come, then arm the timer for the next one.
+  ///
+  /// Nothing here asks permission. The permission was given when the message
+  /// was written and queued, and waking somebody at the moment it is due to ask
+  /// them again would defeat the entire point of scheduling it.
   Future<void> runDue() async {
-    final now = DateTime.now();
-    final due = _queue.where((m) => !m.at.isAfter(now)).toList();
-    for (final m in due) {
-      final r = await MailService.instance.send(
-        to: m.to,
-        subject: m.subject,
-        body: m.body,
-      );
-      debugPrint('[watch] scheduled send ${m.id}: ok=${r.ok}');
-      // Only drop it once it has actually gone. A failed send stays queued so
-      // reconnecting an account is enough to make it happen, rather than the
-      // message being silently lost at the one moment nobody was watching.
-      if (r.ok) {
-        _queue.removeWhere((q) => q.id == m.id);
-        await NotificationService.instance.cancel(m.id.hashCode & 0x7fffffff);
+    if (_sending) return;
+    _sending = true;
+    try {
+      final now = DateTime.now();
+      final due = _queue.where((m) => !m.at.isAfter(now)).toList();
+      for (final m in due) {
+        final r = await MailService.instance.send(
+          to: m.to,
+          subject: m.subject,
+          body: m.body,
+        );
+        debugPrint('[watch] scheduled send ${m.id}: ok=${r.ok}');
+
+        // Only drop it once it has actually gone. A failed send stays queued,
+        // so reconnecting an account is enough to make it happen rather than
+        // the message being lost at the one moment nobody was watching.
+        if (r.ok) {
+          _queue.removeWhere((q) => q.id == m.id);
+          await _notify(
+              () => NotificationService.instance.cancel(_dueNotificationId(m.id)));
+        }
+        _sends.add(SentResult(mail: m, ok: r.ok, message: r.message));
+
+        // Told at the moment it happens, not only in a conversation they may
+        // not be looking at. A message going out under somebody's own name is
+        // worth a notification whichever way it went.
+        await _notify(() => NotificationService.instance.showNow(
+              id: _sentNotificationId(m.id),
+              title: r.ok ? 'Sent to ${m.to}' : 'Could not send to ${m.to}',
+              body: r.ok ? m.subject : r.message,
+            ));
       }
-      _sends.add(SentResult(mail: m, ok: r.ok, message: r.message));
+      if (due.isNotEmpty) {
+        notifyListeners();
+        await _persistQueue();
+      }
+    } finally {
+      _sending = false;
     }
-    if (due.isNotEmpty) {
-      notifyListeners();
-      await _persistQueue();
-    }
+    _armNext();
   }
 
   Future<void> _persistQueue() async {
@@ -221,7 +295,7 @@ class MailWatch extends ChangeNotifier {
 
   @override
   void dispose() {
-    _poll?.cancel();
+    _due?.cancel();
     _arrivals.close();
     _sends.close();
     super.dispose();
