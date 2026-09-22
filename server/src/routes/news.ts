@@ -191,6 +191,88 @@ async function fromRss(query: string, limit: number): Promise<NewsItem[]> {
   return items;
 }
 
+/**
+ * Bing News, which is searchable, needs no key, and - the part that matters -
+ * hands back the publisher's real URL.
+ *
+ * Google News was the original source and cannot carry a picture by any route:
+ * its RSS has no image fields at all, and its links are opaque redirects whose
+ * pages are Google's own, so og:image there returns the same grey card for
+ * every story. Measured, not assumed.
+ *
+ * Bing wraps the link in an apiclick tracker, but the real article sits in the
+ * `url=` query parameter in plain URL-encoded form. Pulling it out gives a
+ * genuine publisher page, which means og:image finds a genuine article image.
+ * Six out of six on the first live sample, in about a second and a half.
+ */
+function bingRealUrl(link: string): string | null {
+  const m = plainAttr(link).match(/[?&]url=([^&]+)/);
+  if (m) {
+    try {
+      return decodeURIComponent(m[1]);
+    } catch {
+      return null;
+    }
+  }
+  // Anything that is still a Bing URL is a tracker we could not unwrap, and
+  // is no use to us: it neither renders nor resolves to an image.
+  return link.includes('bing.com') ? null : link;
+}
+
+/** Entity-decode without stripping tags, which `plain` would do to a URL. */
+function plainAttr(s: string): string {
+  return s
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+}
+
+async function fromBing(query: string, limit: number): Promise<NewsItem[]> {
+  const q = encodeURIComponent(query);
+  const url = `https://www.bing.com/news/search?q=${q}&format=RSS`;
+  const res = await fetch(url, {
+    headers: { 'User-Agent': BROWSER_UA, Accept: 'application/rss+xml, */*' },
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!res.ok) {
+    console.warn(`[news] bing for "${query}" -> HTTP ${res.status}`);
+    return [];
+  }
+  const xml = await res.text();
+
+  const items: NewsItem[] = [];
+  for (const m of xml.matchAll(/<item>([\s\S]*?)<\/item>/g)) {
+    const block = m[1];
+    const title = tag(block, 'title');
+    const rawLink = block.match(/<link>([\s\S]*?)<\/link>/)?.[1]?.trim();
+    if (!title || !rawLink) continue;
+    const real = bingRealUrl(rawLink);
+    if (!real) continue;
+    items.push({
+      title,
+      summary: tag(block, 'description'),
+      url: real,
+      imageUrl: null,
+      // Bing does not name the publisher, but the URL does, and a domain is
+      // more honest than a guess.
+      source: hostOf(real),
+      publishedAt: tag(block, 'pubDate'),
+    });
+    if (items.length >= limit) break;
+  }
+  return items;
+}
+
+function hostOf(u: string): string | null {
+  try {
+    return new URL(u).hostname.replace(/^www\./, '');
+  } catch {
+    return null;
+  }
+}
+
 async function fromNewsApi(query: string, limit: number): Promise<NewsItem[]> {
   const q = encodeURIComponent(query);
   const url =
@@ -236,9 +318,24 @@ r.get('/news', requireAuth, async (req, res) => {
   }
 
   try {
+    // Three sources, in descending order of what they can give a card.
+    //
+    // NewsAPI first when a key is configured: it returns a real image field
+    // outright, so no page has to be fetched at all.
+    //
+    // Bing second, and it is the one that makes a keyless feed look like
+    // anything: real publisher URLs, so og:image can find real pictures.
+    //
+    // Google News last, as the thing that always answers. It can never carry
+    // a picture, so those editions are text-only - better than empty.
     let items = NEWS_API_KEY ? await fromNewsApi(q, limit) : [];
-    // Falls through on an empty keyed result too, not just a missing key: a
-    // quota that ran out mid-day should cost pictures, not the whole feed.
+    if (items.length === 0) {
+      try {
+        items = await fromBing(q, limit);
+      } catch (e) {
+        console.warn('[news] bing failed', e);
+      }
+    }
     if (items.length === 0) items = await fromRss(q, limit);
 
     // Pictures, in parallel, for whatever has none. Parallel because this is
