@@ -44,6 +44,8 @@ import 'providers/streak_provider.dart';
 import 'providers/task_provider.dart';
 import 'services/notification_service.dart';
 import 'widgets/puter_host.dart';
+import 'core/services/soul_service.dart';
+import 'core/services/mail_watch.dart';
 
 /// Root navigator key - lets the app-wide [PuterHost] present Puter's one-time
 /// sign-in popup over whatever screen is showing.
@@ -92,6 +94,8 @@ void main() async {
   // Reads the connected address out of the keychain so the coach knows whether
   // it can offer to send mail on the very first turn.
   await _bootStep('mail account', MailService.instance.init);
+  await _bootStep('voice', SoulService.instance.init);
+  await _bootStep('mail watch', MailWatch.instance.init);
 
   // The health-data consent answer, from this device's cache, before anything
   // can consult it. Nothing here gates on a network call: the provider fails

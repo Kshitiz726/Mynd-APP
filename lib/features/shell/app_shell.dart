@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 // Lucide only fed the parked (+) create sheet; nav-tab icons live on AppTab.
 // import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -33,6 +34,7 @@ import '../feed/feed_screen.dart';
 import 'widgets/live_focus_pill.dart';
 import 'widgets/om_nav_bar.dart';
 import '../home/widgets/quick_add_sheet.dart';
+import '../../core/services/mail_watch.dart';
 
 /// The root authenticated shell: a persistent bottom nav over an [IndexedStack].
 class AppShell extends StatefulWidget {
@@ -42,7 +44,18 @@ class AppShell extends StatefulWidget {
   State<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends State<AppShell> {
+class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Coming back is the only reliable moment this app gets. iOS will not run
+    // it on a schedule in the background, so anything that was meant to happen
+    // while it was away, a queued message whose time came or mail that landed,
+    // is caught up here.
+    if (state == AppLifecycleState.resumed) {
+      unawaited(MailWatch.instance.onResumed());
+    }
+  }
+
   /// Tab order must match [AppTab.values]: chat · feed · schedule · focus.
   ///
   /// Chat is first and is where the app opens: it is the thing people come back
@@ -68,6 +81,7 @@ class _AppShellState extends State<AppShell> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // Subscribe to live chat app-wide so new messages reach the Chats list and
     // open conversations instantly, not just after reopening a chat.
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -87,6 +101,12 @@ class _AppShellState extends State<AppShell> {
       context.read<FeedProvider>().load();
       _askForNotifications();
     });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
   }
 
   /// The one permission this app actually needs, asked for once, early, and out

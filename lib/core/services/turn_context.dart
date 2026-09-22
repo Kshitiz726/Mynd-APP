@@ -16,6 +16,7 @@ library;
 import 'package:flutter/foundation.dart';
 
 import '../../providers/calendar_provider.dart';
+import '../../providers/focus_provider.dart';
 import '../../providers/task_provider.dart';
 import 'mail_service.dart';
 
@@ -88,6 +89,7 @@ Future<TurnContext> gatherTurnContext(
   String text, {
   required TaskProvider tasks,
   required CalendarProvider calendar,
+  FocusProvider? focus,
 }) async {
   final needMail = wantsMail(text);
   final needCal = wantsCalendar(text);
@@ -178,9 +180,23 @@ Future<TurnContext> gatherTurnContext(
 
           lines.sort();
           final nowBlock = tasks.nowBlock;
+
+          // What is actually happening this second. Asked for specifically,
+          // because "what am I meant to be doing" answered from a schedule
+          // while a timer is visibly running on the next tab is the kind of
+          // wrong that makes the whole thing feel like it is not paying
+          // attention.
+          final f = focus;
+          final focusLine = (f != null && f.isActive)
+              ? '\nRight now they are in a focus session'
+                  '${f.isRunning ? '' : ' (paused)'}, '
+                  '${(f.secondsRemaining / 60).ceil()} minutes left'
+                  '${f.bodyDoubling ? ', working alongside someone' : ''}.'
+              : '';
           calBlock = 'THEIR DAY (${now.day}/${now.month})\n'
               '${lines.isEmpty ? '- nothing scheduled' : lines.join('\n')}'
               '${nowBlock != null ? '\nRight now: ${nowBlock.title}' : ''}'
+              '$focusLine'
               '${calendar.connected ? '' : '\n(Their phone calendar is not connected, so this is only what they planned in the app.)'}';
           debugPrint('[turn] day: ${lines.length} entries');
         } catch (e) {

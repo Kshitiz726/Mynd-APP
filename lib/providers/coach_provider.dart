@@ -27,6 +27,9 @@ import 'mood_provider.dart';
 import 'reminders_provider.dart';
 import 'settings_provider.dart';
 import 'task_provider.dart';
+import '../core/services/soul_service.dart';
+import '../core/services/mail_control_intent.dart';
+import '../core/services/mail_watch.dart';
 
 /// The single source of truth for the coaching chat.
 ///
@@ -503,6 +506,9 @@ class CoachProvider extends ChangeNotifier {
     // making them go and type it into the feed as well would be asking the
     // same thing twice. Only their own words are kept, and only on the device.
     unawaited(FeedInstructionsService.instance.noteUserMessage(text));
+    // How they write, kept separately from what they write about. The feed
+    // wants the topics; the voice wants the register.
+    unawaited(SoulService.instance.noteUserMessage(text));
 
     // Placeholder assistant message (streaming = true).
     final assistantMsg = ChatMessage(
@@ -590,6 +596,7 @@ class CoachProvider extends ChangeNotifier {
         text,
         tasks: _tasks,
         calendar: _calendar ?? CalendarProvider(),
+        focus: _focus,
       );
 
       final messages = _promptBuilder.build(
@@ -599,6 +606,7 @@ class CoachProvider extends ChangeNotifier {
         agentBlock: _agentBlock,
         mailConnected: MailService.instance.canSend,
         mailCanRead: MailService.instance.canRead,
+        soulBlock: SoulService.instance.promptBlock,
       );
       if (!extra.isEmpty) {
         // Immediately before the user's turn, so it is the freshest thing the
@@ -660,6 +668,7 @@ class CoachProvider extends ChangeNotifier {
           // time, so acting mid-stream would read half of one and set an alarm
           // for a time the coach had not finished writing.
           _runReminderIntents(assistantMsg);
+          _runMailControlIntents(assistantMsg);
           _runEmailIntents(assistantMsg);
           notifyListeners();
           _turnDone?.complete(assistantMsg.text);
@@ -741,6 +750,55 @@ class CoachProvider extends ChangeNotifier {
   @visibleForTesting
   void runEmailIntents(ChatMessage msg) => _runEmailIntents(msg);
 
+  @visibleForTesting
+  void runMailControlIntents(ChatMessage msg) => _runMailControlIntents(msg);
+
+  /// Watching the inbox, and queueing a message for later.
+  ///
+  /// Neither of these sends anything now, so neither goes through the approval
+  /// sheet. Queueing one does show the time it will go at, because "I'll send
+  /// it later" with no stated time is how somebody ends up finding out at
+  /// 3am.
+  void _runMailControlIntents(ChatMessage msg) {
+    final watch = parseWatchIntent(msg.text);
+    final later = parseScheduleIntents(msg.text);
+    if (watch == null && later.isEmpty) return;
+    msg.text = stripMailControlMarkers(msg.text);
+
+    if (watch != null) {
+      unawaited(MailWatch.instance.setWatching(watch.on).then((_) {
+        _say(watch.on
+            ? '👀 Watching your inbox. I will tell you when something lands.'
+            : '👀 Stopped watching your inbox.');
+      }));
+    }
+
+    for (final l in later) {
+      final m = ScheduledMail(
+        id: 's-${DateTime.now().microsecondsSinceEpoch}-${l.to.hashCode}',
+        to: l.to,
+        subject: l.subject,
+        body: l.body,
+        at: l.at,
+      );
+      unawaited(MailWatch.instance.scheduleSend(m).then((_) {
+        _say('🕒 Queued for ${_whenPhrase(l.at)}, to ${l.to}.');
+      }));
+    }
+  }
+
+  /// "today at 18:30", "tomorrow at 09:00", "on 24/9 at 09:00".
+  static String _whenPhrase(DateTime at) {
+    final now = DateTime.now();
+    final hh = at.hour.toString().padLeft(2, '0');
+    final mm = at.minute.toString().padLeft(2, '0');
+    final sameDay = at.year == now.year && at.month == now.month && at.day == now.day;
+    final tomorrow = at.difference(DateTime(now.year, now.month, now.day)).inDays == 1;
+    if (sameDay) return 'today at $hh:$mm';
+    if (tomorrow) return 'tomorrow at $hh:$mm';
+    return 'on ${at.day}/${at.month} at $hh:$mm';
+  }
+
   void _runEmailIntents(ChatMessage msg) {
     final intents = parseEmailIntents(msg.text);
     if (intents.isEmpty) return;
@@ -779,6 +837,43 @@ class CoachProvider extends ChangeNotifier {
 
   /// They have said "never ask again". Shown in settings so it can be undone.
   bool get alwaysSendMail => _alwaysSend;
+
+  StreamSubscription<List<MailSummary>>? _arrivals;
+  StreamSubscription<SentResult>? _queuedSends;
+
+  /// Listen for mail landing and for queued messages going out.
+  ///
+  /// The coach says these itself rather than the app showing a banner, because
+  /// the whole promise of the watch is that somebody hears about their mail
+  /// from the same voice they asked to watch it.
+  void bindMailWatch() {
+    _arrivals ??= MailWatch.instance.arrivals.listen((fresh) {
+      if (fresh.isEmpty) return;
+      _say(_arrivalLine(fresh));
+    });
+    _queuedSends ??= MailWatch.instance.sends.listen((r) {
+      _say(r.ok
+          ? '✉️ Sent that one to ${r.mail.to} as planned.'
+          : "✉️ The one for ${r.mail.to} didn't go. ${r.message}");
+    });
+  }
+
+  /// What just arrived, in a sentence rather than a header dump.
+  ///
+  /// Written here rather than asked of the model on purpose: this fires when
+  /// nobody is necessarily looking, and spending a model call and a second of
+  /// latency to announce two emails would be the wrong trade. The subject line
+  /// is the publisher's own summary of itself and is usually enough.
+  static String _arrivalLine(List<MailSummary> fresh) {
+    if (fresh.length == 1) {
+      final m = fresh.first;
+      final subject = m.subject.trim();
+      return '📬 ${m.from} just emailed you'
+          '${subject.isEmpty ? '.' : ', about "$subject".'}';
+    }
+    final names = <String>{for (final m in fresh) m.from}.take(3).join(', ');
+    return '📬 ${fresh.length} new emails just landed, from $names.';
+  }
 
   Future<void> loadMailPrefs() async {
     try {
@@ -1016,6 +1111,10 @@ class CoachProvider extends ChangeNotifier {
     unawaited(_persistLog());
     _sinceCondense += 2;
     if (_sinceCondense >= _condenseEvery) unawaited(_condense());
+    // Rate limited to once a day inside the service, so this is cheap to call
+    // after every turn and means the voice keeps up with how somebody has
+    // started talking rather than how they talked the week they signed up.
+    unawaited(SoulService.instance.adapt());
   }
 
   /// Voice turn: send [text] and resolve with the full assistant reply once the
@@ -1051,6 +1150,8 @@ class CoachProvider extends ChangeNotifier {
   @override
   Future<void> dispose() async {
     await _streamSub?.cancel();
+    await _arrivals?.cancel();
+    await _queuedSends?.cancel();
     unawaited(_persistLog());
     // Anything since the last fold still deserves remembering.
     if (_sinceCondense > 0) unawaited(_condense());

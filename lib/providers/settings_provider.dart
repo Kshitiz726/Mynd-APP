@@ -23,6 +23,14 @@ class SettingsProvider extends ChangeNotifier {
   bool _reduceMotion = false;
   bool _haptics = true;
 
+  /// A soft tick while the coach is composing.
+  ///
+  /// On by default because it was asked for, and separately switchable
+  /// because a repeating sound is exactly the kind of thing that is pleasant
+  /// to one person and unbearable to another, and this app's users are more
+  /// likely than most to be in the second group.
+  bool _typingSound = true;
+
   TimeOfDay _wakeUpTime = const TimeOfDay(hour: 8, minute: 0);
   TimeOfDay _sleepTime = const TimeOfDay(hour: 22, minute: 0);
   String _selectedRingtone = 'Default';
@@ -33,6 +41,7 @@ class SettingsProvider extends ChangeNotifier {
   bool get hyperlegible => _hyperlegible;
   bool get reduceMotion => _reduceMotion;
   bool get haptics => _haptics;
+  bool get typingSound => _typingSound;
   TimeOfDay get wakeUpTime => _wakeUpTime;
   TimeOfDay get sleepTime => _sleepTime;
   String get selectedRingtone => _selectedRingtone;
@@ -71,6 +80,15 @@ class SettingsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> toggleTypingSound([bool? value]) async {
+    _typingSound = value ?? !_typingSound;
+    notifyListeners();
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.setBool(_kTypingSound, _typingSound);
+    } catch (_) {/* the setting still applies for this session */}
+  }
+
   void toggleHaptics([bool? value]) {
     _haptics = value ?? !_haptics;
     Haptics.enabled = _haptics;
@@ -100,13 +118,19 @@ class SettingsProvider extends ChangeNotifier {
   /// directly, because scheduling also happens from the OS boot receiver, where
   /// there is no provider to ask.
   static const _kRingtone = 'om_selected_ringtone';
+  static const _kTypingSound = 'om_typing_sound';
 
   /// Restore the tone. Held only in memory before, so every launch silently
   /// reset the picker to 'Default' and the choice never survived a restart.
   Future<void> loadRingtone() async {
     final p = await SharedPreferences.getInstance();
+    final typing = p.getBool(_kTypingSound);
+    if (typing != null) _typingSound = typing;
     final saved = p.getString(_kRingtone);
-    if (saved == null || saved == _selectedRingtone) return;
+    if (saved == null || saved == _selectedRingtone) {
+      if (typing != null) notifyListeners();
+      return;
+    }
     _selectedRingtone = saved;
     notifyListeners();
   }

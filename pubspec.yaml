@@ -110,6 +110,8 @@ flutter:
     # before anything else has loaded, and a coach with a missing face is worse
     # than a coach with a plain one.
     - assets/agents/
+    - assets/soul/
+    - assets/sfx/
     # The app icon, bundled so the splash and login screens can show the same
     # mark the user tapped. flutter_launcher_icons only reads it at build time;
     # displaying it inside the app needs it shipped as well.

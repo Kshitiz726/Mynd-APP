@@ -250,6 +250,12 @@ class ProfileScreen extends StatelessWidget {
                 onChanged: (_) => settings.toggleHaptics(),
               ),
               _ToggleRow(
+                icon: Icons.graphic_eq_rounded,
+                label: 'Typing sound',
+                value: settings.typingSound,
+                onChanged: (_) => settings.toggleTypingSound(),
+              ),
+              _ToggleRow(
                 icon: Icons.motion_photos_off_outlined,
                 label: 'Reduce motion',
                 value: settings.reduceMotion,

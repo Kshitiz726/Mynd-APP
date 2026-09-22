@@ -5,6 +5,7 @@ import '../../services/notification_service.dart';
 import 'coach_memory_service.dart';
 import 'feed_instructions_service.dart';
 import 'mail_service.dart';
+import 'soul_service.dart';
 
 /// Gives every account its own local data on a shared device.
 ///
@@ -99,6 +100,7 @@ class AccountScope {
     // Held in memory by a singleton, so swapping its keys is not enough.
     await CoachMemoryService.instance.reload();
     await FeedInstructionsService.instance.reload();
+    await SoulService.instance.reload();
     // The Gmail credential belongs to whoever put it there, not to whoever
     // signs in next. Dropped from memory here; the keychain entry itself is
     // cleared by Connections > Disconnect.

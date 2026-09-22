@@ -21,6 +21,7 @@ import '../onboarding/health_consent_screen.dart';
 import 'agent_picker_screen.dart';
 import 'widgets/email_approval_sheet.dart';
 import '../../core/services/email_approval.dart';
+import '../../widgets/thinking_cloud.dart';
 
 /// "coach" - Mynd, the pocket coach. A calm chat with one-tap prompts for the
 /// moments words are hard to find ("i'm stuck", "i'm overwhelmed"…).
@@ -77,6 +78,10 @@ class _CoachScreenState extends State<CoachScreen> {
       coach.refreshQuota();
       // Whether they have already said "never ask again" about sending mail.
       coach.loadMailPrefs();
+      // New mail, and queued messages going out, are spoken by the coach
+      // rather than shown as a banner: the promise of the watch is that they
+      // hear about it from the voice they asked to watch.
+      coach.bindMailWatch();
     });
   }
 
@@ -252,11 +257,30 @@ class _CoachScreenState extends State<CoachScreen> {
                   const SizedBox(width: 4),
                   // The agent's face, and it is a button: tapping it is the
                   // fastest route to switching who you are talking to.
-                  AgentAvatar(
-                    agent: agents.agent,
-                    size: 44,
-                    mood: _moodFor(coach),
-                    onTap: () => AgentPickerScreen.open(context),
+                  //
+                  // The thinking cloud sits over the top of the head and is
+                  // allowed to overflow the row, which is why the Stack is
+                  // unclipped and the avatar keeps its own 44px footprint:
+                  // reserving space for the cloud would shift the whole header
+                  // every time the coach started composing.
+                  Stack(
+                    clipBehavior: Clip.none,
+                    alignment: Alignment.topCenter,
+                    children: [
+                      AgentAvatar(
+                        agent: agents.agent,
+                        size: 44,
+                        mood: _moodFor(coach),
+                        onTap: () => AgentPickerScreen.open(context),
+                      ),
+                      Positioned(
+                        top: -30,
+                        child: ThinkingCloud(
+                          visible: coach.isLoading && !coach.isStreaming,
+                          colour: agents.agent.accent,
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(width: 10),
                   Expanded(

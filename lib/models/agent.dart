@@ -156,11 +156,17 @@ class AgentSettings {
             'one.'
       else
         'No emoji.',
+      // The old rule here was "end on one question that moves things
+      // forward", which produced "want to do this?" at the bottom of almost
+      // every reply. That hands the deciding back to somebody who came here
+      // because deciding is the hard part, and it is the single thing that
+      // made the coach read like a bot.
       if (asksQuestions)
-        'End on one question that moves things forward, when there is a real '
-            'one to ask.'
+        'Ask a question only when the answer changes what you would say next '
+            'and you could not reasonably work it out yourself. Never end by '
+            'offering to do something.'
       else
-        'Do not end every message with a question. Statements are fine.',
+        'Do not ask questions back. Say the thing.',
       emotion.instruction,
     ];
     if (custom.trim().isNotEmpty) {
