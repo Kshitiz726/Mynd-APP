@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ourmynd/models/feed_post.dart';
 import 'package:ourmynd/models/news_item.dart';
@@ -95,5 +97,31 @@ void main() {
     // Substring matching on two or three characters would pair almost any
     // post with almost any article.
     expect(match({'title': 'focus'}), isNull);
+  });
+
+  group('repairing what the writer answered with', () {
+    test('a raw newline inside a body no longer costs the whole edition', () {
+      // Observed live: the writer laid a body out over two lines, JSON forbids
+      // that inside a string, and the entire edition dropped back to bare
+      // headlines because one card was formatted prettily.
+      const answer = '{"posts":[{"title":"A","body":"one line\nand another"}]}';
+      expect(() => jsonDecode(answer), throwsFormatException);
+
+      final fixed = jsonDecode(FeedProvider.repairJson(answer))
+          as Map<String, dynamic>;
+      final post = (fixed['posts'] as List).first as Map<String, dynamic>;
+      expect(post['body'], 'one line and another');
+    });
+
+    test('prose or code fences around the answer are sliced off', () {
+      const answer = 'Sure, here you go:\n```json\n{"posts":[]}\n```';
+      expect(jsonDecode(FeedProvider.repairJson(answer)),
+          containsPair('posts', isEmpty));
+    });
+
+    test('clean json is returned untouched', () {
+      const answer = '{"posts":[{"ref":"a1","title":"A","body":"B"}]}';
+      expect(FeedProvider.repairJson(answer), answer);
+    });
   });
 }

@@ -219,8 +219,9 @@ class FeedProvider extends ChangeNotifier {
       for (var i = 0; i < source.length; i++) 'a${i + 1}': source[i],
     };
 
+    String? raw;
     try {
-      final out = await GroqService.instance.extract(task: 'feed', [
+      final out = raw = await GroqService.instance.extract(task: 'feed', [
         {
           'role': 'system',
           'content': '''
@@ -270,7 +271,7 @@ Answer as JSON only: {"posts":[...]}''',
         },
       ]);
 
-      final j = jsonDecode(_jsonSlice(out)) as Map<String, dynamic>;
+      final j = jsonDecode(repairJson(out)) as Map<String, dynamic>;
       final posts = <FeedPost>[];
       for (final raw in ((j['posts'] as List?) ?? const []).whereType<Map>()) {
         final m = raw.cast<String, dynamic>();
@@ -296,7 +297,15 @@ Answer as JSON only: {"posts":[...]}''',
       }
       return posts.isEmpty ? null : posts;
     } catch (e) {
+      // The text is logged, not just the exception. A FormatException gives a
+      // character offset and nothing else, which says an edition was lost
+      // without saying why, and the feed silently drops back to bare
+      // headlines when this happens.
       debugPrint('[feed] could not compose: $e');
+      if (raw != null) {
+        debugPrint('[feed] the writer said: '
+            '${raw.substring(0, raw.length.clamp(0, 400))}');
+      }
       return null;
     }
   }
@@ -384,10 +393,20 @@ Answer as JSON only: {"posts":[...]}''',
     }
   }
 
-  static String _jsonSlice(String s) {
+  /// Make a model's answer parseable without changing what it says.
+  ///
+  /// Two things get in the way, and both cost the whole edition its writing
+  /// rather than one field. The answer may be wrapped in prose or code fences,
+  /// so it is sliced to the outermost braces. And a writer laying a body out
+  /// over two lines puts a raw newline inside a JSON string, which the format
+  /// forbids and jsonDecode refuses outright. Between tokens a control
+  /// character is only ever whitespace here, so turning every one of them into
+  /// a space is safe and fixes the string case at the same time.
+  @visibleForTesting
+  static String repairJson(String s) {
     final a = s.indexOf('{');
     final b = s.lastIndexOf('}');
-    if (a < 0 || b <= a) return s;
-    return s.substring(a, b + 1);
+    final slice = (a < 0 || b <= a) ? s : s.substring(a, b + 1);
+    return slice.replaceAll(RegExp(r'[\x00-\x1F]'), ' ');
   }
 }
