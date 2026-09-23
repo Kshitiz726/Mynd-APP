@@ -21,6 +21,7 @@ import '../../widgets/om_switch.dart';
 import '../../widgets/om_tappable.dart';
 import '../coach/agent_picker_screen.dart';
 import '../memory/memory_screen.dart';
+import '../soul/soul_screen.dart';
 import 'about_screen.dart';
 import 'connections_screen.dart';
 import 'account_data_screen.dart';
@@ -190,6 +191,15 @@ class ProfileScreen extends StatelessWidget {
                 icon: Icons.face_retouching_natural_outlined,
                 label: 'Your coach',
                 onTap: () => AgentPickerScreen.open(context),
+              ),
+              // Next to memory, because they are the pair: one is what it
+              // knows about you, the other is how it talks to you. The second
+              // steered every conversation while existing nowhere you could
+              // go and look at it.
+              _Row(
+                icon: Icons.favorite_outline_rounded,
+                label: 'Soul',
+                onTap: () => SoulScreen.open(context),
               ),
               _Row(
                 icon: Icons.psychology_outlined,
