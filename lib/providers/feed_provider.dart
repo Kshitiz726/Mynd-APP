@@ -161,9 +161,15 @@ class FeedProvider extends ChangeNotifier {
       final queries = await fi.searchQueries();
       debugPrint('[feed] queries: $queries');
       final api = ApiClient.instance;
-      // Twelve per query, not six. Everything already published is now filtered
-      // out, so the pool has to be deep enough that a slot can still be filled
-      // from what is left after a week of filtering.
+      // Twenty-five per query, not six.
+      //
+      // Two filters now stand between a fetched article and a written post:
+      // it must not have run before, and it must have a picture. Measured on
+      // real queries, only about one article in eight carries an og:image that
+      // can actually be read - publishers behind bot walls and Google's own
+      // redirect pages account for most of the rest - so asking for twelve
+      // produced editions of one and two posts. The pool has to be deep
+      // enough that the survivors are still a feed.
       final thisWrite = <String>{};
       final articles = <NewsItem>[];
       var fetched = 0;
@@ -177,7 +183,7 @@ class FeedProvider extends ChangeNotifier {
           blocked++;
           continue;
         }
-        for (final n in await api.fetchNews(q, limit: 12)) {
+        for (final n in await api.fetchNews(q, limit: 25)) {
           fetched++;
 
           // Never, whatever the instructions say. See feed_safety.dart.
