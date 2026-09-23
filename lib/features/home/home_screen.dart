@@ -107,8 +107,13 @@ class _HomeScreenState extends State<HomeScreen> {
             const MyndHero(),
             // The one thing to do, first: it is the only item on this screen
             // that somebody can act on without deciding anything.
-            const OmSectionHeader('do this now'),
-            const QuickActions(),
+            //
+            // Heading and card together, or neither. QuickActions already
+            // collapses to nothing when there is no task, but the heading was
+            // outside it and stayed - so an empty schedule showed the words
+            // "do this now" with a blank space under them, which reads as a
+            // card that failed to load rather than as a clear day.
+            const _DoThisNow(),
 
             // Then the day's line, still on the first screen.
             const MotivationCard(),
@@ -130,6 +135,25 @@ class _HomeScreenState extends State<HomeScreen> {
             const GoalsList(),
           ],
         ),
+      ],
+    );
+  }
+}
+
+/// "do this now", heading included, or nothing at all.
+class _DoThisNow extends StatelessWidget {
+  const _DoThisNow();
+
+  @override
+  Widget build(BuildContext context) {
+    final tasks = context.watch<TaskProvider>();
+    final has = tasks.upNext != null || tasks.backlog.isNotEmpty;
+    if (!has) return const SizedBox.shrink();
+    return const Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        OmSectionHeader('do this now'),
+        QuickActions(),
       ],
     );
   }
