@@ -45,8 +45,35 @@ void main() {
 
     expect(find.text('Blocked accounts'), findsOneWidget);
     expect(find.text('Contact support'), findsOneWidget);
-    // Deletion lives one screen in, behind this row.
-    expect(find.text('Account'), findsWidgets);
+    // Deletion lives one screen in, behind this row. Matched exactly, because
+    // 'Account' on its own also matches the group heading above it - so the
+    // old assertion passed on the heading alone and would have gone on passing
+    // if the row itself disappeared.
+    expect(find.text('Account and your data'), findsOneWidget);
+  });
+
+  testWidgets('no two rows lead to the same screen', (tester) async {
+    // 'Account' and 'Your data' both opened AccountDataScreen, from two
+    // different groups. Reading both and picking one is work that ends in the
+    // same place either way, so one of them was pure cost.
+    //
+    // Tall enough for the whole page to lay out at once. The list is lazy, so
+    // on the default surface the rows near the bottom are never built and
+    // every findsNothing below would pass without proving anything.
+    tester.view.physicalSize = const Size(393 * 3, 3000 * 3);
+    tester.view.devicePixelRatio = 3.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(host());
+    await tester.pump();
+
+    expect(find.text('Your data'), findsNothing);
+
+    // And the label matches what is behind it: this row opens the about page,
+    // which is a version number and a licence list. The row that reaches a
+    // person is 'Contact support', asserted above.
+    expect(find.text('Help & Support'), findsNothing);
+    expect(find.text('About OurMynd'), findsOneWidget);
   });
 
   testWidgets('Blocked accounts opens the unblock list', (tester) async {

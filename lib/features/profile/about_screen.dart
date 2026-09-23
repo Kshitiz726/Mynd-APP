@@ -2,7 +2,6 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_spacing.dart';
-import '../../core/constants/legal.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/om_icons.dart';
 import '../../widgets/om_back_button.dart';
@@ -11,6 +10,14 @@ import '../../widgets/om_tappable.dart';
 
 class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
+
+  /// Kept in one place because it was written out twice and both copies were
+  /// wrong: the card claimed build 42 while the shipping build was 15, so the
+  /// one screen whose job is to say what you are running was the one screen
+  /// lying about it. Update this line whenever `version:` in pubspec.yaml
+  /// changes.
+  static const String _version = '1.0.0';
+  static const String _build = '15';
 
   @override
   Widget build(BuildContext context) {
@@ -45,30 +52,25 @@ class AboutScreen extends StatelessWidget {
                 const OmTopBar(title: 'about', leading: OmBackButton()),
                 const SizedBox(height: AppSpacing.lg),
                 
-                const _AboutCard(title: 'App Version', subtitle: 'v1.0.0 (Build 42)', icon: 'smartphone'),
-                _AboutCard(
-                  title: 'Terms of Service',
-                  subtitle: 'Read our terms',
-                  icon: 'file-text',
-                  showArrow: true,
-                  onTap: () => Legal.openTerms(context),
+                // Two cards, not four. "Terms of Service" and "Privacy Policy"
+                // were here as well, and they are already rows on the Profile
+                // screen one level up - so the same two documents were offered
+                // twice within one tap of each other, and this page answered a
+                // question the page that opened it had already answered.
+                const _AboutCard(
+                  title: 'App version',
+                  subtitle: 'v$_version (build $_build)',
+                  icon: 'smartphone',
                 ),
                 _AboutCard(
-                  title: 'Privacy Policy',
-                  subtitle: 'How we handle your data',
-                  icon: 'shield',
-                  showArrow: true,
-                  onTap: () => Legal.openPrivacy(context),
-                ),
-                _AboutCard(
-                  title: 'Open Source Licenses',
+                  title: 'Open source licenses',
                   subtitle: 'Libraries we use',
                   icon: 'code',
                   showArrow: true,
                   onTap: () => showLicensePage(
                     context: context,
                     applicationName: 'OurMynd',
-                    applicationVersion: 'v1.0.0',
+                    applicationVersion: 'v$_version',
                   ),
                 ),
                 

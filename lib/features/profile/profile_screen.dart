@@ -157,9 +157,14 @@ class ProfileScreen extends StatelessWidget {
               // code. Apple requires account deletion to be reachable from
               // inside the app (5.1.1(v)), so that was a rejection on its own,
               // quite apart from being a door to the paywall.
+              // Labelled for both of the things behind it. There used to be a
+              // second row, "Your data", down in the Privacy group, opening
+              // this exact same screen - one destination wearing two names in
+              // two places, which is a choice to make with no difference to
+              // find at the end of it. One row, both words people search for.
               _Row(
                 icon: Icons.person_outline_rounded,
-                label: 'Account',
+                label: 'Account and your data',
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute<void>(
                     builder: (_) => const AccountDataScreen(),
@@ -285,17 +290,6 @@ class ProfileScreen extends StatelessWidget {
                 icon: Icons.gavel_rounded,
                 label: 'Terms',
                 onTap: () => Legal.openTerms(context),
-              ),
-              // Export and deletion. Both endpoints existed with no way to
-              // reach them, which is the same as not having them: these are
-              // rights the user exercises, and App Store review requires the
-              // deletion route to be in the app.
-              _Row(
-                icon: Icons.download_outlined,
-                label: 'Your data',
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(builder: (_) => const AccountDataScreen()),
-                ),
                 last: true,
               ),
             ]),
@@ -303,9 +297,14 @@ class ProfileScreen extends StatelessWidget {
 
             const _GroupLabel('Settings'),
             _Group(children: [
+              // Named after what is actually behind it. It said "Help &
+              // Support" and opened a page of version numbers and licences,
+              // while the row that does reach a human is "Contact support" in
+              // the Account group - so the promising label was the wrong door
+              // and the working one looked like the lesser of the two.
               _Row(
-                icon: Icons.help_outline_rounded,
-                label: 'Help & Support',
+                icon: Icons.info_outline_rounded,
+                label: 'About OurMynd',
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute<void>(builder: (_) => const AboutScreen()),
                 ),
