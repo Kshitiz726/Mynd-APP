@@ -54,7 +54,12 @@ class FeedProvider extends ChangeNotifier {
   /// afternoon, and the fix would look like no fix at all until the day part
   /// rolled over. Older editions are left exactly as they were: they are the
   /// archive, not the front page.
-  static const _schema = 2;
+  ///
+  /// 3: every card carries a picture now, and stories are not repeated between
+  /// editions. The edition already stored was written under neither rule, so
+  /// the front page would otherwise still be the thing that was complained
+  /// about.
+  static const _schema = 3;
 
   /// Roughly a fortnight at four a day. Enough to scroll back through, small
   /// enough that the JSON stays a sane thing to keep in a preference.
@@ -178,6 +183,10 @@ class FeedProvider extends ChangeNotifier {
           // Never, whatever the instructions say. See feed_safety.dart.
           if (isUnsafeForFeed('${n.title} ${n.summary ?? ''}')) {
             blocked++;
+            // Named, because the filter erring towards caution is the failure
+            // mode worth being able to see: a headline dropped here is a real
+            // story somebody will never know was withheld.
+            debugPrint('[feed] blocked: ${n.title}');
             continue;
           }
 
