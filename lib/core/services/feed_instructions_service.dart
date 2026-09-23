@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'feed_safety.dart';
 import 'groq_service.dart';
 
 /// The document that decides what the Feed is about.
@@ -75,8 +76,15 @@ class FeedInstructionsService {
     await init();
   }
 
+  /// Saved with anything this feed will not carry removed first.
+  ///
+  /// Filtered here rather than only at fetch time, so the instruction is gone
+  /// rather than merely ignored: it does not sit in the document looking like
+  /// it is in force, it does not reach the model that writes the queries, and
+  /// it is not still there next week. Line by line, so one line costs itself
+  /// and not the rest of what somebody wrote.
   Future<void> save(String value) async {
-    final v = value.trim();
+    final v = stripUnsafeInstructions(value.trim());
     if (v.isEmpty) return;
     _text = v;
     final p = await SharedPreferences.getInstance();
@@ -175,14 +183,18 @@ class FeedInstructionsService {
       final qs = ((j['queries'] as List?) ?? const [])
           .whereType<String>()
           .map((q) => q.trim())
-          .where((q) => q.isNotEmpty && q.length < 60)
+          // Again here, because the model is the other way in: a stored
+          // document that was clean can still produce a query that is not.
+          .where((q) =>
+              q.isNotEmpty && q.length < 60 && !isUnsafeForFeed(q, strict: true))
           .take(3)
           .toList();
       if (qs.isNotEmpty) return qs;
     } catch (e) {
       debugPrint('[feed] could not build queries: $e');
     }
-    return [_fallbackQuery()];
+    final fallback = _fallbackQuery();
+    return isUnsafeForFeed(fallback, strict: true) ? const [] : [fallback];
   }
 
   String _fallbackQuery() {

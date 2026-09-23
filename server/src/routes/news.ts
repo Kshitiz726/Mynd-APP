@@ -437,7 +437,10 @@ r.get('/news', requireAuth, async (req, res) => {
 
     // Swap Google's redirects for the publisher's own page where the same
     // headline can be found on Bing. Bounded, because it is a request each.
-    const opaque = items.filter((i) => i.url.includes('news.google.com')).slice(0, 6);
+    // Twelve, not six. A google.com redirect can never yield a picture - the
+    // page behind it is Google's own - so every link left unresolved here is a
+    // card that cannot have one, and the feed now publishes only cards that do.
+    const opaque = items.filter((i) => i.url.includes('news.google.com')).slice(0, 12);
     if (opaque.length > 0) {
       const real = await Promise.all(opaque.map((i) => realArticleFor(i.title)));
       opaque.forEach((item, n) => {

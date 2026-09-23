@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../core/services/api_client.dart';
 import '../core/services/coach_memory_service.dart';
 import '../core/services/feed_instructions_service.dart';
+import '../core/services/feed_safety.dart';
 import '../core/services/groq_service.dart';
 import '../models/feed_post.dart';
 import '../models/news_item.dart';
@@ -162,9 +163,35 @@ class FeedProvider extends ChangeNotifier {
       final articles = <NewsItem>[];
       var fetched = 0;
       var repeats = 0;
+      var blocked = 0;
+      var pictureless = 0;
       for (final q in queries) {
+        // A query built from an instruction asking for something this feed does
+        // not carry is not run at all.
+        if (isUnsafeForFeed(q, strict: true)) {
+          blocked++;
+          continue;
+        }
         for (final n in await api.fetchNews(q, limit: 12)) {
           fetched++;
+
+          // Never, whatever the instructions say. See feed_safety.dart.
+          if (isUnsafeForFeed('${n.title} ${n.summary ?? ''}')) {
+            blocked++;
+            continue;
+          }
+
+          // Every card carries a real picture from its own article, so a story
+          // that has none is not written up. The alternative was a feed of
+          // mixed cards where the text-only ones read as broken, and the only
+          // ways to fill them would be a stock photo that is not of this story
+          // or a generated image, which is worse: an invented picture next to
+          // a real headline is a small lie on every card.
+          if (n.imageUrl == null || n.imageUrl!.isEmpty) {
+            pictureless++;
+            continue;
+          }
+
           final keys = seenKeysFor(n);
           // Within this edition, and against every edition before it.
           if (keys.any(thisWrite.contains)) continue;
@@ -177,30 +204,25 @@ class FeedProvider extends ChangeNotifier {
         }
       }
       debugPrint('[feed] $fetched fetched, $repeats already published, '
+          '$pictureless without a picture, $blocked blocked, '
           '${articles.length} fresh');
 
       if (articles.isEmpty) {
-        // Two different nothings, and saying the wrong one sends somebody to
-        // check their connection over a quiet news day.
-        debugPrint('[feed] nothing fresh for $queries');
+        // Several different nothings, and saying the wrong one sends somebody
+        // to check their connection over a quiet news day.
+        debugPrint('[feed] nothing usable for $queries');
         _problem = fetched == 0
             ? 'Could not reach the news source just now.'
-            : 'Nothing new since the last edition. Everything out there right '
-                'now has already been in your feed.';
+            : pictureless > repeats
+                ? 'Nothing with a picture came back this time. Try again in a '
+                    'little while.'
+                : 'Nothing new since the last edition. Everything out there '
+                    'right now has already been in your feed.';
         return;
       }
 
-      // Stories that came with a picture go first, and only the first eight
-      // are ever written up. The feed is meant to be looked at, so when two
-      // stories fit the instructions equally well the one that can be shown
-      // should be the one that gets the space.
-      articles.sort((a, b) {
-        final ai = a.imageUrl == null ? 1 : 0;
-        final bi = b.imageUrl == null ? 1 : 0;
-        return ai.compareTo(bi);
-      });
-      debugPrint('[feed] ${articles.length} articles, '
-          '${articles.where((a) => a.imageUrl != null).length} with a picture');
+      // No sort by picture any more: nothing without one gets this far.
+      debugPrint('[feed] ${articles.length} articles, all with a picture');
 
       final posts = await _compose(articles, fi) ?? _plain(articles);
       if (posts.isEmpty) {
