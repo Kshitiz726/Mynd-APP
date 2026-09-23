@@ -444,6 +444,29 @@ Answer as JSON only: {"posts":[...]}''',
     ];
   }
 
+  /// Build the record from what has already been published on this device.
+  ///
+  /// A post keeps the link it was written from, so the URL key seeds exactly.
+  /// Its title is the headline the model wrote, not the publisher's, so the
+  /// title key seeded here will usually miss - which costs nothing, because
+  /// the URL is the key that catches the same article coming back and the
+  /// title is only ever the second net, for the same story under a different
+  /// link. Editions written from now on record both properly.
+  void _seedSeenFromEditions() {
+    for (final e in _editions) {
+      final at = e.at.millisecondsSinceEpoch;
+      for (final post in e.posts) {
+        final url = post.linkUrl;
+        if (url == null || url.isEmpty) continue;
+        for (final k in seenKeysFor(NewsItem(title: post.title, url: url))) {
+          // Keep the oldest stamp, so the TTL runs from when it was published.
+          final prev = _seen[k];
+          if (prev == null || at < prev) _seen[k] = at;
+        }
+      }
+    }
+  }
+
   /// Forget stories old enough that running one again is not a repeat.
   void _pruneSeen() {
     final cutoff =
@@ -457,7 +480,18 @@ Answer as JSON only: {"posts":[...]}''',
     try {
       final p = await SharedPreferences.getInstance();
       final raw = p.getString(_kSeen);
-      if (raw == null) return;
+      if (raw == null) {
+        // Nothing recorded yet, so seed it from the editions already on the
+        // device. Without this the record starts empty on the build that
+        // introduces it, and the very next edition happily repeats everything
+        // written before it - which is the complaint, reproduced once more on
+        // the machine that was supposed to have fixed it.
+        _seedSeenFromEditions();
+        _pruneSeen();
+        if (_seen.isNotEmpty) await _persistSeen();
+        debugPrint('[feed] seeded ${_seen.length} keys from stored editions');
+        return;
+      }
       final m = jsonDecode(raw) as Map;
       _seen
         ..clear()
