@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/constants/app_spacing.dart';
+import '../../core/config/store_policy.dart';
 import '../../core/routes/app_routes.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/haptics.dart';
@@ -75,7 +76,12 @@ class MemoryScreen extends StatelessWidget {
                           Haptics.light();
                           Toast.show(context,
                               'Editing your memory is a Plus feature');
-                          Navigator.of(context).pushNamed(AppRoutes.paywall);
+                          // Only where there is something to buy. Pushing this
+                          // on a build that does not register the route stacks
+                          // a second copy of the app instead of opening it.
+                          if (StorePolicy.canSell) {
+                            Navigator.of(context).pushNamed(AppRoutes.paywall);
+                          }
                         }
                       },
                     ),

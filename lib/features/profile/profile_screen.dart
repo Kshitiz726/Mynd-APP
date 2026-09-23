@@ -239,7 +239,12 @@ class ProfileScreen extends StatelessWidget {
                 onLockedTap: () {
                   Haptics.light();
                   Toast.show(context, 'Dark mode is a Premium feature');
-                  Navigator.of(context).pushNamed(AppRoutes.paywall);
+                  // See the plan card above: the route is not registered on a
+                  // build that cannot sell, and pushing it anyway stacks a
+                  // second app rather than opening a paywall.
+                  if (StorePolicy.canSell) {
+                    Navigator.of(context).pushNamed(AppRoutes.paywall);
+                  }
                 },
               ),
               _ToggleRow(
