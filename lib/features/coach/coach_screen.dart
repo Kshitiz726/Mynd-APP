@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/config/store_policy.dart';
 import '../../core/constants/app_spacing.dart';
 import '../../core/routes/app_routes.dart';
 import '../../core/theme/app_colors.dart';
@@ -13,7 +14,6 @@ import '../../providers/memory_provider.dart';
 import '../../providers/premium_provider.dart';
 import '../../providers/agent_provider.dart';
 import '../../widgets/agent_avatar.dart';
-import '../../widgets/om_back_button.dart';
 import '../../widgets/om_glass.dart';
 import '../../widgets/om_push_drawer.dart';
 import '../../widgets/om_tappable.dart';
@@ -44,7 +44,7 @@ class CoachScreen extends StatefulWidget {
 ///
 /// Only conversation is metered. The Feed, the scheduling and the app's other
 /// reasoning run through the unmetered extract route and are never affected.
-const int kCoachWeeklyLimit = 100;
+const int kCoachWeeklyLimit = 200;
 
 class _CoachScreenState extends State<CoachScreen> {
   static const _prompts = [
@@ -237,23 +237,22 @@ class _CoachScreenState extends State<CoachScreen> {
                   8, AppSpacing.screenTop, AppSpacing.screenH, 8),
               child: Row(
                 children: [
-                  // The chat hides the bottom bar, so it always carries its own
-                  // way out. If it was pushed (from history or a deep link) the
-                  // arrow pops that route; on the tab there is nothing to pop, so
-                  // it returns to whichever tab you came from instead.
-                  // Chat is the first tab and the app opens on it, so there is
-                  // usually nothing to go back to: the control is the drawer,
-                  // which is the only route to side chats and to Profile. It
-                  // stays a back arrow when this screen was pushed from
-                  // somewhere, where popping is what the user means.
-                  if (Navigator.of(context).canPop())
-                    OmBackButton(onTap: () => Navigator.of(context).maybePop())
-                  else
-                    // The panel belongs to the shell, not to this screen: it
-                    // pushes the bottom bar aside too, and that bar is a level
-                    // above here.
-                    _DrawerButton(
-                        onTap: () => OmPushDrawer.of(context)?.open()),
+                  // The drawer, always. This is the chat tab: the panel is the
+                  // only route to side chats and to Profile, so the control has
+                  // one job.
+                  //
+                  // It used to be `if (Navigator.canPop())` show a back arrow
+                  // instead, which sounds reasonable and is not: canPop is a
+                  // live reading of the stack, so the icon changed the instant
+                  // anything at all was pushed over this screen. Tapping the
+                  // quota pill flipped the hamburger into a back arrow, which
+                  // looked like the sidebar glitching, because in a sense it
+                  // was. Nothing pushes CoachScreen anyway - the tab and the
+                  // route are its only two call sites, and the route already
+                  // asks for no back button - so the branch could only ever
+                  // fire by accident.
+                  _DrawerButton(
+                      onTap: () => OmPushDrawer.of(context)?.open()),
                   const SizedBox(width: 4),
                   // The agent's face, and it is a button: tapping it is the
                   // fastest route to switching who you are talking to.
@@ -425,10 +424,17 @@ class _QuotaWarning extends StatelessWidget {
     final left = coach.remainingToday;
     if (left == null) return const SizedBox.shrink();
 
+    // Not a button on a build that cannot sell. The tap pushed the paywall
+    // route, which on iOS is not registered, so onGenerateRoute fell through to
+    // its default and pushed a SECOND AppShell on top of the first. Nothing
+    // appeared to happen - it is the same app - except that the stack now had
+    // something to pop, which is what turned the drawer icon into a back arrow.
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: OmTappable(
-        onTap: () => Navigator.of(context).pushNamed(AppRoutes.paywall),
+        onTap: StorePolicy.canSell
+            ? () => Navigator.of(context).pushNamed(AppRoutes.paywall)
+            : null,
         feedback: OmTapFeedback.light,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
@@ -885,34 +891,49 @@ class _LimitReachedCard extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'Free includes $kCoachWeeklyLimit messages a week, and they reset '
-            'every Monday. Plus raises it to 1,000 and Pro removes the cap.',
+            StorePolicy.canSell
+                ? 'Free includes $kCoachWeeklyLimit messages a week, and they '
+                    'reset every Monday. Plus raises it to 1,000 and Pro '
+                    'removes the cap.'
+                : 'That is $kCoachWeeklyLimit messages this week. They reset '
+                    'every Monday, and everything else in the app keeps '
+                    'working in the meantime.',
             style:
                 Theme.of(context).textTheme.bodySmall?.copyWith(color: c.text2, height: 1.4),
           ),
-          const SizedBox(height: 14),
-          OmTappable(
-            onTap: () {
-              Haptics.medium();
-              Navigator.of(context).pushNamed(AppRoutes.paywall);
-            },
-            feedback: OmTapFeedback.none,
-            pressedScale: 0.97,
-            child: Container(
-              width: double.infinity,
-              height: 48,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                gradient: c.brandGradient,
-                borderRadius: BorderRadius.circular(AppRadius.pill),
+          // The button only exists where there is something to buy.
+          //
+          // It used to be shown unconditionally, and on iOS it pushed a route
+          // that is deliberately not registered there - so it silently stacked
+          // a second copy of the whole app instead of opening anything. An
+          // upgrade button that does nothing is worse than no button: it reads
+          // as the app being broken at the exact moment somebody is being
+          // asked to pay.
+          if (StorePolicy.canSell) ...[
+            const SizedBox(height: 14),
+            OmTappable(
+              onTap: () {
+                Haptics.medium();
+                Navigator.of(context).pushNamed(AppRoutes.paywall);
+              },
+              feedback: OmTapFeedback.none,
+              pressedScale: 0.97,
+              child: Container(
+                width: double.infinity,
+                height: 48,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  gradient: c.brandGradient,
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
+                ),
+                child: const Text('Upgrade to Premium',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15)),
               ),
-              child: const Text('Upgrade to Premium',
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 15)),
             ),
-          ),
+          ],
         ],
       ),
     );

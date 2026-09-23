@@ -44,7 +44,7 @@ const GROQ_ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions';
  * Matches kCoachWeeklyLimit in the app; this copy is the authoritative one.
  */
 const WEEKLY_LIMIT: Record<Tier, number | null> = {
-  free: 100,
+  free: 200,
   plus: 1000,
   pro: null,
 };
