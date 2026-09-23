@@ -29,6 +29,22 @@ class FeedProvider extends ChangeNotifier {
   static const _kEditions = 'om_feed_editions';
   static const _kSchema = 'om_feed_schema';
 
+  /// Every story already published to this person, as key -> when.
+  ///
+  /// The feed used to dedupe with a set built inside one write and thrown away
+  /// at the end of it, so it could only stop the same story appearing twice in
+  /// the same edition. Across editions there was nothing: the queries do not
+  /// change between breakfast and lunch, the news moves slower than the slots
+  /// do, and so the same articles came back and were written up again. The
+  /// Wednesday morning feed was Tuesday's stories, which is the one thing a
+  /// feed must not be.
+  static const _kSeen = 'om_feed_seen';
+
+  /// How long a story stays "already seen". Long enough to cover the slow
+  /// stories that sit near the top of a search for days, short enough that the
+  /// record cannot grow without bound.
+  static const _seenTtl = Duration(days: 21);
+
   /// Bumped when a change makes an already written edition worse than a fresh
   /// one. The current slot is then rewritten once, on the next open.
   ///
@@ -49,6 +65,9 @@ class FeedProvider extends ChangeNotifier {
   bool _writing = false;
   String? _problem;
   bool _staleSchema = false;
+
+  /// Keys of stories already written up, to the millisecond they were.
+  final Map<String, int> _seen = {};
 
   List<FeedEdition> get editions => List.unmodifiable(_editions);
 
@@ -80,7 +99,10 @@ class FeedProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      if (!_loaded) await _restore();
+      if (!_loaded) {
+        await _restore();
+        await _restoreSeen();
+      }
     } finally {
       _loading = false;
       _loaded = true;
@@ -133,16 +155,38 @@ class FeedProvider extends ChangeNotifier {
       final queries = await fi.searchQueries();
       debugPrint('[feed] queries: $queries');
       final api = ApiClient.instance;
-      final seen = <String>{};
+      // Twelve per query, not six. Everything already published is now filtered
+      // out, so the pool has to be deep enough that a slot can still be filled
+      // from what is left after a week of filtering.
+      final thisWrite = <String>{};
       final articles = <NewsItem>[];
+      var fetched = 0;
+      var repeats = 0;
       for (final q in queries) {
-        for (final n in await api.fetchNews(q, limit: 6)) {
-          if (seen.add(n.url)) articles.add(n);
+        for (final n in await api.fetchNews(q, limit: 12)) {
+          fetched++;
+          final keys = seenKeysFor(n);
+          // Within this edition, and against every edition before it.
+          if (keys.any(thisWrite.contains)) continue;
+          if (keys.any(_seen.containsKey)) {
+            repeats++;
+            continue;
+          }
+          thisWrite.addAll(keys);
+          articles.add(n);
         }
       }
+      debugPrint('[feed] $fetched fetched, $repeats already published, '
+          '${articles.length} fresh');
+
       if (articles.isEmpty) {
-        debugPrint('[feed] no articles came back for $queries');
-        _problem = 'Could not reach the news source just now.';
+        // Two different nothings, and saying the wrong one sends somebody to
+        // check their connection over a quiet news day.
+        debugPrint('[feed] nothing fresh for $queries');
+        _problem = fetched == 0
+            ? 'Could not reach the news source just now.'
+            : 'Nothing new since the last edition. Everything out there right '
+                'now has already been in your feed.';
         return;
       }
 
@@ -166,6 +210,21 @@ class FeedProvider extends ChangeNotifier {
       _problem = null;
       debugPrint('[feed] wrote ${posts.length} posts, '
           '${posts.where((p) => p.imageUrl != null).length} with a picture');
+
+      // Recorded after composing, not before: a story that was fetched but
+      // never made it into a post has not been published to anybody, and
+      // burning it here would quietly shrink tomorrow's pool for nothing.
+      final stamp = DateTime.now().millisecondsSinceEpoch;
+      final byUrl = {for (final a in articles) a.url: a};
+      for (final post in posts) {
+        final match = byUrl[post.linkUrl];
+        if (match == null) continue;
+        for (final k in seenKeysFor(match)) {
+          _seen[k] = stamp;
+        }
+      }
+      _pruneSeen();
+      await _persistSeen();
 
       final now = DateTime.now();
       _editions.removeWhere((e) => e.slot == slot);
@@ -357,7 +416,68 @@ Answer as JSON only: {"posts":[...]}''',
           ))
       .toList();
 
+  // ─── Not the same story twice ─────────────────────────────────────────────
+
+  /// The keys that identify a story for "have we already run this".
+  ///
+  /// Two, because one is not enough. The URL catches the identical article
+  /// coming back from the same search tomorrow. The flattened headline catches
+  /// the same story carried by a second publisher under its own link, which is
+  /// how a single news event otherwise fills a whole edition on its own.
+  @visibleForTesting
+  static List<String> seenKeysFor(NewsItem n) {
+    final url = n.url.trim().toLowerCase();
+    // Query strings are where trackers live, and the same article arrives with
+    // a different one every time it is fetched.
+    final cut = url.indexOf('?');
+    final bare = cut == -1 ? url : url.substring(0, cut);
+
+    final title = n.title
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9 ]'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+
+    return [
+      if (bare.isNotEmpty) 'u:$bare',
+      if (title.length >= 12) 't:$title',
+    ];
+  }
+
+  /// Forget stories old enough that running one again is not a repeat.
+  void _pruneSeen() {
+    final cutoff =
+        DateTime.now().subtract(_seenTtl).millisecondsSinceEpoch;
+    _seen.removeWhere((_, at) => at < cutoff);
+  }
+
   // ─── Storage ──────────────────────────────────────────────────────────────
+
+  Future<void> _restoreSeen() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      final raw = p.getString(_kSeen);
+      if (raw == null) return;
+      final m = jsonDecode(raw) as Map;
+      _seen
+        ..clear()
+        ..addAll(m.map((k, v) => MapEntry('$k', (v as num).toInt())));
+      _pruneSeen();
+      debugPrint('[feed] ${_seen.length} stories already published');
+    } catch (e) {
+      // A lost record costs one edition its freshness, never the screen.
+      debugPrint('[feed] could not restore seen stories: $e');
+    }
+  }
+
+  Future<void> _persistSeen() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.setString(_kSeen, jsonEncode(_seen));
+    } catch (e) {
+      debugPrint('[feed] could not save seen stories: $e');
+    }
+  }
 
   Future<void> _restore() async {
     try {
