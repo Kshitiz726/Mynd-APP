@@ -142,14 +142,66 @@ void main() {
     await tester.tap(find.byWidgetPredicate((w) => w is Switch).last);
     await tester.pumpAndSettle();
 
-    // Every room stays reachable, which is what wrapping buys over a scroll.
-    // Every room stays reachable, which is what wrapping buys over a
-    // horizontal scroll: nothing about a scroll says there is more to the
-    // right. The chips render their labels lowercased.
-    for (final room in ['café', 'library', 'rain', 'silence']) {
-      expect(find.text(room), findsOneWidget, reason: '$room went missing');
-    }
+    // Turning it on explains what happens instead of offering a room to sit
+    // in. The room picker is gone: it set a field nobody read, and two of its
+    // four labels were also scenes in the picker above it, which do work.
+    expect(find.textContaining('match you with someone focusing'), findsOneWidget);
+    expect(find.text('library'), findsNothing,
+        reason: 'the dead room picker is back');
+    // 'café' and 'rain' survive exactly once each, as scenes.
+    expect(find.text('café'), findsOneWidget);
+    expect(find.text('rain'), findsOneWidget);
     expect(tester.takeException(), isNull,
-        reason: 'the room chips overflowed when body doubling was turned on');
+        reason: 'the screen overflowed when body doubling was turned on');
+  });
+
+  testWidgets('the length row offers the four named lengths and one custom',
+      (tester) async {
+    // Hick's Law, and the reason the row was cut from 22 chips to 5: every one
+    // of the eighteen bare numbers cost a read and none of them said anything
+    // the dial behind "custom" does not.
+    tester.view.physicalSize = const Size(393 * 3, 2200 * 3);
+    tester.view.devicePixelRatio = 3.0;
+    addTearDown(tester.view.reset);
+
+    final tasks = TaskProvider()..addTasks([inProgress()]);
+    await tester.pumpWidget(host(tasks, FocusProvider()));
+    await tester.pumpAndSettle();
+
+    for (final named in ['sprint  15m', 'pomodoro  25m', 'deep work  45m', 'flow  90m']) {
+      expect(find.text(named), findsOneWidget, reason: '$named is not on the row');
+    }
+    expect(find.text('custom'), findsOneWidget);
+
+    // The bare numbers that used to sit alongside them are gone. '35m' was one
+    // of the eighteen; if it is back, so are the other seventeen.
+    expect(find.text('35m'), findsNothing);
+  });
+
+  testWidgets('tapping a length actually changes the session length',
+      (tester) async {
+    // This was dead. _selectMinutes animated a PageController whose PageView
+    // had been deleted and never assigned _minutes at all, so the screen was
+    // pinned to 25m for good and the tap threw on the unattached controller.
+    // The start button carries the chosen length, so it is the honest witness.
+    tester.view.physicalSize = const Size(393 * 3, 2200 * 3);
+    tester.view.devicePixelRatio = 3.0;
+    addTearDown(tester.view.reset);
+
+    final tasks = TaskProvider()..addTasks([inProgress()]);
+    await tester.pumpWidget(host(tasks, FocusProvider()));
+    await tester.pumpAndSettle();
+
+    expect(find.text('start pomodoro · 25m'), findsOneWidget);
+
+    await tester.tap(find.text('deep work  45m'));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull,
+        reason: 'tapping a length chip threw');
+    expect(find.text('start deep work · 45m'), findsOneWidget,
+        reason: 'the length chip did not move the session length');
+    expect(find.text('45m · deep work'), findsOneWidget,
+        reason: 'the header did not follow the chosen length');
   });
 }

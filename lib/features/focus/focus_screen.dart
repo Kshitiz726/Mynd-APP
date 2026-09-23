@@ -36,23 +36,10 @@ class FocusScreen extends StatefulWidget {
 }
 
 class _FocusScreenState extends State<FocusScreen> {
-  /// Minute options the dial snaps through: fine-grained where short sessions
-  /// live, coarser once you are past an hour.
-  static const _steps = [
-    5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, //
-    75, 90, 105, 120, 150, 180, 210, 240, 300, 360,
-  ];
-
-  late final PageController _dial = PageController(
-    // Pomodoro's 25 minutes is the sane default to open on.
-    initialPage: _steps.indexOf(25),
-    viewportFraction: 0.26,
-  );
-
+  /// Pomodoro's 25 minutes is the sane default to open on.
   int _minutes = 25;
   String _label = 'Pomodoro';
   bool _bodyDoubling = false;
-  String _ambient = 'Café';
 
   /// The background scene (looping video) the session runs inside. 'none' keeps
   /// the plain screen.
@@ -72,12 +59,11 @@ class _FocusScreenState extends State<FocusScreen> {
   @override
   void dispose() {
     _clock?.cancel();
-    _dial.dispose();
     super.dispose();
   }
 
-  /// The mode actually started: a preset when the dial still matches one,
-  /// otherwise a custom session at whatever the dial says.
+  /// The mode actually started: a preset when the chosen length still matches
+  /// one, otherwise a custom session at whatever length was set.
   FocusMode get _mode {
     for (final preset in FocusMode.presets) {
       if (preset.minutes == _minutes) return preset;
@@ -85,11 +71,52 @@ class _FocusScreenState extends State<FocusScreen> {
     return FocusMode(name: 'Focus', minutes: _minutes, iconName: 'timer', when: 'your call');
   }
 
-  void _selectMinutes(int minutes) {
-    final index = _steps.indexOf(minutes);
-    if (index == -1) return;
+  /// True when the length is not one of the four named ones, which is what the
+  /// "custom" chip shows and stays lit for.
+  bool get _isCustom => !FocusMode.presets.any((m) => m.minutes == _minutes);
+
+  /// Set the length, and the name that goes with it.
+  ///
+  /// This used to animate a PageController that no longer had a PageView under
+  /// it (the swipe dial was replaced by chips) and never touched [_minutes] at
+  /// all, so every chip on the row was dead: the screen was stuck on 25m and a
+  /// tap threw on the unattached controller.
+  void _selectMinutes(int minutes, String label) {
     Haptics.select();
-    _dial.animateToPage(index, duration: const Duration(milliseconds: 320), curve: Curves.easeOutCubic);
+    setState(() {
+      _minutes = minutes;
+      _label = label;
+    });
+  }
+
+  /// The way to any length that is not one of the four. Behind one chip rather
+  /// than spread across eighteen more: see the note on the row itself.
+  Future<void> _pickCustomLength() async {
+    Haptics.light();
+    var minutes = _minutes;
+    final chosen = await showOmFormPage<int>(
+      context,
+      title: 'how long',
+      subtitle: 'drag the dial, or tap either side of it',
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (builderContext, setSheetState) => Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            OmMinuteDial(
+              value: minutes,
+              max: 360,
+              onChanged: (m) => setSheetState(() => minutes = m),
+            ),
+            const SizedBox(height: AppSpacing.xl),
+            OmButton(
+              label: 'use this',
+              onPressed: () => Navigator.of(builderContext).pop(minutes),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (chosen != null && mounted) _selectMinutes(chosen, 'Focus');
   }
 
   /// Start a session, honouring body doubling either way.
@@ -208,7 +235,7 @@ class _FocusScreenState extends State<FocusScreen> {
         ),
         const SizedBox(height: AppSpacing.xl),
 
-        // One control for one value.
+        // Five options for one value, not twenty-two.
         //
         // This was a 22-stop dial you swiped through, and *underneath it* a row
         // of named presets. Both set the same minutes. Two controls for one
@@ -216,9 +243,25 @@ class _FocusScreenState extends State<FocusScreen> {
         // for no reason - and having set 45 on the dial, "Deep Work" below it
         // still looked unselected, so the screen contradicted itself.
         //
-        // Now: the named lengths lead, because "how do I feel" is the easier
-        // question, and the plain numbers follow for anyone who wants a
-        // specific one. One row, one selected state, one source of truth.
+        // Collapsing them into one row fixed the contradiction but kept all 22
+        // stops as chips, which traded one problem for another: picking a
+        // length meant reading eighteen interchangeable numbers, and the four
+        // that carry a name - the ones that answer "how do I feel", which is
+        // the easier question and the right one to lead with - were lost in the
+        // middle of them.
+        //
+        // So the row is the four named lengths and a single "custom", which
+        // opens the dial for anything else. Every value from 5 to 360 is still
+        // reachable; only one of them is a decision you have to make standing
+        // up. The custom chip shows the chosen number once it is off-preset, so
+        // the row never lies about what is selected.
+        //
+        // And they wrap rather than scroll sideways. Five chips do not fit
+        // across a phone, and a horizontal scroll gives no sign that there is
+        // anything past the right edge - so "flow" and "custom" were simply
+        // not there unless you thought to swipe. Cutting the list down and then
+        // hiding the tail of it would have been the same problem in a smaller
+        // font. Two short lines, everything visible, nothing to discover.
         Row(
           children: [
             Text('how long',
@@ -239,35 +282,28 @@ class _FocusScreenState extends State<FocusScreen> {
           ],
         ),
         const SizedBox(height: AppSpacing.md),
-        SizedBox(
-          height: 58,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            children: [
-              for (final mode in FocusMode.presets)
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: _LengthChip(
-                    label: mode.name.toLowerCase(),
-                    minutes: mode.minutes,
-                    icon: mode.iconName,
-                    selected: _minutes == mode.minutes,
-                    onTap: () => _selectMinutes(mode.minutes),
-                  ),
-                ),
-              for (final value in _steps)
-                if (!FocusMode.presets.any((m) => m.minutes == value))
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: _LengthChip(
-                      minutes: value,
-                      selected: _minutes == value,
-                      onTap: () => _selectMinutes(value),
-                    ),
-                  ),
-            ],
-          ),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final mode in FocusMode.presets)
+              _LengthChip(
+                label: mode.name.toLowerCase(),
+                minutes: mode.minutes,
+                icon: mode.iconName,
+                selected: _minutes == mode.minutes,
+                onTap: () => _selectMinutes(mode.minutes, mode.name),
+              ),
+            // Last, and the only one that opens something: the four above are
+            // the answer nearly every time.
+            _LengthChip(
+              label: 'custom',
+              minutes: _isCustom ? _minutes : null,
+              icon: 'sliders',
+              selected: _isCustom,
+              onTap: _pickCustomLength,
+            ),
+          ],
         ),
         const SizedBox(height: AppSpacing.lg),
 
@@ -289,27 +325,24 @@ class _FocusScreenState extends State<FocusScreen> {
           ],
         ),
         const SizedBox(height: AppSpacing.md),
-        SizedBox(
-          height: 46,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            children: [
-              for (final scene in kFocusAmbiences)
-                Padding(
-                  padding: const EdgeInsets.only(right: AppSpacing.sm),
-                  child: _AmbientChip(
-                    label: scene.label,
-                    icon: scene.icon,
-                    selected: _sceneId == scene.id,
-                    onTap: () {
-                      Haptics.select();
-                      setState(() => _sceneId = scene.id);
-                    },
-                  ),
-                ),
-            ],
-          ),
+        // Wrapped for the same reason as the lengths above: seven scenes do not
+        // fit across a phone, and the three past the right edge were invisible
+        // rather than merely further away.
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          children: [
+            for (final scene in kFocusAmbiences)
+              _AmbientChip(
+                label: scene.label,
+                icon: scene.icon,
+                selected: _sceneId == scene.id,
+                onTap: () {
+                  Haptics.select();
+                  setState(() => _sceneId = scene.id);
+                },
+              ),
+          ],
         ),
         const SizedBox(height: AppSpacing.md),
 
@@ -320,9 +353,7 @@ class _FocusScreenState extends State<FocusScreen> {
         // start button off the fold.
         _BodyDoublingRow(
           enabled: _bodyDoubling,
-          ambient: _ambient,
           onToggle: (v) => setState(() => _bodyDoubling = v),
-          onAmbient: (name) => setState(() => _ambient = name),
         ),
         const SizedBox(height: AppSpacing.lg),
         OmButton(
@@ -921,13 +952,12 @@ Future<void> showNewFocusSheet(
   );
 }
 
-/// A professional body-doubling control: a clean switch row (no checkmarks) and,
-/// when on, a soft explanation that we'll match the user with someone currently
-/// focusing - or keep searching in the background - plus an ambience selector.
 /// One length. Named ones carry their name, the rest carry their number.
 ///
 /// The same chip for both, so a preset and a plain length cannot look like two
-/// different kinds of thing when they set exactly the same value.
+/// different kinds of thing when they set exactly the same value. [minutes] is
+/// null on "custom" until a custom length is actually chosen, so the chip reads
+/// as a door before it has an answer behind it and as the answer afterwards.
 class _LengthChip extends StatelessWidget {
   const _LengthChip({
     required this.minutes,
@@ -937,7 +967,7 @@ class _LengthChip extends StatelessWidget {
     this.icon,
   });
 
-  final int minutes;
+  final int? minutes;
   final bool selected;
   final VoidCallback onTap;
   final String? label;
@@ -971,7 +1001,11 @@ class _LengthChip extends StatelessWidget {
               const SizedBox(width: 7),
             ],
             Text(
-              label == null ? '${minutes}m' : '$label  ${minutes}m',
+              switch ((label, minutes)) {
+                (null, final m) => '${m}m',
+                (final l, null) => '$l',
+                (final l, final m) => '$l  ${m}m',
+              },
               style: TextStyle(
                 color: selected ? Colors.white : c.text,
                 fontWeight: FontWeight.w700,
@@ -990,20 +1024,22 @@ class _LengthChip extends StatelessWidget {
 /// The toggle is the whole decision. The ambience picker only appears once it
 /// is on, because choosing a room to sit in is meaningless until you have said
 /// you want to sit with anyone.
+/// Body doubling: a switch, and when it is on, a line saying what happens next.
+///
+/// It used to carry a picker for the "room" you sat in - café, library, rain,
+/// silence. That picker was a prop. The chosen room was held in a field on the
+/// screen, used to decide which chip looked selected, and then dropped on the
+/// floor: BodyDoublingScreen takes an auto-start flag and a mode, and has never
+/// had anywhere to put a room. So it was four choices that changed nothing,
+/// and two of its four words - "café" and "rain" - were also scenes in the
+/// picker directly above it, where they did do something. Asking someone to
+/// choose twice between the same two words, and honouring neither answer, is
+/// worse than not asking.
 class _BodyDoublingRow extends StatelessWidget {
-  const _BodyDoublingRow({
-    required this.enabled,
-    required this.ambient,
-    required this.onToggle,
-    required this.onAmbient,
-  });
+  const _BodyDoublingRow({required this.enabled, required this.onToggle});
 
   final bool enabled;
-  final String ambient;
   final ValueChanged<bool> onToggle;
-  final ValueChanged<String> onAmbient;
-
-  static const _rooms = ['Café', 'Library', 'Rain', 'Silence'];
 
   @override
   Widget build(BuildContext context) {
@@ -1057,33 +1093,13 @@ class _BodyDoublingRow extends StatelessWidget {
           child: enabled
               ? Padding(
                   padding: const EdgeInsets.only(top: AppSpacing.sm),
-                  // Wrap, not Row. Four chips of icon plus word do not fit
-                  // across a phone, and a Row cannot do anything about that
-                  // except paint the overflow stripes over the screen. Wrapping
-                  // to a second line is the honest answer: every room stays
-                  // reachable, which a horizontal scroll would not guarantee
-                  // since nothing about it says there is more to the right.
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      for (final room in _rooms)
-                        _AmbientChip(
-                          label: room,
-                          icon: room == 'Café'
-                              ? 'coffee'
-                              : room == 'Library'
-                                  ? 'book'
-                                  : room == 'Rain'
-                                      ? 'cloud-rain'
-                                      : 'moon',
-                          selected: ambient == room,
-                          onTap: () {
-                            Haptics.select();
-                            onAmbient(room);
-                          },
-                        ),
-                    ],
+                  child: Text(
+                    'we will match you with someone focusing right now, and '
+                    'keep looking in the background if nobody is free yet.',
+                    style: Theme.of(context)
+                        .textTheme
+                        .labelSmall
+                        ?.copyWith(color: c.text2, height: 1.45),
                   ),
                 )
               : const SizedBox(width: double.infinity),
