@@ -124,10 +124,12 @@ Future<TurnContext> gatherTurnContext(
               .timeout(const Duration(seconds: 40));
 
           if (msgs.isEmpty) {
+            // Reaching here now means the mailbox really is empty of what was
+            // asked for. A read that fails throws, and is handled below.
             mailBlock = onlyUnread
                 ? 'THEIR INBOX\nNothing unread. Say so in one short line, and '
                     'do not pad it out.'
-                : 'THEIR INBOX\nNothing came back from their recent mail.';
+                : 'THEIR INBOX\nTheir inbox is empty. Say so in one line.';
           } else {
             final unread = msgs.where((m) => m.unread).length;
             mailBlock = 'THEIR INBOX (${onlyUnread ? 'unread only' : 'recent'}, '
@@ -143,8 +145,9 @@ Future<TurnContext> gatherTurnContext(
               '(unreadOnly=$onlyUnread)');
         } catch (e) {
           debugPrint('[turn] inbox failed: $e');
-          mailBlock = 'THEIR INBOX\nGmail could not be reached just now. Say '
-              'so rather than guessing what is in it.';
+          mailBlock = 'THEIR INBOX\nGmail could not be reached just now, so '
+              'you cannot see it. Say that in one line, offer to try again, '
+              'and do not guess what is in it.';
         }
       }),
     if (needCal)

@@ -4,6 +4,30 @@ import 'package:enough_mail/enough_mail.dart';
 import 'package:mailer/mailer.dart' as mailer;
 import 'package:mailer/smtp_server.dart';
 
+/// What to ask Gmail for about each message, as one IMAP FETCH data item list.
+///
+/// The parentheses are the whole point. enough_mail writes this string into the
+/// command verbatim - it adds nothing - and IMAP's grammar only allows a bare
+/// data item when there is exactly one of them. Sent as
+/// `FETCH 10:22 ENVELOPE FLAGS BODY.PEEK[TEXT]<0.400>` the server parses
+/// ENVELOPE, finds FLAGS where the command should have ended, and answers BAD.
+/// Every inbox read failed on that, and because the failure was swallowed into
+/// an empty list it looked like an empty inbox rather than a broken command.
+///
+/// BODY.PEEK, not BODY: peeking does not set \Seen, so summarising an inbox
+/// cannot silently mark as read the very messages somebody asked about.
+const String kFetchSpec = '(ENVELOPE FLAGS BODY.PEEK[TEXT]<0.400>)';
+
+/// An inbox read that did not happen, as opposed to one that found nothing.
+class MailReadException implements Exception {
+  const MailReadException(this.detail);
+
+  final String detail;
+
+  @override
+  String toString() => 'MailReadException: $detail';
+}
+
 
 /// Sending mail as the user, from the user's own device.
 ///
@@ -201,7 +225,7 @@ class MailService {
       final from = count - (limit * 3) + 1;
       final sequence = MessageSequence.fromRange(from < 1 ? 1 : from, count);
       final fetch = await client
-          .fetchMessages(sequence, 'ENVELOPE FLAGS BODY.PEEK[TEXT]<0.400>')
+          .fetchMessages(sequence, kFetchSpec)
           .timeout(const Duration(seconds: 30));
 
       final out = <MailSummary>[];
@@ -228,8 +252,12 @@ class MailService {
           '(${out.where((m) => m.unread).length} unread)');
       return out;
     } catch (e) {
+      // Rethrown, not swallowed into an empty list. Returning [] made a broken
+      // FETCH, a refused login and a genuinely empty inbox the same answer, so
+      // the coach cheerfully reported "nothing came back from your mail" while
+      // the real problem was a malformed command it never got to hear about.
       debugPrint('[mail] imap read failed: $e');
-      return const [];
+      throw MailReadException('$e');
     } finally {
       try {
         await client.logout();
