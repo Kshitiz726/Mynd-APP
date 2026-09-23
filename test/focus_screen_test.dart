@@ -168,10 +168,17 @@ void main() {
     await tester.pumpWidget(host(tasks, FocusProvider()));
     await tester.pumpAndSettle();
 
-    for (final named in ['sprint  15m', 'pomodoro  25m', 'deep work  45m', 'flow  90m']) {
-      expect(find.text(named), findsOneWidget, reason: '$named is not on the row');
+    for (final named in ['sprint', 'pomodoro', 'deep work', 'flow']) {
+      expect(find.text(named), findsOneWidget, reason: '$named is not on the grid');
+    }
+    for (final len in ['15 min', '25 min', '45 min', '90 min']) {
+      expect(find.text(len), findsOneWidget, reason: '$len is not on the grid');
     }
     expect(find.text('custom'), findsOneWidget);
+
+    // Each tile shows the preset's own "use it when", which the model has
+    // always carried and the pills had no room to print.
+    expect(find.text('the classic'), findsOneWidget);
 
     // The bare numbers that used to sit alongside them are gone. '35m' was one
     // of the eighteen; if it is back, so are the other seventeen.
@@ -194,7 +201,7 @@ void main() {
 
     expect(find.text('start pomodoro · 25m'), findsOneWidget);
 
-    await tester.tap(find.text('deep work  45m'));
+    await tester.tap(find.text('deep work'));
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull,
@@ -203,5 +210,29 @@ void main() {
         reason: 'the length chip did not move the session length');
     expect(find.text('45m · deep work'), findsOneWidget,
         reason: 'the header did not follow the chosen length');
+  });
+
+  testWidgets('the body doubling switch does not move when it is toggled',
+      (tester) async {
+    // It used to jump left on its own tap. The status text beside it shrank
+    // from 'work alongside someone' to 'on', and because a loose Flexible and
+    // an Expanded both default to flex 1, the freed space was handed back and
+    // landed after the switch rather than before it.
+    tester.view.physicalSize = const Size(393 * 3, 2200 * 3);
+    tester.view.devicePixelRatio = 3.0;
+    addTearDown(tester.view.reset);
+
+    final tasks = TaskProvider()..addTasks([inProgress()]);
+    await tester.pumpWidget(host(tasks, FocusProvider()));
+    await tester.pumpAndSettle();
+
+    final switchFinder = find.byWidgetPredicate((w) => w is Switch).last;
+    final before = tester.getTopLeft(switchFinder);
+
+    await tester.tap(switchFinder);
+    await tester.pumpAndSettle();
+
+    expect(tester.getTopLeft(switchFinder).dx, before.dx,
+        reason: 'the switch slid sideways when it was toggled');
   });
 }

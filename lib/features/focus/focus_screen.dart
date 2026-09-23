@@ -256,12 +256,13 @@ class _FocusScreenState extends State<FocusScreen> {
         // up. The custom chip shows the chosen number once it is off-preset, so
         // the row never lies about what is selected.
         //
-        // And they wrap rather than scroll sideways. Five chips do not fit
-        // across a phone, and a horizontal scroll gives no sign that there is
-        // anything past the right edge - so "flow" and "custom" were simply
-        // not there unless you thought to swipe. Cutting the list down and then
-        // hiding the tail of it would have been the same problem in a smaller
-        // font. Two short lines, everything visible, nothing to discover.
+        // Laid out as a grid, not a row of pills. Wrapping five pills gave
+        // three ragged lines of thin capsules with a hole at the end - all the
+        // options visible, and ugly enough that it read as a mistake. A fixed
+        // 2x2 of real tiles has room for the name, the number and the "use it
+        // when" line each preset already carried and had nowhere to show, and
+        // the odd one out - custom - gets the full width underneath rather
+        // than dangling.
         Row(
           children: [
             Text('how long',
@@ -282,28 +283,33 @@ class _FocusScreenState extends State<FocusScreen> {
           ],
         ),
         const SizedBox(height: AppSpacing.md),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            for (final mode in FocusMode.presets)
-              _LengthChip(
-                label: mode.name.toLowerCase(),
-                minutes: mode.minutes,
-                icon: mode.iconName,
-                selected: _minutes == mode.minutes,
-                onTap: () => _selectMinutes(mode.minutes, mode.name),
-              ),
-            // Last, and the only one that opens something: the four above are
-            // the answer nearly every time.
-            _LengthChip(
-              label: 'custom',
-              minutes: _isCustom ? _minutes : null,
-              icon: 'sliders',
-              selected: _isCustom,
-              onTap: _pickCustomLength,
-            ),
-          ],
+        for (var row = 0; row < 2; row++) ...[
+          if (row > 0) const SizedBox(height: AppSpacing.sm),
+          Row(
+            children: [
+              for (var col = 0; col < 2; col++) ...[
+                if (col > 0) const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Builder(builder: (_) {
+                    final mode = FocusMode.presets[row * 2 + col];
+                    return _LengthTile(
+                      mode: mode,
+                      selected: _minutes == mode.minutes,
+                      onTap: () => _selectMinutes(mode.minutes, mode.name),
+                    );
+                  }),
+                ),
+              ],
+            ],
+          ),
+        ],
+        const SizedBox(height: AppSpacing.sm),
+        // Full width and last: the four above are the answer nearly every
+        // time, and this is the only one that opens anything.
+        _CustomLengthTile(
+          minutes: _isCustom ? _minutes : null,
+          selected: _isCustom,
+          onTap: _pickCustomLength,
         ),
         const SizedBox(height: AppSpacing.lg),
 
@@ -952,65 +958,83 @@ Future<void> showNewFocusSheet(
   );
 }
 
-/// One length. Named ones carry their name, the rest carry their number.
+/// One of the four named lengths, as a tile.
 ///
-/// The same chip for both, so a preset and a plain length cannot look like two
-/// different kinds of thing when they set exactly the same value. [minutes] is
-/// null on "custom" until a custom length is actually chosen, so the chip reads
-/// as a door before it has an answer behind it and as the answer afterwards.
-class _LengthChip extends StatelessWidget {
-  const _LengthChip({
-    required this.minutes,
+/// The name leads, the number sits under it, and the preset's own "use it
+/// when" line - which the model has always carried and the UI has never shown -
+/// goes underneath that. As a pill there was room for none of it, which is
+/// what made a row of them read as a row of numbers.
+class _LengthTile extends StatelessWidget {
+  const _LengthTile({
+    required this.mode,
     required this.selected,
     required this.onTap,
-    this.label,
-    this.icon,
   });
 
-  final int? minutes;
+  final FocusMode mode;
   final bool selected;
   final VoidCallback onTap;
-  final String? label;
-  final String? icon;
 
   @override
   Widget build(BuildContext context) {
     final c = context.omColors;
+    final ink = selected ? Colors.white : c.text;
     return OmTappable(
       onTap: onTap,
       feedback: OmTapFeedback.none,
-      pressedScale: 0.94,
+      pressedScale: 0.97,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         curve: Curves.easeOut,
-        padding: EdgeInsets.symmetric(horizontal: label == null ? 18 : 14),
-        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
         decoration: BoxDecoration(
           color: selected ? c.primary : c.surfaceAlt,
-          borderRadius: BorderRadius.circular(AppRadius.pill),
+          borderRadius: BorderRadius.circular(AppRadius.lg),
           border: Border.all(
             color: selected ? c.primary : c.border.withValues(alpha: 0.7),
           ),
         ),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (icon != null) ...[
-              Icon(OmIcons.byName(icon!),
-                  size: 15, color: selected ? Colors.white : c.text2),
-              const SizedBox(width: 7),
-            ],
+            Row(
+              children: [
+                Icon(OmIcons.byName(mode.iconName),
+                    size: 17, color: selected ? Colors.white : c.primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    mode.name.toLowerCase(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        color: ink,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
             Text(
-              switch ((label, minutes)) {
-                (null, final m) => '${m}m',
-                (final l, null) => '$l',
-                (final l, final m) => '$l  ${m}m',
-              },
+              '${mode.minutes} min',
               style: TextStyle(
-                color: selected ? Colors.white : c.text,
-                fontWeight: FontWeight.w700,
-                fontSize: 14.5,
-              ),
+                  color: ink,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 19,
+                  height: 1.0),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              mode.when,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: selected
+                        ? Colors.white.withValues(alpha: 0.82)
+                        : c.text2,
+                  ),
             ),
           ],
         ),
@@ -1019,11 +1043,63 @@ class _LengthChip extends StatelessWidget {
   }
 }
 
-/// Body doubling, as one row rather than a slab.
-///
-/// The toggle is the whole decision. The ambience picker only appears once it
-/// is on, because choosing a room to sit in is meaningless until you have said
-/// you want to sit with anyone.
+/// Any other length, as a full width row under the four.
+class _CustomLengthTile extends StatelessWidget {
+  const _CustomLengthTile({
+    required this.minutes,
+    required this.selected,
+    required this.onTap,
+  });
+
+  /// Null until a custom length has actually been chosen, so the tile reads as
+  /// a door before it has an answer behind it and as the answer afterwards.
+  final int? minutes;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.omColors;
+    final ink = selected ? Colors.white : c.text;
+    return OmTappable(
+      onTap: onTap,
+      feedback: OmTapFeedback.none,
+      pressedScale: 0.98,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        decoration: BoxDecoration(
+          color: selected ? c.primary : c.surfaceAlt,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          border: Border.all(
+            color: selected ? c.primary : c.border.withValues(alpha: 0.7),
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(OmIcons.byName('sliders'),
+                size: 17, color: selected ? Colors.white : c.primary),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                minutes == null ? 'custom' : 'custom  $minutes min',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    color: ink, fontWeight: FontWeight.w800, fontSize: 15),
+              ),
+            ),
+            Icon(OmIcons.byName('chevR'),
+                size: 16,
+                color: selected ? Colors.white : c.text2),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// Body doubling: a switch, and when it is on, a line saying what happens next.
 ///
 /// It used to carry a picker for the "room" you sat in - café, library, rain,
@@ -1047,31 +1123,44 @@ class _BodyDoublingRow extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // The status line sits under the title rather than beside it, and that
+        // is what stops the switch sliding.
+        //
+        // It used to be a Flexible next to an Expanded. Both default to flex 1,
+        // so the row split its free space between them by flex rather than by
+        // content: the loose Flexible took only what its text needed and handed
+        // the rest back, and with the row packed from the start that slack
+        // ended up *after* the switch. Toggling replaced "work alongside
+        // someone" with "on", the slack grew by the difference, and the switch
+        // visibly jumped left on its own tap.
+        //
+        // Nothing in this row changes width now, so there is nothing to move.
         Row(
           children: [
             Icon(OmIcons.byName('users'),
                 size: 18, color: enabled ? c.primary : c.text2),
             const SizedBox(width: 10),
             Expanded(
-              child: Text('body doubling',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleMedium
-                      ?.copyWith(fontSize: 15.5)),
-            ),
-            // Flexible, because this label and the title are both variable
-            // width and the switch beside them is not. On a narrow phone an
-            // unbounded Text here is an overflow waiting for a longer word.
-            Flexible(
-              child: Text(
-                enabled ? 'on' : 'work alongside someone',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.end,
-                style: Theme.of(context)
-                    .textTheme
-                    .labelSmall
-                    ?.copyWith(color: c.text2),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('body doubling',
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleMedium
+                          ?.copyWith(fontSize: 15.5)),
+                  const SizedBox(height: 2),
+                  Text(
+                    'work alongside someone',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context)
+                        .textTheme
+                        .labelSmall
+                        ?.copyWith(color: c.text2),
+                  ),
+                ],
               ),
             ),
             const SizedBox(width: 8),
