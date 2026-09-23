@@ -59,7 +59,11 @@ class FeedProvider extends ChangeNotifier {
   /// editions. The edition already stored was written under neither rule, so
   /// the front page would otherwise still be the thing that was complained
   /// about.
-  static const _schema = 3;
+  ///
+  /// 4: the picture rule was applied to a pool that had not been widened for
+  /// it, and the edition it produced had one post in it. Rewritten against the
+  /// deeper pool rather than left as the thinnest feed the app has shipped.
+  static const _schema = 4;
 
   /// Roughly a fortnight at four a day. Enough to scroll back through, small
   /// enough that the JSON stays a sane thing to keep in a preference.
