@@ -3,6 +3,10 @@ import { createServer } from 'node:http';
 import { Server } from 'socket.io';
 import { config, logMode } from './config.js';
 import { db } from './db.js';
+import { lookup as dnsLookupCb } from 'node:dns';
+import { promisify } from 'node:util';
+
+const dnsLookup = promisify(dnsLookupCb);
 import {
   securityHeaders, cors, authLimiter, billingLimiter, writeLimiter, globalLimiter,
 } from './security.js';
@@ -88,9 +92,40 @@ function describeDbUrl(raw: string): string {
         ? 'direct'
         : 'other';
     const qualified = u.username.includes('.');
-    return `user=${qualified ? 'tenant-qualified' : 'plain'} host=${host} port=${u.port || 'default'}`;
+    // The pooler host is aws-0-<region>.pooler.supabase.com. The region is not
+    // a secret and it is the one field that catches a mismatch: a URL pointing
+    // at the wrong region's pooler gets "tenant not found" for a project that
+    // exists and is running.
+    const region = u.hostname.match(/^aws-\d+-([a-z0-9-]+)\.pooler\./i)?.[1] ?? 'n/a';
+    return `user=${qualified ? 'tenant-qualified' : 'plain'} host=${host} ` +
+      `port=${u.port || 'default'} region=${region}`;
   } catch {
     return 'unparseable';
+  }
+}
+
+/**
+ * Does the project behind the username still exist?
+ *
+ * Supavisor answers "tenant or user not found" for a paused project, a deleted
+ * one and a region mismatch alike, and those need three different actions -
+ * restore it, accept the data is gone, or re-copy the connection string. Every
+ * Supabase project has a DNS record at <ref>.supabase.co that survives being
+ * paused and disappears when the project is deleted, so one lookup separates
+ * "asleep" from "gone".
+ *
+ * Reports a boolean. The ref is read from the username and never emitted: it
+ * identifies the project, and this response is public.
+ */
+async function projectRefResolves(raw: string): Promise<string> {
+  try {
+    const ref = new URL(raw).username.split('.')[1];
+    if (!ref) return 'no-ref';
+    await dnsLookup(`${ref}.supabase.co`);
+    return 'yes';
+  } catch (e) {
+    const code = (e as { code?: string })?.code;
+    return code === 'ENOTFOUND' ? 'no' : `error ${code ?? 'unknown'}`;
   }
 }
 
@@ -98,6 +133,7 @@ app.get('/health', async (_req, res) => {
   let dbState: 'up' | 'down' | 'unconfigured' = 'unconfigured';
   let dbFault: string | null = null;
   let dbShape: string | null = null;
+  let dbProject: string | null = null;
   if (config.hasDb) {
     try {
       await db.one('select 1 as ok');
@@ -133,6 +169,7 @@ app.get('/health', async (_req, res) => {
       // shape carries no secret, so there is nothing to spend by always
       // sending it when the database is down.
       dbShape = describeDbUrl(config.databaseUrl);
+      dbProject = await projectRefResolves(config.databaseUrl);
     }
   }
   // Always 200, and that is deliberate. render.yaml points healthCheckPath at
@@ -146,6 +183,7 @@ app.get('/health', async (_req, res) => {
     db: dbState,
     ...(dbFault ? { dbFault } : {}),
     ...(dbShape ? { dbShape } : {}),
+    ...(dbProject ? { dbProject } : {}),
   });
 });
 
