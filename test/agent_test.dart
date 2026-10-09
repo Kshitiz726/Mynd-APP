@@ -33,14 +33,13 @@ void main() {
       () async {
     final p = AgentProvider();
     await p.init();
-    await p.select('sprout');
+    await p.select('ember');
 
     final block = p.promptBlock;
-    expect(block, contains('SPROUT'));
-    expect(block, contains('playful'));
-    // Sprout ships warm, funny and high energy.
+    expect(block, contains('EMBER'));
+    expect(block, contains('encouraging'));
+    // Ember ships warm and high energy.
     expect(block, contains('openly warm'));
-    expect(block, contains('Be funny'));
   });
 
   test('the shipped personalities really are different in the prompt',
@@ -48,38 +47,38 @@ void main() {
     final p = AgentProvider();
     await p.init();
 
-    await p.select('sprout');
-    final blunt = p.promptBlock;
-    await p.select('pim');
-    final gentle = p.promptBlock;
+    await p.select('ember');
+    final bright = p.promptBlock;
+    await p.select('hush');
+    final quiet = p.promptBlock;
 
-    expect(blunt, isNot(gentle));
+    expect(bright, isNot(quiet));
   });
 
   test('tuning one agent leaves the others alone', () async {
     final p = AgentProvider();
     await p.init();
 
-    final sprout = Agent.byId('sprout');
-    final pim = Agent.byId('pim');
+    final ember = Agent.byId('ember');
+    final hush = Agent.byId('hush');
 
-    await p.update(sprout, p.settingsFor(sprout).copyWith(humour: 1.0));
+    await p.update(ember, p.settingsFor(ember).copyWith(humour: 1.0));
 
-    expect(p.isCustomised(sprout), isTrue);
-    expect(p.isCustomised(pim), isFalse,
+    expect(p.isCustomised(ember), isTrue);
+    expect(p.isCustomised(hush), isFalse,
         reason: 'settings are per agent, not a shared block');
-    expect(p.settingsFor(pim).humour, pim.defaults.humour);
+    expect(p.settingsFor(hush).humour, hush.defaults.humour);
   });
 
   test('a tuned agent survives a restart, and reset only clears that one',
       () async {
     final first = AgentProvider();
     await first.init();
-    final sprout = Agent.byId('sprout');
-    await first.select('sprout');
+    final ember = Agent.byId('ember');
+    await first.select('ember');
     await first.update(
-      sprout,
-      first.settingsFor(sprout).copyWith(
+      ember,
+      first.settingsFor(ember).copyWith(
             emotion: AgentEmotion.gentle,
             custom: 'Call me by my first name.',
           ),
@@ -88,12 +87,12 @@ void main() {
     // A fresh provider over the same storage is what the next launch sees.
     final second = AgentProvider();
     await second.init();
-    expect(second.selectedId, 'sprout');
-    expect(second.settingsFor(sprout).emotion, AgentEmotion.gentle);
+    expect(second.selectedId, 'ember');
+    expect(second.settingsFor(ember).emotion, AgentEmotion.gentle);
     expect(second.promptBlock, contains('Call me by my first name.'));
 
-    await second.resetToDefaults(sprout);
-    expect(second.settingsFor(sprout).emotion, sprout.defaults.emotion);
+    await second.resetToDefaults(ember);
+    expect(second.settingsFor(ember).emotion, ember.defaults.emotion);
     expect(second.promptBlock, isNot(contains('Call me by my first name.')));
   });
 
@@ -124,12 +123,37 @@ void main() {
   /// else owns. They were withdrawn, and this is what stops them coming back
   /// the next time somebody wants more variety in the picker: the review that
   /// catches it otherwise is Apple's, after a submission.
-  test('only the two agents whose artwork is ours are shipped', () {
-    expect(Agent.all.map((a) => a.id), ['pim', 'sprout']);
+  test('only the three agents whose artwork is ours are shipped', () {
+    expect(Agent.all.map((a) => a.id), ['ember', 'hush', 'wren']);
     for (final a in Agent.all) {
-      expect(a.asset, anyOf(endsWith('avatar1.jpg'), endsWith('avatar2.jpg')),
+      expect(a.asset, anyOf(endsWith('ember.png'), endsWith('hush.png'),
+          endsWith('wren.png')),
           reason: '${a.name} uses withdrawn artwork');
     }
+  });
+
+  /// The faces are three moods, so the writing has to be three voices. An
+  /// agent whose persona could be swapped for its neighbour's without anybody
+  /// noticing is the "skin" failure this roster exists to avoid.
+  test('each agent sounds like its own face', () {
+    final ember = Agent.byId('ember');
+    final hush = Agent.byId('hush');
+    final wren = Agent.byId('wren');
+
+    // Ember is the warm, high-energy one.
+    expect(ember.defaults.energy, greaterThan(hush.defaults.energy));
+    expect(ember.defaults.emotion, AgentEmotion.upbeat);
+
+    // Hush is the quiet one, and says less on purpose.
+    expect(hush.defaults.verbosity, Verbosity.brief);
+    expect(hush.defaults.energy, lessThan(0.3));
+    expect(hush.defaults.emotion, AgentEmotion.calm);
+
+    // Wren takes worry seriously, which means it must never wave it away.
+    expect(wren.defaults.emotion, AgentEmotion.gentle);
+    expect(wren.persona, contains('never'));
+    expect(wren.persona.toLowerCase(), contains('do not worry'),
+        reason: 'the one rule Wren exists to follow is not in its persona');
   });
 
   test('somebody who had a withdrawn agent selected gets a real one', () async {
@@ -139,7 +163,7 @@ void main() {
 
     // Not just the agent object: the id itself has to settle, or the picker
     // shows nothing selected while the coach answers as somebody.
-    expect(p.selectedId, 'pim');
-    expect(p.agent.name, 'Pim');
+    expect(p.selectedId, 'ember');
+    expect(p.agent.name, 'Ember');
   });
 }
