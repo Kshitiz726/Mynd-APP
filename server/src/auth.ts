@@ -153,9 +153,40 @@ async function verifyAppleProfile(
  * connection strings show up.
  */
 function dbFault(e: unknown): string {
-  const err = e as { code?: string; constraint?: string; table?: string };
-  const parts = [err?.code, err?.constraint ?? err?.table].filter(Boolean);
-  return parts.length > 0 ? parts.join(' ') : 'unknown';
+  const err = e as {
+    code?: string | number;
+    constraint?: string;
+    table?: string;
+    routine?: string;
+    detail?: string;
+    message?: string;
+    name?: string;
+  };
+
+  // A constraint violation names itself in `constraint`, and that is the whole
+  // answer. Everything else - XX000 internal_error most of all - puts the only
+  // useful words in the message, so withholding it leaves a code that means
+  // "something went wrong" and nothing more.
+  //
+  // Redacted, not trusted. Postgres quotes offending row values into detail
+  // and sometimes into message, which on this table is somebody's email
+  // address, so addresses, UUIDs and quoted literals are masked before any of
+  // it leaves the process.
+  const redact = (t: string) =>
+    t
+      .replace(/[\w.+-]+@[\w.-]+\.\w+/g, '<email>')
+      .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, '<uuid>')
+      .replace(/\(([^)]{0,80})\)=\(([^)]{0,80})\)/g, '(<cols>)=(<values>)')
+      .slice(0, 240);
+
+  const parts = [
+    err?.name && err.name !== 'Error' ? err.name : null,
+    err?.code != null ? String(err.code) : null,
+    err?.constraint ?? err?.table ?? null,
+    err?.routine ?? null,
+    err?.message ? redact(err.message) : null,
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(' | ') : 'unknown';
 }
 
 async function issueSessionForEmail(

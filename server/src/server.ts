@@ -2,6 +2,7 @@ import express from 'express';
 import { createServer } from 'node:http';
 import { Server } from 'socket.io';
 import { config, logMode } from './config.js';
+import { db } from './db.js';
 import {
   securityHeaders, cors, authLimiter, billingLimiter, writeLimiter, globalLimiter,
 } from './security.js';
@@ -59,7 +60,29 @@ app.use(express.json({ limit: '2mb' }));
 // which told an unauthenticated caller that Redis was in-memory and LiveKit was
 // off - a map of where to push. The same detail is still available to an
 // operator, just not to the internet: it goes to the startup log instead.
-app.get('/health', (_req, res) => res.json({ ok: true }));
+// Liveness, including the one dependency whose absence looks like a bug in
+// the app rather than an outage.
+//
+// A sleeping or unreachable database fails every authenticated route and the
+// sign-in button, while /health cheerfully answered {ok:true} - so "the server
+// is up" and "the server can do anything" were the same answer, and telling
+// them apart needed a valid Google account and a look at a log. One boolean
+// is no use to an attacker (the migrations in this repo are public, the commit
+// behind /version is not) and it answers in one request what otherwise costs a
+// debugging round.
+app.get('/health', async (_req, res) => {
+  let dbState: 'up' | 'down' | 'unconfigured' = 'unconfigured';
+  if (config.hasDb) {
+    try {
+      await db.one('select 1 as ok');
+      dbState = 'up';
+    } catch (e) {
+      console.error('[health] database unreachable:', e);
+      dbState = 'down';
+    }
+  }
+  res.status(dbState === 'down' ? 503 : 200).json({ ok: dbState !== 'down', db: dbState });
+});
 
 // Which revision is actually serving.
 //
