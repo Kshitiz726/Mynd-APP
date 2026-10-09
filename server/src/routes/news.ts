@@ -122,18 +122,44 @@ async function ogImage(articleUrl: string): Promise<string | null> {
 }
 
 /** Strip tags and decode the handful of entities RSS actually emits. */
-function plain(s: string): string {
+/** Entities to text. `&amp;` last, so decoding cannot invent a new entity. */
+function decodeEntities(s: string): string {
   return s
-    .replace(/<[^>]*>/g, ' ')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&#(\d+);/g, (_, d) => String.fromCharCode(Number(d)))
-    .replace(/\s+/g, ' ')
-    .trim();
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&apos;/gi, "'")
+    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Number(d)))
+    .replace(/&amp;/gi, '&');
+}
+
+/**
+ * RSS text to something a person can read.
+ *
+ * Decode first, then strip, and do it twice. The old version stripped tags and
+ * decoded entities afterwards, in that order, which is backwards for every
+ * feed that matters: Google News escapes its description, so the markup
+ * arrives as `&lt;a href=...&gt;` and there is nothing for the tag stripper to
+ * find. Decoding then turned it into `<a href=...>` AFTER the only pass that
+ * would have removed it, so the stripper did not merely miss the markup - the
+ * step after it created the markup. That is what put raw anchor tags in the
+ * feed.
+ *
+ * Twice, because feeds double-encode: `&amp;lt;a&amp;gt;` needs one pass to
+ * become `&lt;a&gt;` and a second to become a tag and be removed. Two is
+ * enough for everything seen in the wild and is a fixed bound rather than a
+ * loop over attacker-controlled input.
+ */
+function plain(s: string): string {
+  let out = s;
+  for (let pass = 0; pass < 2; pass++) {
+    out = decodeEntities(out).replace(/<[^>]*>/g, ' ');
+  }
+  // A lone '<' left by a truncated feed would still render as the start of a
+  // tag in some clients, and it carries no meaning here either way.
+  return out.replace(/[<>]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
 function tag(block: string, name: string): string | null {

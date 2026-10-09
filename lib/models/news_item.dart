@@ -1,3 +1,5 @@
+import 'feed_post.dart';
+
 /// One story in the Feed.
 ///
 /// Only what a publisher puts in their own metadata: a headline, the summary
@@ -23,7 +25,9 @@ class NewsItem {
   /// Null rather than throwing on a malformed row: one bad item in a feed of
   /// twelve should cost that item, not the screen.
   static NewsItem? fromJson(Map<String, dynamic> j) {
-    final title = (j['title'] as String?)?.trim();
+    final title = (j['title'] as String?) == null
+        ? null
+        : FeedPost.stripMarkup(j['title'] as String);
     final url = (j['url'] as String?)?.trim();
     if (title == null || title.isEmpty || url == null || url.isEmpty) {
       return null;
@@ -32,7 +36,13 @@ class NewsItem {
     return NewsItem(
       title: title,
       url: url,
-      summary: (j['summary'] as String?)?.trim(),
+      // Stripped here too, so markup never reaches the prompt. A model shown
+      // an anchor tag in the source summary will cheerfully carry it into the
+      // post it writes, and then the card has markup that no server fix
+      // touches because the server never saw that sentence.
+      summary: (j['summary'] as String?) == null
+          ? null
+          : FeedPost.stripMarkup(j['summary'] as String),
       imageUrl: (j['imageUrl'] as String?)?.trim(),
       source: (j['source'] as String?)?.trim(),
       publishedAt: raw == null ? null : DateTime.tryParse(raw),

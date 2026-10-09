@@ -91,9 +91,38 @@ class FeedPost {
   /// the form. It is a small thing that makes a written card look generated,
   /// and cleaning it here rather than at the point of writing means editions
   /// already stored on the device are repaired the next time they are read.
+  /// Markup out, text in.
+  ///
+  /// Applied on the way out of storage as well as on the way in, because the
+  /// editions already written to the device contain what the old server sent -
+  /// raw anchor tags, in the body, on the card. Fixing the source fixes the
+  /// next edition; this is what fixes the ones somebody can already see.
+  ///
+  /// Decode then strip, twice, for the same reason the server does it in that
+  /// order: the markup arrives escaped, so decoding is what turns it into a
+  /// tag, and stripping first finds nothing to remove.
+  static String stripMarkup(String raw) {
+    var out = raw;
+    for (var pass = 0; pass < 2; pass++) {
+      out = out
+          .replaceAll('&nbsp;', ' ')
+          .replaceAll('&lt;', '<')
+          .replaceAll('&gt;', '>')
+          .replaceAll('&quot;', '"')
+          .replaceAll('&apos;', "'")
+          .replaceAllMapped(RegExp(r'&#x([0-9a-fA-F]+);'),
+              (m) => String.fromCharCode(int.parse(m[1]!, radix: 16)))
+          .replaceAllMapped(
+              RegExp(r'&#(\d+);'), (m) => String.fromCharCode(int.parse(m[1]!)))
+          .replaceAll('&amp;', '&')
+          .replaceAll(RegExp(r'<[^>]*>'), ' ');
+    }
+    return out.replaceAll(RegExp(r'[<>]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
+
   static String? _cleanBody(String? raw) {
     if (raw == null) return null;
-    final out = raw
+    final out = stripMarkup(raw)
         .replaceAll(
             RegExp(r'\s*\b(linkText|linkUrl|ref|source)\s*:\s*"[^"]*"\s*$'), '')
         .trim();
@@ -101,7 +130,10 @@ class FeedPost {
   }
 
   static FeedPost? fromJson(Map<String, dynamic> j) {
-    final title = (j['title'] as String?)?.trim();
+    // The headline carries markup as readily as the body does.
+    final title = (j['title'] as String?) == null
+        ? null
+        : stripMarkup(j['title'] as String);
     final body = _cleanBody(j['body'] as String?);
     if (title == null || title.isEmpty || body == null || body.isEmpty) {
       return null;
