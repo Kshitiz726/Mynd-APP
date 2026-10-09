@@ -70,6 +70,8 @@ app.use(express.json({ limit: '2mb' }));
 // is no use to an attacker (the migrations in this repo are public, the commit
 // behind /version is not) and it answers in one request what otherwise costs a
 // debugging round.
+//
+// It always answers 200: see the note on the response below.
 app.get('/health', async (_req, res) => {
   let dbState: 'up' | 'down' | 'unconfigured' = 'unconfigured';
   if (config.hasDb) {
@@ -81,7 +83,13 @@ app.get('/health', async (_req, res) => {
       dbState = 'down';
     }
   }
-  res.status(dbState === 'down' ? 503 : 200).json({ ok: dbState !== 'down', db: dbState });
+  // Always 200, and that is deliberate. render.yaml points healthCheckPath at
+  // this route, so a non-200 here does not report an outage - it causes one:
+  // Render refuses to promote a deploy whose health check fails and will cycle
+  // the instance that is already serving. A database that is asleep must not
+  // be able to take the API down with it, least of all while somebody is
+  // deploying the fix for it. The state is in the body for a human to read.
+  res.json({ ok: true, db: dbState });
 });
 
 // Which revision is actually serving.
