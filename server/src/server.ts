@@ -75,8 +75,7 @@ app.use(express.json({ limit: '2mb' }));
 /**
  * The shape of DATABASE_URL, with nothing identifying in it.
  *
- * Only ever reported when Supavisor says "tenant or user not found", which is
- * the one failure where the shape is the answer. Emits whether the username is
+ * Reported whenever the database is unreachable. Emits whether the username is
  * tenant-qualified, the host family and the port - never the ref, the host or
  * the password.
  */
@@ -127,9 +126,13 @@ app.get('/health', async (_req, res) => {
       // dot, which host family it points at and which port it uses are not
       // secrets - the password and the project ref are, and none of those
       // three carries either.
-      if (/tenant or user not found/i.test(err?.message ?? '')) {
-        dbShape = describeDbUrl(config.databaseUrl);
-      }
+      // Unconditional, not gated on the message text. It was gated on
+      // "tenant or user not found", which assumed the driver surfaces the
+      // pooler's wording - it does not always, and the result was a diagnostic
+      // that stayed silent during the exact outage it was written for. The
+      // shape carries no secret, so there is nothing to spend by always
+      // sending it when the database is down.
+      dbShape = describeDbUrl(config.databaseUrl);
     }
   }
   // Always 200, and that is deliberate. render.yaml points healthCheckPath at
