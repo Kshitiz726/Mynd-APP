@@ -72,9 +72,33 @@ app.use(express.json({ limit: '2mb' }));
 // debugging round.
 //
 // It always answers 200: see the note on the response below.
+/**
+ * The shape of DATABASE_URL, with nothing identifying in it.
+ *
+ * Only ever reported when Supavisor says "tenant or user not found", which is
+ * the one failure where the shape is the answer. Emits whether the username is
+ * tenant-qualified, the host family and the port - never the ref, the host or
+ * the password.
+ */
+function describeDbUrl(raw: string): string {
+  try {
+    const u = new URL(raw);
+    const host = /pooler\.supabase\.com$/i.test(u.hostname)
+      ? 'pooler'
+      : /\.supabase\.(co|com)$/i.test(u.hostname)
+        ? 'direct'
+        : 'other';
+    const qualified = u.username.includes('.');
+    return `user=${qualified ? 'tenant-qualified' : 'plain'} host=${host} port=${u.port || 'default'}`;
+  } catch {
+    return 'unparseable';
+  }
+}
+
 app.get('/health', async (_req, res) => {
   let dbState: 'up' | 'down' | 'unconfigured' = 'unconfigured';
   let dbFault: string | null = null;
+  let dbShape: string | null = null;
   if (config.hasDb) {
     try {
       await db.one('select 1 as ok');
@@ -87,10 +111,25 @@ app.get('/health', async (_req, res) => {
       // separate the three cases that need different fixes - ENOTFOUND or
       // ETIMEDOUT is a paused or moved database, 28P01 is a rotated password,
       // XX000 from the pooler is the tenant being unavailable.
-      const err = e as { code?: string | number; name?: string };
+      const err = e as { code?: string | number; name?: string; message?: string };
       dbFault = [err?.name, err?.code != null ? String(err.code) : null]
         .filter(Boolean)
         .join(' ') || 'unknown';
+
+      // "Tenant or user not found" is Supavisor saying it cannot resolve the
+      // project behind the pooler, and it has exactly two causes that need
+      // opposite fixes: the project is paused, or the username in DATABASE_URL
+      // is not tenant-qualified. The pooler requires `postgres.<project-ref>`;
+      // the plain `postgres` that works for a direct connection is rejected
+      // here, and the message is identical either way.
+      //
+      // The SHAPE of the URL, never the URL. Whether the username contains a
+      // dot, which host family it points at and which port it uses are not
+      // secrets - the password and the project ref are, and none of those
+      // three carries either.
+      if (/tenant or user not found/i.test(err?.message ?? '')) {
+        dbShape = describeDbUrl(config.databaseUrl);
+      }
     }
   }
   // Always 200, and that is deliberate. render.yaml points healthCheckPath at
@@ -99,7 +138,12 @@ app.get('/health', async (_req, res) => {
   // the instance that is already serving. A database that is asleep must not
   // be able to take the API down with it, least of all while somebody is
   // deploying the fix for it. The state is in the body for a human to read.
-  res.json({ ok: true, db: dbState, ...(dbFault ? { dbFault } : {}) });
+  res.json({
+    ok: true,
+    db: dbState,
+    ...(dbFault ? { dbFault } : {}),
+    ...(dbShape ? { dbShape } : {}),
+  });
 });
 
 // Which revision is actually serving.
