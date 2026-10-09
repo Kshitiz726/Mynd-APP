@@ -139,27 +139,67 @@ async function verifyAppleProfile(
 // user each time" bug. Selecting the earliest row by handle guarantees one
 // stable identity per email regardless of the constraint's presence, and
 // tolerates any pre-existing duplicates (limit 1).
+/**
+ * What actually went wrong, in a form that is safe to hand to a client.
+ *
+ * A bare "internal server error" on the sign-in button is undiagnosable from
+ * the outside: the only copy of the reason is in a log the person hitting the
+ * button cannot read, and reproducing it needs their Google account. Postgres
+ * error codes and constraint names are not secrets - every migration in this
+ * repo is public - and they turn "it 500s" into "23505 on users_email_key",
+ * which names the fix.
+ *
+ * The message itself is never forwarded: that is where row values and
+ * connection strings show up.
+ */
+function dbFault(e: unknown): string {
+  const err = e as { code?: string; constraint?: string; table?: string };
+  const parts = [err?.code, err?.constraint ?? err?.table].filter(Boolean);
+  return parts.length > 0 ? parts.join(' ') : 'unknown';
+}
+
 async function issueSessionForEmail(
   res: Response,
   email: string,
   seed: string,
   fullName: string | null = null,
 ): Promise<void> {
+  // Matched on handle OR email, not handle alone.
+  //
+  // There are two unique keys on this table - `handle`, and a partial unique
+  // index on lower(email) - and an account can hold the address under either
+  // of them. Sign in with Apple stores a relay address as the handle; a
+  // migration backfilled email from handle for older rows; a renamed handle
+  // leaves the email behind. Looking only at handle meant any of those made a
+  // returning user look new, and the insert that followed collided with the
+  // email index - which `on conflict (handle)` does not cover, so it came back
+  // as an unhandled unique violation and a 500 on the sign-in button.
   let u = await db.oneOrNone(
-    `select * from users where handle = $1 order by created_at asc limit 1`,
+    `select * from users
+      where handle = $1 or lower(email) = lower($1)
+      order by created_at asc limit 1`,
     [email],
   );
   if (u) {
     // Returning user: load the SAME account and refresh stored identity. This is
     // what makes "continue with Google again" restore everything - same user id,
     // so all their posts, friends, chats, rooms and notifications come back.
+    //
+    // The email is only written when it is not already somebody else's, for the
+    // same reason: this update can violate that index too, and failing a
+    // sign-in to refresh a column that is already correct would be absurd.
     await db.none(
       `update users set last_seen_at = now(),
-              email = $2,
+              email = case
+                when exists (
+                  select 1 from users o
+                   where lower(o.email) = lower($2) and o.id <> $1::uuid
+                ) then email else $2 end,
               full_name = coalesce($3, full_name)
        where id = $1`,
       [u.id, email, fullName],
     );
+    u = await db.one(`select * from users where id = $1`, [u.id]);
   } else {
     u = await db.one(
       `insert into users (handle, display_name, avatar_color, avatar_text_color, email, full_name)
@@ -349,7 +389,7 @@ authRouter.post('/auth/google', async (req, res) => {
     await issueSessionForEmail(res, profile.email, profile.email, profile.name);
   } catch (e) {
     console.error('Google auth error:', e);
-    res.status(500).json({ error: 'internal server error' });
+    res.status(500).json({ error: 'internal server error', fault: dbFault(e) });
   }
 });
 
@@ -385,7 +425,7 @@ authRouter.post('/auth/apple', async (req, res) => {
     await issueSessionForEmail(res, handle, handle, null);
   } catch (e) {
     console.error('Apple auth error:', e);
-    res.status(500).json({ error: 'internal server error' });
+    res.status(500).json({ error: 'internal server error', fault: dbFault(e) });
   }
 });
 
