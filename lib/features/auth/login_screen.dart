@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import '../../core/constants/legal.dart';
@@ -171,9 +172,23 @@ class _LoginScreenState extends State<LoginScreen>
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Login failed: $e')),
-        );
+        // Readable, and long enough to read. A sign-in failure carries the one
+        // piece of information that makes it fixable - the server's fault code
+        // on a 500, or which leg of the Google flow gave up - and the default
+        // snackbar is two lines for four seconds, which loses exactly that.
+        debugPrint('[gsi] login failed: $e');
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(
+            content: Text('Login failed: $e', maxLines: 6),
+            duration: const Duration(seconds: 12),
+            behavior: SnackBarBehavior.floating,
+            action: SnackBarAction(
+              label: 'Copy',
+              onPressed: () =>
+                  Clipboard.setData(ClipboardData(text: '$e')),
+            ),
+          ));
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -259,9 +274,23 @@ class _LoginScreenState extends State<LoginScreen>
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Login failed: $e')),
-        );
+        // Readable, and long enough to read. A sign-in failure carries the one
+        // piece of information that makes it fixable - the server's fault code
+        // on a 500, or which leg of the Google flow gave up - and the default
+        // snackbar is two lines for four seconds, which loses exactly that.
+        debugPrint('[gsi] login failed: $e');
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(
+            content: Text('Login failed: $e', maxLines: 6),
+            duration: const Duration(seconds: 12),
+            behavior: SnackBarBehavior.floating,
+            action: SnackBarAction(
+              label: 'Copy',
+              onPressed: () =>
+                  Clipboard.setData(ClipboardData(text: '$e')),
+            ),
+          ));
       }
     } finally {
       if (mounted) setState(() => _loading = false);
