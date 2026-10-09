@@ -74,6 +74,7 @@ app.use(express.json({ limit: '2mb' }));
 // It always answers 200: see the note on the response below.
 app.get('/health', async (_req, res) => {
   let dbState: 'up' | 'down' | 'unconfigured' = 'unconfigured';
+  let dbFault: string | null = null;
   if (config.hasDb) {
     try {
       await db.one('select 1 as ok');
@@ -81,6 +82,15 @@ app.get('/health', async (_req, res) => {
     } catch (e) {
       console.error('[health] database unreachable:', e);
       dbState = 'down';
+      // The code only, never the message: a connection failure quotes the
+      // host, and the host is half the DATABASE_URL. The code is enough to
+      // separate the three cases that need different fixes - ENOTFOUND or
+      // ETIMEDOUT is a paused or moved database, 28P01 is a rotated password,
+      // XX000 from the pooler is the tenant being unavailable.
+      const err = e as { code?: string | number; name?: string };
+      dbFault = [err?.name, err?.code != null ? String(err.code) : null]
+        .filter(Boolean)
+        .join(' ') || 'unknown';
     }
   }
   // Always 200, and that is deliberate. render.yaml points healthCheckPath at
@@ -89,7 +99,7 @@ app.get('/health', async (_req, res) => {
   // the instance that is already serving. A database that is asleep must not
   // be able to take the API down with it, least of all while somebody is
   // deploying the fix for it. The state is in the body for a human to read.
-  res.json({ ok: true, db: dbState });
+  res.json({ ok: true, db: dbState, ...(dbFault ? { dbFault } : {}) });
 });
 
 // Which revision is actually serving.
