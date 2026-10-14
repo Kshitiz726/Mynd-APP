@@ -234,6 +234,11 @@ class _ChatScreenState extends State<ChatScreen> {
                   ? _EmptyChat(title: widget.title, isGroup: widget.isGroup)
                   : ListView.builder(
                       controller: _scroll,
+                      // Same as the coach chat: drag the conversation and the
+                      // keyboard goes, because it is covering the thing you
+                      // are scrolling to read.
+                      keyboardDismissBehavior:
+                          ScrollViewKeyboardDismissBehavior.onDrag,
                       padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),
                       itemCount: msgs.length,
                       itemBuilder: (context, i) {
@@ -690,6 +695,10 @@ class _Composer extends StatelessWidget {
                 onChanged: onChanged,
                 textInputAction: TextInputAction.send,
                 onSubmitted: (_) => onSend(),
+                // On a touch device Flutter leaves the keyboard up when you
+                // tap elsewhere; only desktop dismisses by default.
+                onTapOutside: (_) =>
+                    FocusManager.instance.primaryFocus?.unfocus(),
                 decoration: const InputDecoration(
                   hintText: 'Message…',
                   border: InputBorder.none,

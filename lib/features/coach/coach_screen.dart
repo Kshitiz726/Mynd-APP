@@ -307,6 +307,11 @@ class _CoachScreenState extends State<CoachScreen> {
             Expanded(
               child: ListView.builder(
                 controller: _scroll,
+                // Drag the conversation, lose the keyboard. The expected
+                // gesture in every chat app, and the one people reach for
+                // first when the keyboard is covering what they want to read.
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
                 padding: const EdgeInsets.fromLTRB(
                   AppSpacing.screenH,
                   AppSpacing.xl,
@@ -1031,6 +1036,13 @@ class _CoachInput extends StatelessWidget {
                 controller: controller,
                 textCapitalization: TextCapitalization.sentences,
                 onSubmitted: onSend,
+                // Flutter does not dismiss the keyboard on a tap elsewhere on
+                // a touch device - the default only does that on desktop - so
+                // without this the keyboard stayed up over everything it was
+                // covering, and tapping the drawer, the agent's face or
+                // another tab did nothing about it.
+                onTapOutside: (_) =>
+                    FocusManager.instance.primaryFocus?.unfocus(),
                 minLines: 1,
                 maxLines: 4,
                 style: Theme.of(context)
