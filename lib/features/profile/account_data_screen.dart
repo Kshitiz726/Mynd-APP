@@ -6,6 +6,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../core/constants/app_spacing.dart';
 import '../../core/routes/app_routes.dart';
+import '../../core/services/account_scope.dart';
 import '../../core/services/api_client.dart';
 import '../../core/services/api_config.dart';
 import '../../core/services/coach_memory_service.dart';
@@ -124,21 +125,48 @@ class _AccountDataScreenState extends State<AccountDataScreen> {
     try {
       // The server checks the confirmation too, so a client that skipped this
       // dialog would still be refused.
+      // Captured before the call: deleteAccount signs out, which clears the id
+      // the purge needs to find this account's parked keys.
+      final userId = ApiConfig.instance.userId;
+
       await ApiClient.instance.deleteAccount(confirm: controller.text.trim());
 
-      // Everything local goes with it, or the next account on this device
-      // inherits the last one's coach memory.
+      // Everything local goes with it. Clearing coach memory alone left the
+      // schedule, goals, mood history, feed and the Gmail credential sitting
+      // on the device - so an account that had just been erased came back the
+      // moment anybody signed in, which is not what "delete my account" says.
       await GoogleAuth.forget();
       RealtimeService.instance.dispose();
       await CoachMemoryService.instance.clearAll();
+      if (userId != null) await AccountScope.purge(userId);
 
       if (!mounted) return;
       Navigator.of(context, rootNavigator: true)
           .pushNamedAndRemoveUntil(AppRoutes.login, (_) => false);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() => _busy = false);
+      // Only a 400 is the name not matching. Every other failure said the same
+      // thing, which blamed the user's typing for a fault on the server - and
+      // in the one case that actually happened (a foreign key that stopped the
+      // account row being deleted) it sent people round the same loop, typing
+      // their name more carefully, while the account survived every attempt.
+      Toast.show(
+        context,
+        e.statusCode == 400
+            ? "That didn't match. Nothing was deleted."
+            : 'Your account could not be deleted just now, and nothing was '
+                'changed. Please try again, or contact support if it keeps '
+                'happening.',
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() => _busy = false);
-      Toast.show(context, "That didn't match. Nothing was deleted.");
+      debugPrint('[account] delete failed: $e');
+      Toast.show(
+        context,
+        'Your account could not be deleted just now, and nothing was changed.',
+      );
     }
   }
 

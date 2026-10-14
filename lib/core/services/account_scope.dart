@@ -121,6 +121,53 @@ class AccountScope {
     return live.isNotEmpty || returning.isNotEmpty;
   }
 
+  /// Destroy this account's local data, live and parked, and forget it ever
+  /// had any.
+  ///
+  /// [adopt] deliberately never throws anything away - handing the phone to
+  /// somebody else must not cost you your schedule. Deletion is the one case
+  /// where that is exactly wrong: somebody who asks for their account to be
+  /// erased and is told it is gone has not been told the truth if it is still
+  /// on the device under another key, waiting to be handed back. The parked
+  /// copies go too, for the same reason.
+  ///
+  /// The Gmail credential is in the keychain rather than in preferences, so it
+  /// is not reached by removing keys here and has to be dropped explicitly.
+  /// Leaving it would be the worst of the lot: the next person to sign in on
+  /// this phone would inherit a working password to somebody else's email.
+  static Future<void> purge(String userId) async {
+    final p = await SharedPreferences.getInstance();
+
+    final live = p.getKeys().where(_isPersonal).toList();
+    final mine = '$_park$userId:';
+    final parked = p.getKeys().where((k) => k.startsWith(mine)).toList();
+    for (final k in [...live, ...parked]) {
+      await p.remove(k);
+    }
+    await p.remove(_kOwner);
+    _generation++;
+
+    // Each of these independently, because none of them is a reason to abandon
+    // the rest. A locked keychain must not leave the schedule on the device,
+    // and a failed reload must not leave the credential.
+    try {
+      await MailService.instance.disconnect();
+    } catch (e) {
+      debugPrint('[account] could not clear the mail credential: $e');
+    }
+    await CoachMemoryService.instance.reload();
+    await FeedInstructionsService.instance.reload();
+    await SoulService.instance.reload();
+    try {
+      await NotificationService.instance.cancelAll();
+    } catch (e) {
+      debugPrint('[account] could not cancel pending notifications: $e');
+    }
+
+    debugPrint('[account] purged ${live.length} live and ${parked.length} '
+        'parked keys for $userId');
+  }
+
   static bool _isPersonal(String k) =>
       k.startsWith('om_') &&
       !_deviceKeys.contains(k) &&
