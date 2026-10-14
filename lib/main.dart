@@ -151,7 +151,7 @@ void main() async {
   // a reset method that someone forgets to add to provider thirteen brings the
   // whole bug back. Anything that survives this - notification channels, the
   // timezone database - is device state, not personal.
-  AccountScope.onSwitched = () {
+  AccountScope.onSwitched = (String route) {
     // The socket is still authenticated as the previous user, and connect() is
     // a no-op while one exists. Drop it so the new session opens its own.
     RealtimeService.instance.dispose();
@@ -186,7 +186,7 @@ void main() async {
     // Post-frame, so the swap has finished before the stack is rewritten.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       rootNavigatorKey.currentState
-          ?.pushNamedAndRemoveUntil(AppRoutes.shell, (_) => false);
+          ?.pushNamedAndRemoveUntil(route, (_) => false);
     });
   };
 

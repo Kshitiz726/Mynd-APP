@@ -8,6 +8,7 @@ import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import '../../core/constants/legal.dart';
 import '../../core/services/account_scope.dart';
 import '../../core/services/api_client.dart';
+import '../../core/routes/app_routes.dart';
 import '../../core/services/google_auth.dart';
 // Desktop-only real Google OAuth (loopback). Web/mobile pull in the stub.
 import '../../core/services/desktop_google_auth_stub.dart'
@@ -206,7 +207,7 @@ class _LoginScreenState extends State<LoginScreen>
   /// the coach instead, which gates on the same answer independently.
   bool _restartedForNewAccount(bool switched) {
     if (!switched) return false;
-    AccountScope.onSwitched?.call();
+    AccountScope.onSwitched?.call(AppRoutes.shell);
     return true;
   }
 

@@ -57,9 +57,16 @@ class AccountScope {
   /// the swap independent of that ordering.
   static const _sessionPrefix = 'om_session_';
 
-  /// Called after the swap, so the app can rebuild everything still holding the
-  /// previous account's data in memory. Set in main().
-  static void Function()? onSwitched;
+  /// Called after a swap or a purge, so the app can rebuild everything still
+  /// holding the previous account's data in memory. Set in main().
+  ///
+  /// Takes where to land, because the two cases do not go to the same place: a
+  /// switch has just signed somebody in and belongs on the shell, a deletion
+  /// has just signed somebody out and belongs on login. Rebuilding is the
+  /// point of the call either way - clearing the keys underneath a provider
+  /// that is still holding the old values in memory only means it writes them
+  /// back.
+  static void Function(String route)? onSwitched;
 
   /// Bumped once per completed switch.
   ///

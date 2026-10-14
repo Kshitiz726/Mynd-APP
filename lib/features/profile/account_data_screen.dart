@@ -141,8 +141,22 @@ class _AccountDataScreenState extends State<AccountDataScreen> {
       if (userId != null) await AccountScope.purge(userId);
 
       if (!mounted) return;
-      Navigator.of(context, rootNavigator: true)
-          .pushNamedAndRemoveUntil(AppRoutes.login, (_) => false);
+      // A full rebuild, not a navigation.
+      //
+      // Clearing the keys is only half of it. Every provider built at launch is
+      // still holding this account's tasks, goals, mood history and chat in
+      // memory, and the next thing any of them persists writes it all straight
+      // back over the keys that were just cleared - which is exactly what
+      // happened: the name went, and the conversation came back. Navigating to
+      // login leaves that tree standing. This is the same restart a switch
+      // does, pointed at login instead of the shell.
+      final restart = AccountScope.onSwitched;
+      if (restart != null) {
+        restart(AppRoutes.login);
+      } else {
+        Navigator.of(context, rootNavigator: true)
+            .pushNamedAndRemoveUntil(AppRoutes.login, (_) => false);
+      }
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() => _busy = false);
