@@ -111,10 +111,17 @@ r.delete('/me', requireAuth, async (req, res, next) => {
     }
 
     await db.tx(async (t) => {
-      // Anything not covered by a cascade, deleted explicitly and tolerantly:
-      // a table that does not exist in this deployment must not abort the
-      // deletion of a real person's data.
+      // Anything not covered by a cascade, handled explicitly.
+      //
+      // Two of the foreign keys into users(id) have no `on delete cascade`:
+      // messages.sender_id and rooms.host_id. The first was already here. The
+      // second was not, and it is why this endpoint failed for anybody who had
+      // ever hosted a focus room - `delete from users` raised a foreign key
+      // violation, the transaction rolled back, and the account survived its
+      // own deletion. Nulled rather than deleted, because a room can have other
+      // people in it and losing the host is not a reason to end their session.
       for (const stmt of [
+        `update rooms set host_id = null where host_id = $1`,
         `delete from user_state where user_id = $1`,
         `delete from health_consent_events where user_id = $1`,
         `delete from subscriptions where user_id = $1`,
@@ -122,11 +129,40 @@ r.delete('/me', requireAuth, async (req, res, next) => {
         `delete from messages where sender_id = $1`,
         `delete from notes where user_id = $1`,
       ]) {
-        await t.none(stmt, [uid]).catch(() => undefined);
+        // Each in its own savepoint, so "tolerantly" means what it says.
+        //
+        // These used to be `t.none(...).catch(() => undefined)`, which catches
+        // the error in JavaScript and does nothing about Postgres: a failed
+        // statement puts the whole transaction in the aborted state, and every
+        // command after it is refused until rollback. So one missing table did
+        // not skip one statement - it silently guaranteed that the final
+        // `delete from users` could never run. A nested tx is a SAVEPOINT, so
+        // a failure here rolls back to just before it and the outer
+        // transaction stays usable.
+        await t.tx((sp) => sp.none(stmt, [uid])).catch((e) => {
+          console.warn('[account] skipped during delete', {
+            stmt: stmt.slice(0, 40),
+            code: (e as { code?: string })?.code,
+          });
+        });
       }
       // The account row. Every remaining foreign key cascades from here.
       await t.none(`delete from users where id = $1`, [uid]);
     });
+
+    // It is gone, or this endpoint lied. The whole bug being fixed here is an
+    // account that reported its own deletion and came back on the next
+    // sign-in, so the claim is checked rather than assumed.
+    const survivor = await db.oneOrNone(`select 1 from users where id = $1`, [uid]);
+    if (survivor) {
+      console.error('[account] delete reported success but the row is still there', {
+        userId: uid.slice(0, 8),
+      });
+      return res.status(500).json({
+        error: 'account was not deleted',
+        code: 'delete_incomplete',
+      });
+    }
 
     // Belt to the cascade's braces: the row is gone, so verifyJwt would already
     // fail on "user not found", but bumping the counter first would have been
