@@ -1,12 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/config/store_policy.dart';
 import '../../core/constants/app_spacing.dart';
 import '../../core/routes/app_routes.dart';
+import '../../core/services/speech_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/haptics.dart';
 import '../../core/utils/om_icons.dart';
+import '../../core/utils/toast.dart';
 import '../../models/chat_message.dart';
 import '../../providers/coach_provider.dart';
 import '../../providers/health_consent_provider.dart';
@@ -1072,9 +1076,136 @@ class _CoachInput extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(width: 6),
+            const SizedBox(width: 2),
+            // Speak instead of type. Same destination either way: the
+            // transcript lands in the field, so it can be read and corrected
+            // before it is sent rather than going straight off as whatever the
+            // transcriber heard.
+            _MicKey(controller: controller),
+            const SizedBox(width: 2),
             _SendKey(controller: controller, onSend: onSend),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Dictation for the composer.
+///
+/// Records while held open, transcribes on the second tap and appends the
+/// result to whatever is already typed. It deliberately does NOT send: the
+/// transcript is a draft like any other, and a mis-heard sentence that posts
+/// itself is a worse outcome than one you can fix first.
+class _MicKey extends StatefulWidget {
+  const _MicKey({required this.controller});
+
+  final TextEditingController controller;
+
+  @override
+  State<_MicKey> createState() => _MicKeyState();
+}
+
+enum _Mic { idle, listening, working }
+
+class _MicKeyState extends State<_MicKey> {
+  final _stt = SpeechService.instance;
+  _Mic _phase = _Mic.idle;
+  double _level = 0;
+
+  @override
+  void dispose() {
+    // Leaving the screen mid-sentence must not leave the mic open.
+    if (_phase == _Mic.listening) unawaited(_stt.cancel());
+    super.dispose();
+  }
+
+  Future<void> _toggle() async {
+    if (_phase == _Mic.working) return;
+
+    if (_phase == _Mic.listening) {
+      setState(() => _phase = _Mic.working);
+      final text = await _stt.stopAndTranscribe();
+      if (!mounted) return;
+      setState(() {
+        _phase = _Mic.idle;
+        _level = 0;
+      });
+      final clean = text.trim();
+      if (clean.isEmpty) {
+        Toast.show(context, "Didn't catch that. Try again?");
+        return;
+      }
+      // Appended, not replaced: somebody who typed half a sentence and then
+      // spoke the rest should end up with both.
+      final existing = widget.controller.text.trimRight();
+      final joined = existing.isEmpty ? clean : '$existing $clean';
+      widget.controller.value = TextEditingValue(
+        text: joined,
+        selection: TextSelection.collapsed(offset: joined.length),
+      );
+      Haptics.success();
+      return;
+    }
+
+    Haptics.medium();
+    final ok = await _stt.startRecording(
+      onLevel: (l) {
+        if (mounted && _phase == _Mic.listening) {
+          setState(() => _level = _level * 0.6 + l * 0.4);
+        }
+      },
+    );
+    if (!mounted) return;
+    if (!ok) {
+      // The service's own words: a missing grant, a refused one and a recorder
+      // that would not open are three different problems with three different
+      // fixes, and "check your permissions" is wrong for two of them.
+      Toast.show(context, _stt.lastError ?? 'Microphone unavailable.');
+      if (_stt.micBlockedInSettings) await _stt.openMicSettings();
+      return;
+    }
+    setState(() => _phase = _Mic.listening);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.omColors;
+    final listening = _phase == _Mic.listening;
+    return Semantics(
+      button: true,
+      label: listening ? 'stop dictating' : 'dictate a message',
+      child: OmTappable(
+        onTap: _toggle,
+        feedback: OmTapFeedback.none,
+        pressedScale: 0.9,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOut,
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            // While listening it swells gently with the level, so the button
+            // itself says the mic is open rather than leaving somebody talking
+            // at a screen that looks idle.
+            color: listening
+                ? c.accent.withValues(alpha: 0.22 + (_level.clamp(0, 1) * 0.5))
+                : Colors.transparent,
+            shape: BoxShape.circle,
+          ),
+          alignment: Alignment.center,
+          child: _phase == _Mic.working
+              ? SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: c.text2),
+                )
+              : Icon(
+                  listening ? Icons.stop_rounded : OmIcons.byName('mic'),
+                  size: listening ? 22 : 19,
+                  color: listening ? c.accent : c.text2,
+                ),
         ),
       ),
     );
