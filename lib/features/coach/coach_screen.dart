@@ -619,14 +619,26 @@ class _CoachHero extends StatelessWidget {
                 color: c.surfaceAlt,
                 borderRadius: BorderRadius.circular(AppRadius.pill),
               ),
+              // The tagline is Flexible and the name is not, because the name
+              // is the part that must never be cut. Unbounded, this Row
+              // overflowed by 233 pixels on a phone - a tagline is a sentence,
+              // and every one of them is longer than a pill is wide. It is the
+              // first screen a new account sees, so the overflow stripes were
+              // on the first thing anybody looked at.
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(agent.name,
                       style: const TextStyle(fontWeight: FontWeight.w800)),
                   const SizedBox(width: 6),
-                  Text(agent.tagline,
-                      style: TextStyle(color: c.text2, fontSize: 13)),
+                  Flexible(
+                    child: Text(
+                      agent.tagline,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: c.text2, fontSize: 13),
+                    ),
+                  ),
                   const SizedBox(width: 6),
                   Icon(OmIcons.byName('chevR'), size: 15, color: c.text2),
                 ],
