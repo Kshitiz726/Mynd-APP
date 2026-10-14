@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/constants/app_spacing.dart';
-import '../../../core/services/live_dictation.dart';
+import '../../../core/services/speech_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../core/utils/om_icons.dart';
@@ -38,7 +38,7 @@ class VoiceDumpSheet extends StatefulWidget {
 }
 
 class _VoiceDumpSheetState extends State<VoiceDumpSheet> {
-  final _stt = LiveDictation.instance;
+  final _stt = SpeechService.instance;
 
   _Vp _phase = _Vp.listening;
   String _text = '';
@@ -74,25 +74,14 @@ class _VoiceDumpSheetState extends State<VoiceDumpSheet> {
     });
     _turnEnding = false;
     Haptics.medium();
-    // Live now, like the chat composer. The words appear while you are still
-    // talking, so a microphone that is not working is visible immediately
-    // rather than at the end of a paragraph you then have to say again.
-    final ok = await _stt.start(
-      onText: (text, isFinal) {
-        if (!mounted || _phase != _Vp.listening) return;
-        setState(() => _text = text);
-        // The recogniser ends the session itself after a pause. Treating that
-        // as "done" is what lets somebody simply stop talking.
-        if (isFinal && !_stt.isListening) unawaited(_stopAndProcess());
-      },
-      onLevel: _onLevel,
-    );
+    final ok = await _stt.startRecording(onLevel: _onLevel);
     if (!ok && mounted) {
       setState(() {
         _phase = _Vp.error;
-        // The service's own words: a missing grant, a refused one, no network
-        // and a busy microphone are different problems with different fixes,
-        // and one fixed sentence was wrong for most of them.
+        // The service's own words: whether the grant is missing, permanently
+        // refused, or the recorder failed to open are three different problems,
+        // and telling the user "check the app permissions" for all three sent
+        // them to a settings screen that was often already correct.
         _error = _stt.lastError ?? 'Microphone unavailable.';
       });
       return;
@@ -109,11 +98,9 @@ class _VoiceDumpSheetState extends State<VoiceDumpSheet> {
     if (_turnEnding) return;
     _turnEnding = true;
     setState(() => _phase = _Vp.processing);
-    // Nothing to transcribe at the end any more: the text has been arriving
-    // all along, so stopping is just stopping.
-    await _stt.stop();
+    final text = await _stt.stopAndTranscribe();
     if (!mounted) return;
-    await _process(_text);
+    await _process(text);
   }
 
   Future<void> _process(String text) async {
