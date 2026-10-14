@@ -1,7 +1,7 @@
 name: ourmynd
 description: "OurMynd — an ADHD-focused productivity, wellness & community app."
 publish_to: "none"
-version: 1.0.0+17
+version: 1.0.0+18
 
 environment:
   sdk: ">=3.6.0 <4.0.0"
@@ -84,6 +84,7 @@ dependencies:
   # this is what lets the coach summarise mail without Google having to verify
   # and annually re-assess the app for a restricted API scope.
   enough_mail: ^2.1.6
+  speech_to_text: ^7.5.0
 
 dev_dependencies:
   flutter_lints: ^4.0.0

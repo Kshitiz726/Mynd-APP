@@ -6,7 +6,7 @@ import 'package:provider/provider.dart';
 import '../../core/config/store_policy.dart';
 import '../../core/constants/app_spacing.dart';
 import '../../core/routes/app_routes.dart';
-import '../../core/services/speech_service.dart';
+import '../../core/services/live_dictation.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/haptics.dart';
 import '../../core/utils/om_icons.dart';
@@ -1091,12 +1091,16 @@ class _CoachInput extends StatelessWidget {
   }
 }
 
-/// Dictation for the composer.
+/// Dictation for the composer, shown as you speak.
 ///
-/// Records while held open, transcribes on the second tap and appends the
-/// result to whatever is already typed. It deliberately does NOT send: the
-/// transcript is a draft like any other, and a mis-heard sentence that posts
-/// itself is a worse outcome than one you can fix first.
+/// The words appear in the field while you are still talking, which is the
+/// whole point: the previous version recorded silently and only told you
+/// whether it had heard anything after you stopped - and when the capture
+/// failed, which it did consistently, all it could say was "didn't catch
+/// that", with the sentence already gone.
+///
+/// It never sends. The transcript is a draft like any other, and a mis-heard
+/// sentence that posts itself is worse than one you can read first.
 class _MicKey extends StatefulWidget {
   const _MicKey({required this.controller});
 
@@ -1106,75 +1110,84 @@ class _MicKey extends StatefulWidget {
   State<_MicKey> createState() => _MicKeyState();
 }
 
-enum _Mic { idle, listening, working }
-
 class _MicKeyState extends State<_MicKey> {
-  final _stt = SpeechService.instance;
-  _Mic _phase = _Mic.idle;
+  final _dictation = LiveDictation.instance;
+  bool _listening = false;
   double _level = 0;
+
+  /// What was already typed when dictation started.
+  ///
+  /// Every partial result is the whole transcript so far, not an increment, so
+  /// the field is rewritten each time as "what they typed" + "what they have
+  /// said". Appending each result instead would repeat the sentence word by
+  /// word as it grew.
+  String _base = '';
 
   @override
   void dispose() {
-    // Leaving the screen mid-sentence must not leave the mic open.
-    if (_phase == _Mic.listening) unawaited(_stt.cancel());
+    if (_listening) unawaited(_dictation.cancel());
     super.dispose();
   }
 
-  Future<void> _toggle() async {
-    if (_phase == _Mic.working) return;
+  void _write(String heard) {
+    final joined =
+        _base.isEmpty ? heard : (heard.isEmpty ? _base : '$_base $heard');
+    widget.controller.value = TextEditingValue(
+      text: joined,
+      selection: TextSelection.collapsed(offset: joined.length),
+    );
+  }
 
-    if (_phase == _Mic.listening) {
-      setState(() => _phase = _Mic.working);
-      final text = await _stt.stopAndTranscribe();
+  Future<void> _toggle() async {
+    if (_listening) {
+      await _dictation.stop();
       if (!mounted) return;
       setState(() {
-        _phase = _Mic.idle;
+        _listening = false;
         _level = 0;
       });
-      final clean = text.trim();
-      if (clean.isEmpty) {
-        Toast.show(context, "Didn't catch that. Try again?");
-        return;
-      }
-      // Appended, not replaced: somebody who typed half a sentence and then
-      // spoke the rest should end up with both.
-      final existing = widget.controller.text.trimRight();
-      final joined = existing.isEmpty ? clean : '$existing $clean';
-      widget.controller.value = TextEditingValue(
-        text: joined,
-        selection: TextSelection.collapsed(offset: joined.length),
-      );
       Haptics.success();
       return;
     }
 
     Haptics.medium();
-    final ok = await _stt.startRecording(
+    _base = widget.controller.text.trimRight();
+    final ok = await _dictation.start(
+      onText: (text, isFinal) {
+        if (!mounted) return;
+        _write(text);
+        // The OS ends the session itself after a pause, so the button has to
+        // follow that rather than wait for a second tap that may never come.
+        if (isFinal && !_dictation.isListening && _listening) {
+          setState(() {
+            _listening = false;
+            _level = 0;
+          });
+        }
+      },
       onLevel: (l) {
-        if (mounted && _phase == _Mic.listening) {
+        if (mounted && _listening) {
           setState(() => _level = _level * 0.6 + l * 0.4);
         }
       },
     );
     if (!mounted) return;
     if (!ok) {
-      // The service's own words: a missing grant, a refused one and a recorder
-      // that would not open are three different problems with three different
-      // fixes, and "check your permissions" is wrong for two of them.
-      Toast.show(context, _stt.lastError ?? 'Microphone unavailable.');
-      if (_stt.micBlockedInSettings) await _stt.openMicSettings();
+      // The service's own words. A missing grant, a refused one, no network
+      // and a busy microphone are four different problems with four different
+      // fixes, and "didn't catch that" was wrong for all of them.
+      Toast.show(context, _dictation.lastError ?? 'Dictation unavailable.');
       return;
     }
-    setState(() => _phase = _Mic.listening);
+    setState(() => _listening = true);
   }
 
   @override
   Widget build(BuildContext context) {
     final c = context.omColors;
-    final listening = _phase == _Mic.listening;
     return Semantics(
       button: true,
-      label: listening ? 'stop dictating' : 'dictate a message',
+      label: _listening ? 'stop dictating' : 'dictate a message',
       child: OmTappable(
         onTap: _toggle,
         feedback: OmTapFeedback.none,
@@ -1185,27 +1198,20 @@ class _MicKeyState extends State<_MicKey> {
           width: 40,
           height: 40,
           decoration: BoxDecoration(
-            // While listening it swells gently with the level, so the button
-            // itself says the mic is open rather than leaving somebody talking
-            // at a screen that looks idle.
-            color: listening
+            // Swells with your voice while it listens, so the button itself
+            // says the microphone is open. Talking at a screen that looks idle
+            // is what made the old one feel broken.
+            color: _listening
                 ? c.accent.withValues(alpha: 0.22 + (_level.clamp(0, 1) * 0.5))
                 : Colors.transparent,
             shape: BoxShape.circle,
           ),
           alignment: Alignment.center,
-          child: _phase == _Mic.working
-              ? SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                      strokeWidth: 2, color: c.text2),
-                )
-              : Icon(
-                  listening ? Icons.stop_rounded : OmIcons.byName('mic'),
-                  size: listening ? 22 : 19,
-                  color: listening ? c.accent : c.text2,
-                ),
+          child: Icon(
+            _listening ? Icons.stop_rounded : OmIcons.byName('mic'),
+            size: _listening ? 22 : 19,
+            color: _listening ? c.accent : c.text2,
+          ),
         ),
       ),
     );
