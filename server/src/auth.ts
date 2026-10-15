@@ -1,5 +1,5 @@
 import jwt from 'jsonwebtoken';
-import { createPublicKey } from 'node:crypto';
+import { createPublicKey, randomUUID } from 'node:crypto';
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import { OAuth2Client } from 'google-auth-library';
 import { config } from './config.js';
@@ -456,6 +456,39 @@ authRouter.post('/auth/apple', async (req, res) => {
     await issueSessionForEmail(res, handle, handle, null);
   } catch (e) {
     console.error('Apple auth error:', e);
+    res.status(500).json({ error: 'internal server error', fault: dbFault(e) });
+  }
+});
+
+/**
+ * Guest sign-in: one tap, no provider, no credentials.
+ *
+ * Added because the app has no username and password path, so there is no demo
+ * account to hand App Review, and a reviewer who cannot get past the login
+ * screen cannot review anything. It is not a reviewer backdoor though: anyone
+ * who would rather not attach a Google or Apple identity to a mental health
+ * app gets the same door, which is the honest version of the same feature.
+ *
+ * A fresh account every time, deliberately. Reusing one shared guest row would
+ * mean every guest inherits the last guest's tasks, conversation and mood
+ * history, which is both a privacy problem and a confusing first run. The cost
+ * is that each tap creates a real row; `authLimiter` caps /api/auth at 10
+ * requests per 15 minutes per IP, which bounds that.
+ *
+ * The synthetic address is never shown and never mailed. It exists because the
+ * users table keys an account by handle, and giving guests the same shape as
+ * everybody else means every downstream feature - deletion, blocking,
+ * matchmaking, the coach - works without knowing a guest is a guest.
+ */
+authRouter.post('/auth/guest', async (_req, res) => {
+  if (!config.hasDb) {
+    return res.status(503).json({ error: 'DATABASE_URL not configured' });
+  }
+  const id = randomUUID();
+  try {
+    await issueSessionForEmail(res, `guest-${id}@guest.ourmynd.app`, id, null);
+  } catch (e) {
+    console.error('Guest auth error:', e);
     res.status(500).json({ error: 'internal server error', fault: dbFault(e) });
   }
 });

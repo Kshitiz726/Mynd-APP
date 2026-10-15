@@ -17,6 +17,7 @@ import '../../core/services/desktop_google_auth_stub.dart'
 import '../../core/services/realtime_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/haptics.dart';
+import '../../core/utils/om_icons.dart';
 import '../../widgets/om_tappable.dart';
 import '../onboarding/onboarding_gate.dart';
 
@@ -298,6 +299,37 @@ class _LoginScreenState extends State<LoginScreen>
     }
   }
 
+  /// Sign in with no account at all.
+  ///
+  /// The server mints a fresh anonymous user and hands back the same session
+  /// every other provider returns, so the rest of the app cannot tell the
+  /// difference and nothing here needs a special case beyond the request.
+  Future<void> _handleGuestSignIn() async {
+    setState(() => _loading = true);
+    Haptics.medium();
+
+    var switched = false;
+    try {
+      switched = await ApiClient.instance.authAsGuest();
+      RealtimeService.instance.connect();
+      if (_restartedForNewAccount(switched)) return;
+      if (mounted) OnboardingGate.enter(context);
+    } catch (e) {
+      if (mounted) {
+        debugPrint('[guest] login failed: $e');
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(
+            content: Text('Could not start a guest session: $e', maxLines: 6),
+            duration: const Duration(seconds: 12),
+            behavior: SnackBarBehavior.floating,
+          ));
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = context.omColors;
@@ -394,6 +426,14 @@ class _LoginScreenState extends State<LoginScreen>
                           loading: _loading,
                           onTap: _showAuth ? _handleAppleSignIn : null),
                     ],
+                    const SizedBox(height: 12),
+                    // Third, and quieter than the other two on purpose: it is
+                    // a real way in rather than the recommended one, because a
+                    // guest session is tied to this install and goes when the
+                    // app does.
+                    _GuestButton(
+                        loading: _loading,
+                        onTap: _showAuth ? _handleGuestSignIn : null),
                     const SizedBox(height: 48),
                     // The acceptance line was a sentence *about* two documents
                     // with no way to reach either of them, on the one screen
@@ -568,6 +608,51 @@ class _AppleButton extends StatelessWidget {
               'Continue with Apple',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 16,
+                  ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// "Look around first": an account with nothing attached to it.
+///
+/// Deliberately the quietest of the three buttons. Outlined rather than
+/// filled, so it reads as the alternative it is and does not compete with the
+/// two providers above it, while still being an obvious, tappable control
+/// rather than a line of fine print somebody has to find.
+class _GuestButton extends StatelessWidget {
+  const _GuestButton({required this.loading, required this.onTap});
+
+  final bool loading;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.omColors;
+    return OmTappable(
+      onTap: loading ? null : onTap,
+      pressedScale: 0.98,
+      child: Container(
+        height: 56,
+        decoration: BoxDecoration(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: c.border, width: 1.4),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(OmIcons.byName('user'), size: 22, color: c.text2),
+            const SizedBox(width: 12),
+            Text(
+              'Continue as guest',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: c.text,
                     fontWeight: FontWeight.w600,
                     fontSize: 16,
                   ),

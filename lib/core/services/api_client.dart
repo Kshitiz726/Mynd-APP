@@ -152,6 +152,16 @@ class ApiClient {
     return _applyUser(j);
   }
 
+  /// Guest sign-in: no provider, no credentials, one request.
+  ///
+  /// The server mints a brand new anonymous account and returns the same
+  /// session shape as Google and Apple do, so nothing downstream has to know
+  /// the difference.
+  Future<bool> authAsGuest() async {
+    final j = await _post('/api/auth/guest', const {});
+    return _applyUser(j);
+  }
+
   /// Real Sign in with Apple: hands the backend the identity token Apple gave
   /// the app. The server checks it against Apple's published keys and our
   /// bundle id, then returns our own session JWT + user, same as Google.
