@@ -1,0 +1,73 @@
+OURMYND - APP REVIEW NOTES (v1.0, build 19)
+
+DEMONSTRATION VIDEO: attached as app_demo_ios.mp4. 15:39, unedited, physical
+iPhone, latest iOS, starting at the home screen.
+0:00 launch  0:14 sign in  1:00 Brain Dump  4:00 coach  8:30 body doubling
+10:00 paired  11:01 "Report or block"  11:10 block confirmed  11:54 Blocked
+accounts  15:25 account deletion  15:37 login screen.
+
+1. ACCESSING THE APP - TAP "CONTINUE AS GUEST"
+Build 19 adds a third button to the login screen: "Continue as guest". One tap
+creates a fresh, empty account and opens the app, with no password, no email
+and no provider. That is the demo access you asked for, added for this
+review. "Continue with Apple" and "Continue with Google" behave
+identically; there is no username and password path anywhere, which is why no
+credentials exist to type. One account type, no admin tier. The recording was
+captured on build 18, before this button existed.
+
+2. PURPOSE AND AUDIENCE
+A planning app for adults with ADHD and anyone who finds normal to-do apps
+hard to use. A blank task list asks you to be organised first; here you empty
+your head in one messy sentence and the app turns that into sized tasks
+scheduled around your day. Not a medical device, no diagnostic claims.
+
+3. REACHING EACH FEATURE
+Four tabs (Chat, Feed, Schedule, Focus) and a (+) in the centre.
+- AI coach: the Chat tab, where the app opens. Type, or tap a prompt such as
+  "i'm stuck". It answers using the tasks the app can see.
+- Brain Dump: tap (+), choose it, type several mixed-up tasks in one sentence,
+  then "Process with AI". They land on Schedule, with the week strip, goals
+  and Auto-Schedule.
+- Feed tab: an AI briefing, the next task, a mood check-in.
+- Focus tab: pick a length and start a solo timer.
+- Settings and account: Chat tab, drawer button top left, then the gear.
+
+4. USER CONTENT, REPORTING AND BLOCKING (Guideline 1.2)
+The only user-to-user feature is body doubling: two people focusing in a
+shared room. No public feed, no browsable profiles, no direct messages, and
+another person sees a random display name, not your real name.
+- Focus tab, turn on "body doubling", start a session, tap "Find a partner".
+  Matchmaking pairs you with another waiting person.
+- The moment you are paired, "Report or block" sits under the partner's name,
+  before you enter the room.
+- Inside the room, long-press the other participant's tile to report or block.
+- Blocked people are listed, and unblockable, at Profile > Blocked accounts.
+- Matchmaking is the only way into a room, so a reviewer alone will not be
+  paired, which is why it is filmed on two devices. To test it live, reply
+  with a time and we will have someone waiting.
+
+5. ACCOUNT DELETION (Guideline 5.1.1(v))
+Profile > "Account and your data" > "delete my account", with a typed
+confirmation. Deletes the account and its data, server side and on device.
+
+6. PAID CONTENT
+None on iOS. This version sells nothing, has no In-App Purchases, and unlocks
+every feature for everyone. No paywall, no external payment link.
+
+7. EXTERNAL SERVICES
+- Groq: brain dump to tasks, coach replies, voice transcription (Whisper), via
+  our own server, which authenticates every request.
+- Puter.js: in-app WebView, records the mic and speaks replies aloud.
+- Sign in with Apple and Google Sign-In: authentication.
+- Render (hosting) and Supabase PostgreSQL (database), operated by us.
+- YouTube IFrame Player: music pasted into a focus room.
+- Gmail IMAP: optional, if a user connects their own mailbox.
+
+8. REGIONAL DIFFERENCES
+None. Identical everywhere, English only, nothing gated by region.
+
+9. REGULATED INDUSTRY AND THIRD-PARTY MATERIAL
+Not a healthcare provider and not regulated as one. No diagnosis, treatment or
+clinical advice, and the coach directs anyone in crisis to emergency services.
+The onboarding health question is optional consent for wellbeing context. Third-party material is limited to music a user supplies as a
+YouTube link, played through YouTube's official player.

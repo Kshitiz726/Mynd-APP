@@ -1,0 +1,69 @@
+All six items are answered below and repeated in the Notes field.
+
+The version now carries build 18, not build 10. It opens on four tabs (Chat,
+Feed, Schedule, Focus) instead of a Home tab. Everything below describes build
+18, as does the recording.
+
+1. SCREEN RECORDING
+Attached in App Review Information as app_demo_ios.mp4, so it travels with the
+submission rather than an outside link. 15:39, unedited, physical iPhone on
+the latest iOS, from the home screen.
+0:00 launch | 0:14 sign in | 1:00 Brain Dump turning one messy sentence into
+separate tasks | 4:00 the coach answering against those tasks | 8:30 body
+doubling on | 10:00 a live paired session with another person | 11:01 "Report
+or block" on the paired screen | 11:10 the block applied |
+11:54 Blocked accounts, with Unblock | 15:25 account deletion with typed
+confirmation | 15:37 the login screen, account gone.
+Reporting and blocking are filmed on two devices: a shared room is only
+reachable by being paired.
+There is no sign-up form to film: the one-tap sheet at 0:14 both creates an
+account and signs in. The account shown already existed and is deleted for real
+at 15:25. We will film first-time creation if you want it.
+
+2. PURPOSE AND AUDIENCE
+A planning app for adults with ADHD and anyone who finds ordinary to-do apps
+hard to keep up with. A blank task list asks you to be organised before it is
+any use, which is the one thing our users cannot do on demand. Here you empty
+your head in one messy sentence and the app splits that into sized tasks and
+schedules them around your day. Not a medical device; no diagnostic or
+treatment claims.
+
+3. SETUP AND ACCESS
+No credentials exist to give: there is no username and password path. Sign in
+with Apple or Google creates the account on the first tap, with no password
+and no email confirmation, so no demo account can exist. Please use "Continue
+with Apple" with your own Apple ID. One account type, no admin tier.
+Chat, where the app opens, is the coach. Brain Dump: tap (+) in the tab bar,
+choose it, type several mixed-up tasks in one sentence, then "Process with AI";
+they appear on Schedule. Focus: pick a length and start a timer. Settings and
+account are behind the drawer button at the top left of Chat, then the gear.
+The Notes field has the full walkthrough.
+Matchmaking is the only route into a shared room: no room browser, no
+join-by-code, so a reviewer alone will not be paired. To see it live, reply
+with a date and time and we will have a person waiting.
+
+4. EXTERNAL SERVICES
+Groq: AI inference for brain dump parsing, coach replies and Whisper
+transcription, via our own server, which authenticates every request; the app
+holds no AI key. Puter.js: an in-app WebView that
+records the mic and speaks replies aloud. Sign in with Apple and Google
+Sign-In: authentication. Render: hosting for our API server. Supabase
+PostgreSQL: our database. YouTube IFrame Player: music a user pastes into a
+focus room. Gmail IMAP: optional, only if a user connects their own mailbox.
+
+5. REGIONAL DIFFERENCES
+None. The app functions consistently in all regions. English only, nothing
+region-locked or gated by territory.
+
+6. REGULATED INDUSTRY AND THIRD-PARTY MATERIAL
+We are not a healthcare provider and are not regulated as one. No diagnosis,
+treatment or clinical advice, and the coach directs anyone describing a crisis
+to emergency services. The onboarding health question is optional consent for
+using wellbeing context in coaching. The only
+third-party content is music a user chooses by pasting a YouTube link, played
+through YouTube's official player; the Feed briefing is generated text that
+links out to publishers.
+Paid content: this version sells nothing on iOS. No In-App Purchases, no
+paywall, no external payment link, so there is no purchase flow.
+
+If anything is missing, name the item and we will send it the same day.
