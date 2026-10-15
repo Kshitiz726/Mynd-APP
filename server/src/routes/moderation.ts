@@ -80,8 +80,15 @@ r.get('/blocks', requireAuth, async (req, res, next) => {
     // Only the ones I chose are listed, because this backs an "unblock" screen
     // and you cannot unblock somebody else's decision. Filtering still reads
     // both directions.
+    // No handle. It holds the account's email address (the Apple relay for
+    // Sign in with Apple, the Google address otherwise), so returning it put a
+    // real email under the blocked person's name on a screen that is supposed
+    // to show nobody's identity. Everyone in this app is a random display
+    // name to everyone else, and the one place that leaked it was the list of
+    // people you had chosen to never see again. The client already hides the
+    // line when the field is empty, so dropping it here is enough.
     const rows = await db.any(
-      `select u.id, u.display_name, u.handle, u.initial, u.avatar_color, b.created_at
+      `select u.id, u.display_name, u.initial, u.avatar_color, b.created_at
          from user_blocks b
          join users u on u.id = b.blocked_id
         where b.blocker_id = $1
