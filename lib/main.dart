@@ -46,6 +46,7 @@ import 'services/notification_service.dart';
 import 'widgets/puter_host.dart';
 import 'core/services/soul_service.dart';
 import 'core/services/mail_watch.dart';
+import 'core/services/server_directory.dart';
 
 /// Root navigator key - lets the app-wide [PuterHost] present Puter's one-time
 /// sign-in popup over whatever screen is showing.
@@ -103,6 +104,15 @@ void main() async {
   // it treating a consenting user as if they had declined. The server is asked
   // straight after the session is restored, below.
   await _bootStep('health consent', HealthConsentProvider.instance.loadCached);
+
+  // Which server this launch talks to, before anything talks to one.
+  //
+  // Must sit above session restore: restoring a session is an authenticated
+  // request, and sending it to yesterday's server would fail the login of
+  // somebody whose session is perfectly valid. The cached address is applied
+  // immediately and the website is consulted with a short timeout, so this
+  // costs a cold start at most two seconds even on a dead network.
+  await _bootStep('server directory', ServerDirectory.instance.init);
 
   // Auto-login: if a session was saved, restore it and reconnect realtime so we
   // land straight in the shell. Otherwise start at the login screen.

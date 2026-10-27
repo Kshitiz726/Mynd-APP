@@ -19,12 +19,29 @@ class ApiConfig {
   /// Local work overrides it explicitly (`./run-ios.local.sh` without
   /// `OURMYND_ENV=cloud`), so the safe value is the default and the risky one
   /// has to be asked for.
-  static const String hostedApi = 'https://ourmynd-server.onrender.com';
+  ///
+  /// Since build 20 this is only the last resort. [ServerDirectory] reads the
+  /// live address from the website at launch, so this constant is what a phone
+  /// uses before it has ever reached that file, or if the file is unreachable.
+  /// It was moved off ourmynd-server.onrender.com when that host was suspended.
+  static const String hostedApi = 'https://ourmynd-server-3bvh.onrender.com';
 
-  String baseUrl = const String.fromEnvironment(
+  /// What this binary was built with: the dart-define if one was passed, else
+  /// [hostedApi].
+  ///
+  /// Kept separate from [baseUrl] because [baseUrl] moves at runtime now, and
+  /// two questions need different answers: "where are we talking to right now"
+  /// (baseUrl) and "was this build pointed at a developer machine"
+  /// (compiledApi, which decides whether the server file is followed at all).
+  static const String compiledApi = String.fromEnvironment(
     'OURMYND_API',
     defaultValue: hostedApi,
   );
+
+  /// Where requests go right now. Mutable: [ServerDirectory] moves it when the
+  /// website names a different server. Read per request through [rest], so a
+  /// change takes effect on the next call rather than the next launch.
+  String baseUrl = compiledApi;
 
   /// Current user's bearer token. Null until signed in.
   ///

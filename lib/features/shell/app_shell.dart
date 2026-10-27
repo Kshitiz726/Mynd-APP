@@ -35,6 +35,7 @@ import 'widgets/live_focus_pill.dart';
 import 'widgets/om_nav_bar.dart';
 import '../home/widgets/quick_add_sheet.dart';
 import '../../core/services/mail_watch.dart';
+import '../../core/services/server_directory.dart';
 
 /// The root authenticated shell: a persistent bottom nav over an [IndexedStack].
 class AppShell extends StatefulWidget {
@@ -53,6 +54,10 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     // is caught up here.
     if (state == AppLifecycleState.resumed) {
       unawaited(MailWatch.instance.onResumed());
+      // Also the moment to notice the server moved while the app was away.
+      // Throttled inside, so a user who switches apps constantly does not
+      // re-read the file every time.
+      unawaited(ServerDirectory.instance.refreshIfStale());
     }
   }
 

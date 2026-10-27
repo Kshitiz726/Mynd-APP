@@ -26,6 +26,15 @@ class RealtimeService {
   /// previous session can be told apart from a usable one.
   String? _socketToken;
 
+  /// Which server the live socket was built against.
+  ///
+  /// The address moves at runtime now ([ServerDirectory]), and socket.io binds
+  /// its host once at construction: it does not re-read it on reconnect. So a
+  /// server switch left the socket retrying the old host forever while every
+  /// ordinary request had already moved, which looks exactly like "chat is
+  /// broken but the rest of the app is fine".
+  String? _socketBaseUrl;
+
   void connect() {
     final token = ApiConfig.instance.authToken;
 
@@ -40,15 +49,21 @@ class RealtimeService {
     // the old credentials, `ensureConnected` timed out, and body doubling
     // matched two people who could never be told about each other, because
     // `bd_matched` is pushed down exactly this socket.
-    if (_socket != null && _socketToken == token) return;
+    final base = ApiConfig.instance.baseUrl;
+    if (_socket != null && _socketToken == token && _socketBaseUrl == base) {
+      return;
+    }
     if (_socket != null) {
-      debugPrint('[rt] token changed, rebuilding the socket');
+      debugPrint(_socketBaseUrl != base
+          ? '[rt] server changed, rebuilding the socket'
+          : '[rt] token changed, rebuilding the socket');
       dispose();
     }
 
     _socketToken = token;
+    _socketBaseUrl = base;
     final s = io.io(
-      ApiConfig.instance.baseUrl,
+      base,
       io.OptionBuilder()
           .setTransports(['websocket'])
           .disableAutoConnect()
@@ -90,6 +105,18 @@ class RealtimeService {
     debugPrint('[rt] connecting to ${ApiConfig.instance.baseUrl} '
         '(token=${ApiConfig.instance.authToken != null ? 'set' : 'NULL'})');
     s.connect();
+  }
+
+  /// The server moved under us. Rebuild the socket against the new address.
+  ///
+  /// Only acts when a socket actually exists: before sign-in there is nothing
+  /// to move, and [connect] will pick up the new address by itself.
+  void onBaseUrlChanged() {
+    if (_socket == null) return;
+    if (_socketBaseUrl == ApiConfig.instance.baseUrl) return;
+    debugPrint('[rt] base url changed, reconnecting');
+    dispose();
+    connect();
   }
 
   /// Socket.IO hands the error through as a string, a map or an exception
@@ -191,6 +218,7 @@ class RealtimeService {
     // Cleared with the socket, or the next connect() would compare against the
     // credentials of a socket that no longer exists and skip rebuilding.
     _socketToken = null;
+    _socketBaseUrl = null;
   }
 
   // ── Emit (client → server) ──

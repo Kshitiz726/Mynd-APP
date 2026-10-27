@@ -93,6 +93,13 @@ webhooki_secret.txt
 # was all that stood between these and a public history.
 /*.txt
 /*.sql
+
+# The same scratch names turn up in subdirectories, and the two rules above are
+# anchored to the repo root with a leading slash, so appreview/key.txt was one
+# `git add appreview/` away from the history. Named rather than globbed, so a
+# deliberate note like appreview/review-notes.txt stays tracked.
+key.txt
+prompt.txt
 /*.webp
 server/testnote_txt
 
