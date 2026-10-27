@@ -36,6 +36,120 @@ function publicUrl(): string | null {
   return raw.replace(/\/+$/, '');
 }
 
+/** Where the list of servers lives. Overridable so a smoke test can serve it. */
+function serverFileUrl(): string {
+  return process.env.SERVER_FILE_URL || 'https://www.ourmynd.com/servers.json';
+}
+
+/** Bare origin, lowercased, no trailing slash - so two spellings of the same
+ * server compare equal. Returns null for anything that is not a URL. */
+export function origin(raw: unknown): string | null {
+  if (typeof raw !== 'string' || !raw.trim()) return null;
+  try {
+    const u = new URL(raw.trim());
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
+    return `${u.protocol}//${u.host.toLowerCase()}`;
+  } catch {
+    return null;
+  }
+}
+
+/** The servers the file names, in priority order: `api` first, then `servers`. */
+export function listedServers(body: unknown): string[] {
+  const out: string[] = [];
+  const add = (raw: unknown) => {
+    const o = origin(raw);
+    if (o && !out.includes(o)) out.push(o);
+  };
+  if (body && typeof body === 'object') {
+    const b = body as Record<string, unknown>;
+    add(b.api);
+    if (Array.isArray(b.servers)) for (const e of b.servers) add(e);
+  }
+  return out;
+}
+
+/**
+ * Where this server sits in the running order. -1 when it is not listed.
+ *
+ * Pure, so the ranking rule can be exercised without a network.
+ */
+export function rankOf(listed: string[], self: string): number {
+  const me = origin(self);
+  return me ? listed.indexOf(me) : -1;
+}
+
+/** Is this server reachable and serving? */
+async function answers(base: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${base}/health`, {
+      signal: AbortSignal.timeout(20_000),
+      headers: { 'user-agent': 'ourmynd-keepalive-probe' },
+    });
+    if (!res.ok) return false;
+    const body = (await res.json()) as { ok?: unknown };
+    return body?.ok === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Should this server be keeping itself awake right now?
+ *
+ * Priority election over the shared list, the way VRRP picks a master: the
+ * highest-ranked server that is actually up is the one in service, everyone
+ * below it stands down and lets Render idle them out. No handover message is
+ * sent and no token exists - each server works it out for itself - so the one
+ * guarantee this cannot make is strict mutual exclusion. A blip that hides the
+ * primary makes a standby think it is in charge, both stay awake, and the next
+ * tick puts it right. Minutes of overlap, bought in exchange for needing no
+ * coordination at all.
+ *
+ * **Every uncertain answer is "stay awake".** Wrongly staying up costs instance
+ * hours; wrongly standing down takes the live server cold and the users with
+ * it. So an unreadable file, an unparseable file, or a server that cannot find
+ * itself in the list all keep pinging.
+ */
+async function inService(self: string): Promise<boolean> {
+  let listed: string[];
+  try {
+    const res = await fetch(serverFileUrl(), {
+      signal: AbortSignal.timeout(10_000),
+      headers: { 'user-agent': 'ourmynd-keepalive', 'cache-control': 'no-cache' },
+    });
+    if (!res.ok) {
+      console.warn(`[keepalive] server list returned ${res.status}, staying awake`);
+      return true;
+    }
+    listed = listedServers(await res.json());
+  } catch (err) {
+    console.warn('[keepalive] could not read the server list, staying awake:',
+      (err as Error)?.message ?? err);
+    return true;
+  }
+
+  const rank = rankOf(listed, self);
+  if (rank < 0) {
+    // Not in the file at all. No app will ever be sent here, so this is almost
+    // certainly a misconfiguration - and the safe reading of a misconfiguration
+    // is not to put the server to sleep.
+    console.warn(`[keepalive] ${self} is not in the server list, staying awake`);
+    return true;
+  }
+  if (rank === 0) return true;
+
+  // Only stand down on positive evidence that somebody better is serving.
+  for (const better of listed.slice(0, rank)) {
+    if (await answers(better)) {
+      console.log(`[keepalive] standing down, ${better} is serving`);
+      return false;
+    }
+  }
+  console.log(`[keepalive] every server above us is down, taking over`);
+  return true;
+}
+
 export function startKeepAlive(): void {
   // Only in production, and only when there is a real public hostname to hit.
   if (!config.isProd) return;
@@ -47,11 +161,14 @@ export function startKeepAlive(): void {
   // out, and wakes it again on the next request. This ping would prevent that
   // for ever, so a backup with it left on burns a full month of hours serving
   // nobody - which is the exact failure that took the first account down.
-  // Set KEEPALIVE=off on every server except the one currently in service.
-  if ((process.env.KEEPALIVE ?? '').trim().toLowerCase() === 'off') {
+  // KEEPALIVE=off pins a server down whatever the election says; KEEPALIVE=always
+  // pins it up. Unset is the normal case and means "work it out from the list".
+  const mode = (process.env.KEEPALIVE ?? '').trim().toLowerCase();
+  if (mode === 'off') {
     console.log('[keepalive] off: standby server, letting Render idle it out');
     return;
   }
+  const elect = mode !== 'always' && mode !== 'on';
 
   const base = publicUrl();
   if (!base) {
@@ -60,9 +177,16 @@ export function startKeepAlive(): void {
   }
 
   const target = `${base}/health`;
-  console.log(`[keepalive] pinging ${target} every ${PING_INTERVAL_MS / 60000} min`);
+  console.log(`[keepalive] ${elect ? 'electing' : 'always on'}: ${target} every `
+    + `${PING_INTERVAL_MS / 60000} min`);
 
   const tick = async () => {
+    // Asked every tick rather than once at boot, because which server is in
+    // service is exactly the thing that changes while this process is alive.
+    // Standing down only skips the ping: the timer stays armed so this server
+    // can take over later, and with nothing to keep it warm Render idles it out
+    // on its own.
+    if (elect && !(await inService(base))) return;
     try {
       // An abort guard, so a hung request cannot stack up sockets over days.
       const res = await fetch(target, {
