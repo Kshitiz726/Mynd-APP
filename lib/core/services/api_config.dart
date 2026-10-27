@@ -19,7 +19,7 @@ class ApiConfig {
   /// Local work overrides it explicitly (`./run-ios.local.sh` without
   /// `OURMYND_ENV=cloud`), so the safe value is the default and the risky one
   /// has to be asked for.
-  static const String hostedApi = 'https://ourmynd-server-3bvh.onrender.com';
+  static const String hostedApi = 'https://ourmynd-server.onrender.com';
 
   String baseUrl = const String.fromEnvironment(
     'OURMYND_API',
