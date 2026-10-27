@@ -191,6 +191,39 @@ void main() {
       );
     });
 
+    test('the primary/secondary spelling works too', () {
+      // This is how the live file is actually written.
+      expect(
+        ServerDirectory.candidates({
+          'primary': 'https://ourmynd-server-3bvh.onrender.com',
+          'secondary': 'https://ourmynd-server.onrender.com',
+        }),
+        [
+          'https://ourmynd-server-3bvh.onrender.com',
+          'https://ourmynd-server.onrender.com',
+        ],
+      );
+    });
+
+    test('both spellings at once collapse rather than duplicate', () {
+      expect(
+        ServerDirectory.candidates({
+          'primary': 'https://ourmynd-server-3bvh.onrender.com',
+          'api': 'https://ourmynd-server-3bvh.onrender.com',
+          'secondary': 'https://ourmynd-server.onrender.com',
+          'servers': [
+            'https://ourmynd-server.onrender.com',
+            'https://api.ourmynd.com',
+          ],
+        }),
+        [
+          'https://ourmynd-server-3bvh.onrender.com',
+          'https://ourmynd-server.onrender.com',
+          'https://api.ourmynd.com',
+        ],
+      );
+    });
+
     test('a sleeping standby is given time to cold start', () {
       // Render free instances take about fifty seconds to wake.
       expect(ServerDirectory.probeTimeout.inSeconds, greaterThan(50));

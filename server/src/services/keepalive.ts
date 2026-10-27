@@ -63,7 +63,13 @@ export function listedServers(body: unknown): string[] {
   };
   if (body && typeof body === 'object') {
     const b = body as Record<string, unknown>;
+    // Both spellings, for the same reason the app reads both: the file has been
+    // written as api/servers and as primary/secondary, and an election that
+    // silently saw an empty list would leave every server thinking it was in
+    // charge.
+    add(b.primary);
     add(b.api);
+    add(b.secondary);
     if (Array.isArray(b.servers)) for (const e of b.servers) add(e);
   }
   return out;

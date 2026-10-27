@@ -137,12 +137,18 @@ class ServerDirectory {
     return 'https://$host$port';
   }
 
-  /// Every server named by the file, validated, de-duplicated, in order.
+  /// Every server named by the file, validated, de-duplicated, in priority
+  /// order.
   ///
-  /// `api` is always first: it is the primary, it is what the status page
-  /// reads, and it is the only field build 20 understood. `servers` lists the
-  /// standbys after it. A file with no `servers` key still works and simply
-  /// has no redundancy.
+  /// Two spellings are accepted because two are in use. `api` is what build 20
+  /// shipped reading and what the status page reads; `primary`/`secondary` is
+  /// what the file was later written with. Rather than make one of them wrong
+  /// and break whichever install is on the other, both are read: primary, then
+  /// api, then secondary, then anything in `servers`. Duplicates collapse, so
+  /// naming the same host twice costs nothing.
+  ///
+  /// `servers` is the one that scales - adding a third and fourth standby is
+  /// two more lines there, where primary/secondary/tertiary runs out of words.
   @visibleForTesting
   static List<String> candidates(Map<dynamic, dynamic> body) {
     final out = <String>[];
@@ -152,7 +158,9 @@ class ServerDirectory {
       if (origin != null && !out.contains(origin)) out.add(origin);
     }
 
+    add(body['primary']);
     add(body['api']);
+    add(body['secondary']);
     final listed = body['servers'];
     if (listed is List) {
       for (final e in listed) {

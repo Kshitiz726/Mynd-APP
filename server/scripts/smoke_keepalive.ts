@@ -58,6 +58,15 @@ check('a malformed file yields nothing rather than throwing', () => {
   }
 });
 
+check('the primary/secondary spelling is understood too', () => {
+  // The live file is written this way, and an election that read an empty list
+  // would leave every server believing it was in charge.
+  assert.deepEqual(
+    listedServers({ primary: PRIMARY, secondary: STANDBY }),
+    [PRIMARY, STANDBY],
+  );
+});
+
 check('the primary ranks first and so always stays awake', () => {
   const listed = listedServers({ api: PRIMARY, servers: [PRIMARY, STANDBY] });
   assert.equal(rankOf(listed, PRIMARY), 0);
