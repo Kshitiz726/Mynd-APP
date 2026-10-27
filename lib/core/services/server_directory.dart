@@ -85,6 +85,16 @@ class ServerDirectory {
   /// How often a foreground return is allowed to re-read the file.
   static const Duration refreshInterval = Duration(minutes: 12);
 
+  /// Long enough for a Render free instance to cold start, which takes around
+  /// fifty seconds. A standby is asleep by design, so the probe that wakes it
+  /// has to be willing to wait for it; this never runs on the launch path.
+  static const Duration probeTimeout = Duration(seconds: 70);
+
+  /// A malformed or hostile file must not be able to make the app probe for
+  /// ever. Four spares is the plan; the cap is only here to bound the worst
+  /// case.
+  static const int maxServers = 8;
+
   DateTime? _lastChecked;
 
   /// False when this build is pointed at a developer machine.
@@ -125,6 +135,31 @@ class ServerDirectory {
     // cleaned up.
     final port = u.hasPort && u.port != 443 ? ':${u.port}' : '';
     return 'https://$host$port';
+  }
+
+  /// Every server named by the file, validated, de-duplicated, in order.
+  ///
+  /// `api` is always first: it is the primary, it is what the status page
+  /// reads, and it is the only field build 20 understood. `servers` lists the
+  /// standbys after it. A file with no `servers` key still works and simply
+  /// has no redundancy.
+  @visibleForTesting
+  static List<String> candidates(Map<dynamic, dynamic> body) {
+    final out = <String>[];
+    void add(Object? raw) {
+      if (out.length >= maxServers) return;
+      final origin = normalise(raw is String ? raw : null);
+      if (origin != null && !out.contains(origin)) out.add(origin);
+    }
+
+    add(body['api']);
+    final listed = body['servers'];
+    if (listed is List) {
+      for (final e in listed) {
+        add(e);
+      }
+    }
+    return out;
   }
 
   /// Apply the cached address, then try the file. Never throws.
@@ -189,12 +224,56 @@ class ServerDirectory {
     // else's page, and either way it is not an instruction.
     final body = jsonDecode(res.body);
     if (body is! Map) return;
-    final next = normalise(body['api'] as String?);
-    if (next == null) {
+    final listed = candidates(body);
+    if (listed.isEmpty) {
       debugPrint('[servers] file carried no usable api address');
       return;
     }
-    await _apply(next);
+    await _selectHealthy(listed);
+  }
+
+  /// Use the first server on the list that answers, in the file's own order.
+  ///
+  /// **Strictly in order, stopping at the first success.** That is the whole
+  /// design, not an optimisation: a standby is asleep and costs nothing until
+  /// something knocks on it, so probing the spares speculatively would wake
+  /// every one of them on every launch and burn exactly the hours this is
+  /// meant to save. While the primary answers, no backup is ever contacted.
+  ///
+  /// Always starting at the top is also what brings everyone home: once the
+  /// primary is back, the next check prefers it again without anybody editing
+  /// the file.
+  Future<void> _selectHealthy(List<String> listed) async {
+    for (final origin in listed) {
+      if (await _answers(origin)) {
+        await _apply(origin);
+        return;
+      }
+      debugPrint('[servers] $origin did not answer, trying the next');
+    }
+    // Everything on the list is down. Staying put is better than moving to a
+    // server we have just proved is unreachable.
+    debugPrint('[servers] nothing on the list answered, staying on '
+        '${ApiConfig.instance.baseUrl}');
+  }
+
+  /// Is this server actually able to serve?
+  ///
+  /// Checks `ok` only, deliberately not the database. The database is shared
+  /// between all of these servers, so if it is down every candidate reports it
+  /// and failing over would be pointless churn that wakes every spare for
+  /// nothing.
+  Future<bool> _answers(String origin) async {
+    try {
+      final res =
+          await http.get(Uri.parse('$origin/health')).timeout(probeTimeout);
+      if (res.statusCode != 200) return false;
+      final j = jsonDecode(res.body);
+      return j is Map && j['ok'] == true;
+    } catch (e) {
+      debugPrint('[servers] $origin probe failed: $e');
+      return false;
+    }
   }
 
   Future<void> _apply(String origin) async {

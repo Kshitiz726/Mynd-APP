@@ -106,6 +106,97 @@ void main() {
     });
   });
 
+  group('the server list, for redundancy', () {
+    test('api alone still works, with no redundancy', () {
+      expect(
+        ServerDirectory.candidates({'api': 'https://ourmynd-server.onrender.com'}),
+        ['https://ourmynd-server.onrender.com'],
+      );
+    });
+
+    test('the primary comes first, then the standbys in file order', () {
+      expect(
+        ServerDirectory.candidates({
+          'api': 'https://ourmynd-server-3bvh.onrender.com',
+          'servers': [
+            'https://ourmynd-server-3bvh.onrender.com',
+            'https://ourmynd-server.onrender.com',
+            'https://api.ourmynd.com',
+          ],
+        }),
+        [
+          'https://ourmynd-server-3bvh.onrender.com',
+          'https://ourmynd-server.onrender.com',
+          'https://api.ourmynd.com',
+        ],
+      );
+    });
+
+    test('a standby that is not ours is dropped, the rest survive', () {
+      // One poisoned entry must not take the whole list down with it.
+      expect(
+        ServerDirectory.candidates({
+          'api': 'https://ourmynd-server-3bvh.onrender.com',
+          'servers': [
+            'https://harvester.onrender.com',
+            'https://evil.example.com',
+            'https://api.ourmynd.com',
+          ],
+        }),
+        [
+          'https://ourmynd-server-3bvh.onrender.com',
+          'https://api.ourmynd.com',
+        ],
+      );
+    });
+
+    test('a rubbish servers field is ignored, api still stands', () {
+      for (final junk in [null, 'not a list', 42, <String>[]]) {
+        expect(
+          ServerDirectory.candidates({
+            'api': 'https://api.ourmynd.com',
+            'servers': junk,
+          }),
+          ['https://api.ourmynd.com'],
+          reason: 'servers: $junk',
+        );
+      }
+    });
+
+    test('a file naming nothing we trust yields no candidates at all', () {
+      expect(
+        ServerDirectory.candidates({
+          'api': 'https://evil.example.com',
+          'servers': ['https://harvester.onrender.com'],
+        }),
+        isEmpty,
+      );
+    });
+
+    test('the list is capped so a huge file cannot make us probe for ever', () {
+      final many = List.generate(50, (i) => 'https://n$i.ourmynd.com');
+      final got = ServerDirectory.candidates(
+          {'api': 'https://api.ourmynd.com', 'servers': many});
+      expect(got.length, lessThanOrEqualTo(ServerDirectory.maxServers));
+      expect(got.first, 'https://api.ourmynd.com');
+    });
+
+    test('a standby repeated under api is not probed twice', () {
+      expect(
+        ServerDirectory.candidates({
+          'api': 'https://api.ourmynd.com',
+          'servers': ['https://api.ourmynd.com', 'https://api.ourmynd.com'],
+        }),
+        ['https://api.ourmynd.com'],
+      );
+    });
+
+    test('a sleeping standby is given time to cold start', () {
+      // Render free instances take about fifty seconds to wake.
+      expect(ServerDirectory.probeTimeout.inSeconds, greaterThan(50));
+    });
+  });
+
   group('when the file is consulted at all', () {
     test('a release build follows the file', () {
       // compiledApi is https in any build that did not override it with a

@@ -40,6 +40,19 @@ export function startKeepAlive(): void {
   // Only in production, and only when there is a real public hostname to hit.
   if (!config.isProd) return;
 
+  // A standby server must not keep itself awake.
+  //
+  // Redundancy on a free plan only works if the spares cost nothing while they
+  // are spare: Render stops charging instance hours the moment a service idles
+  // out, and wakes it again on the next request. This ping would prevent that
+  // for ever, so a backup with it left on burns a full month of hours serving
+  // nobody - which is the exact failure that took the first account down.
+  // Set KEEPALIVE=off on every server except the one currently in service.
+  if ((process.env.KEEPALIVE ?? '').trim().toLowerCase() === 'off') {
+    console.log('[keepalive] off: standby server, letting Render idle it out');
+    return;
+  }
+
   const base = publicUrl();
   if (!base) {
     console.log('[keepalive] no public URL, not pinging');
