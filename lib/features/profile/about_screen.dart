@@ -17,7 +17,7 @@ class AboutScreen extends StatelessWidget {
   /// lying about it. Update this line whenever `version:` in pubspec.yaml
   /// changes.
   static const String _version = '1.0.0';
-  static const String _build = '19';
+  static const String _build = '20';
 
   @override
   Widget build(BuildContext context) {
