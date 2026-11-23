@@ -24,22 +24,39 @@ export interface PlanEntry {
   priceId: string;
 }
 
-// The catalogue, built from whichever price ids are configured. The client asks
-// for this so the app never hard-codes a Stripe price id of its own.
-export function planCatalog(): PlanEntry[] {
+/**
+ * Every plan this server has ever sold, including ones it no longer offers.
+ *
+ * Separate from the sellable catalogue on purpose. Plus was withdrawn because
+ * Pro's only distinct benefit over it was "everything in Plus", which unlocks
+ * nothing and which Apple rejects as an in-app purchase. But a withdrawn plan
+ * is not a plan nobody holds: anybody already on Plus still renews, and their
+ * renewal arrives as a webhook carrying the Plus price id. Resolving that
+ * through the sellable list alone would find no match, fall through to
+ * 'free', and cancel a paying subscriber's entitlement on the very event that
+ * confirms they have paid again.
+ */
+function allKnownPlans(): PlanEntry[] {
   const p = config.stripe.prices;
   const entries: PlanEntry[] = [
-    { id: 'plus_month', tier: 'plus', interval: 'month', priceId: p.plusMonthly },
-    { id: 'plus_year', tier: 'plus', interval: 'year', priceId: p.plusYearly },
     { id: 'pro_month', tier: 'pro', interval: 'month', priceId: p.proMonthly },
     { id: 'pro_year', tier: 'pro', interval: 'year', priceId: p.proYearly },
+    // Withdrawn. Honoured, never offered.
+    { id: 'plus_month', tier: 'plus', interval: 'month', priceId: p.plusMonthly },
+    { id: 'plus_year', tier: 'plus', interval: 'year', priceId: p.plusYearly },
   ];
   return entries.filter((e) => e.priceId);
 }
 
+/** Plans a new subscriber may actually buy. What the client is shown. */
+export function planCatalog(): PlanEntry[] {
+  return allKnownPlans().filter((e) => e.tier === 'pro');
+}
+
 /** Map a Stripe price id back to the tier/interval it represents. */
 export function planForPrice(priceId: string): { tier: Tier; interval: Interval | null } {
-  const hit = planCatalog().find((e) => e.priceId === priceId);
+  // Against every plan, not just the sellable ones - see allKnownPlans.
+  const hit = allKnownPlans().find((e) => e.priceId === priceId);
   return hit ? { tier: hit.tier, interval: hit.interval } : { tier: 'free', interval: null };
 }
 

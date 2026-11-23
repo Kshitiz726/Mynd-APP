@@ -584,7 +584,7 @@ class CoachProvider extends ChangeNotifier {
     // for: it rations OUR inference bill. Somebody who has connected their
     // own Claude or Gemini account is paying their provider directly, so
     // spending one of our free weekly turns would cap a conversation we are
-    // not paying for, and then tell them "Plus raises the limit" when Plus
+    // not paying for, and then tell them "Pro raises the limit" when Pro
     // would change nothing about it.
     if (AiRouter.instance.effective == AiProvider.groq) {
       try {
@@ -610,7 +610,7 @@ class CoachProvider extends ChangeNotifier {
         assistantMsg
           ..isStreaming = false
           ..text = "That's this week's messages used up. They reset "
-              '${_resetsAtPhrase()}, or Plus raises the limit.';
+              '${_resetsAtPhrase()}, or Pro raises the limit.';
         _limitReached = true;
         _remainingToday = 0;
         _isLoading = false;
@@ -703,7 +703,7 @@ class CoachProvider extends ChangeNotifier {
           if (assistantMsg.text.isEmpty) {
             assistantMsg.text = e is CoachLimitException
                 ? "That's this week's messages used up. They reset "
-                    '${_resetsAtPhrase()}, or Plus raises the limit.'
+                    '${_resetsAtPhrase()}, or Pro raises the limit.'
                 // A connected provider's own words. "Anthropic rejected your
                 // key" tells somebody what to do; the generic wording tells
                 // them only that something broke.
@@ -758,7 +758,7 @@ class CoachProvider extends ChangeNotifier {
       assistantMsg
         ..isStreaming = false
         ..text = "That's this week's messages used up. They reset "
-            '${_resetsAtPhrase()}, or Plus raises the limit.';
+            '${_resetsAtPhrase()}, or Pro raises the limit.';
       _limitReached = true;
       _remainingToday = 0;
       _isLoading = false;

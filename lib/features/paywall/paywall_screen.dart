@@ -9,7 +9,7 @@ import '../../core/utils/toast.dart';
 import '../../providers/premium_provider.dart';
 import '../../widgets/om_tappable.dart';
 
-/// The paywall: pick a tier (Plus or Pro) and an interval (monthly or yearly),
+/// The paywall: pick an interval (monthly or yearly),
 /// then subscribe through Stripe's hosted Checkout. We open the hosted page in
 /// the browser; when the app returns to the foreground we reconcile the session
 /// with the server, so premium unlocks the moment payment clears.
@@ -33,14 +33,12 @@ class _TierInfo {
     required this.tagline,
     required this.benefits,
     required this.colors,
-    this.badge,
   });
   final String id; // 'plus' | 'pro'
   final String name;
   final String tagline;
   final List<String> benefits;
   final List<Color> colors;
-  final String? badge;
 }
 
 /// What each plan promises.
@@ -50,33 +48,28 @@ class _TierInfo {
 /// vague claim becomes a charge on somebody's card. Two things are gated
 /// today and only two: the daily message cap (coach_screen.dart,
 /// kFreeCoachMessageLimit) and editing your memory by hand
-/// (memory_screen.dart). Both lift at Plus. Nothing else in the app reads the
-/// tier at all, so nothing else may be claimed here.
+/// (memory_screen.dart). Nothing else in the app reads the tier at all, so
+/// nothing else may be claimed here.
 ///
-/// Pro therefore has no feature of its own to name yet. Rather than invent
-/// one, it says what it honestly is. Anything added to this list needs a gate
-/// behind it first.
+/// One paid tier, not two. There used to be a Plus and a Pro, and Pro's only
+/// distinct benefit was "everything in Plus" - it unlocked nothing Plus did
+/// not. Apple rejects an in-app purchase that does not deliver identifiable
+/// content or functionality, and charging more for the same thing is a bad
+/// deal besides. Pro is now the single paid tier and it carries the benefits
+/// that are actually gated.
+///
+/// `plus` still exists as a tier on the server so that anybody who bought one
+/// before keeps what they paid for. It is simply not sold any more.
 const _tiers = [
   _TierInfo(
-    id: 'plus',
-    name: 'OurMynd Plus',
+    id: 'pro',
+    name: 'OurMynd Pro',
     tagline: 'Talk to Mynd as much as you need.',
     benefits: [
       'Unlimited messages with Mynd',
       'Edit your memory by hand',
       'Everything in the free plan',
       'Support a small, independent app',
-    ],
-    colors: [Color(0xFF1FA2A6), Color(0xFF3E7BF0)],
-    badge: 'MOST POPULAR',
-  ),
-  _TierInfo(
-    id: 'pro',
-    name: 'OurMynd Pro',
-    tagline: 'Back OurMynd at a higher tier.',
-    benefits: [
-      'Everything in Plus',
-      'A bigger share towards building the app',
     ],
     colors: [Color(0xFF6D3BF0), Color(0xFFF0B24A)],
   ),
@@ -99,7 +92,10 @@ const _freeBenefits = [
 class _PaywallScreenState extends State<PaywallScreen>
     with WidgetsBindingObserver {
   String _interval = 'month'; // 'month' | 'year'
-  String _tier = 'plus';
+  // The only tier there is. Kept as state rather than inlined because the
+  // card list and the plan lookup are both written for any number of tiers,
+  // and a second one may come back once it has a feature of its own.
+  String _tier = 'pro';
 
   @override
   void initState() {
@@ -269,7 +265,7 @@ class _PaywallScreenState extends State<PaywallScreen>
           _CtaButton(
             label: premium.busy
                 ? 'Opening checkout…'
-                : 'Subscribe to ${_tier == 'pro' ? 'Pro' : 'Plus'}',
+                : 'Subscribe to Pro',
             busy: premium.busy,
             onTap: premium.busy ? null : _subscribe,
           ),
@@ -472,26 +468,6 @@ class _TierCard extends StatelessWidget {
                               fontWeight: FontWeight.w800,
                             ),
                           ),
-                          if (info.badge != null) ...[
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 7, vertical: 2),
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(colors: info.colors),
-                                borderRadius: BorderRadius.circular(999),
-                              ),
-                              child: Text(
-                                info.badge!,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 9.5,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 0.4,
-                                ),
-                              ),
-                            ),
-                          ],
                         ],
                       ),
                       const SizedBox(height: 2),
@@ -681,20 +657,20 @@ class _AlreadyPremium extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.omColors;
-    final isPro = tier == 'pro';
-    final name = isPro ? 'OurMynd Pro' : 'OurMynd Plus';
-    // Show the tier's own unlocked list (Pro shows Plus's list too, since Pro
-    // "includes everything in Plus").
-    final info = _tiers.firstWhere((t) => t.id == tier, orElse: () => _tiers[0]);
-    final plusInfo = _tiers.firstWhere((t) => t.id == 'plus');
-    // Pro includes Plus, so start from Plus and add Pro's extras, skipping the
-    // "Everything in Plus" line and any benefit already listed (dedup).
-    final features = <String>[...plusInfo.benefits];
-    if (isPro) {
-      for (final b in info.benefits) {
-        if (b != 'Everything in Plus' && !features.contains(b)) features.add(b);
-      }
-    }
+    // Named from what they actually hold. Plus is withdrawn but not revoked,
+    // so somebody who bought one still sees it called by its name rather than
+    // being told they are on a tier they never chose.
+    final name = tier == 'plus' ? 'OurMynd Plus' : 'OurMynd Pro';
+
+    // One list, because there is one paid tier and the server grants the same
+    // entitlement for either: isPremium checks only that the tier is not free.
+    //
+    // This used to merge the Plus and Pro benefit lists, reading them out of
+    // _tiers by id. With Plus gone from _tiers that lookup throws, and it
+    // threw on the screen a paying subscriber opens to manage their
+    // subscription - so the one person guaranteed to see it was somebody who
+    // had already given us money.
+    final features = _tiers.first.benefits;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
@@ -777,8 +753,8 @@ class _AlreadyPremium extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         Text(
-          'Switch between Plus and Pro, update your card, or cancel anytime — '
-          'all handled securely by Stripe.',
+          'Update your payment details or cancel anytime. Your subscription '
+          'is managed by whoever you bought it through.',
           textAlign: TextAlign.center,
           style: TextStyle(color: c.text2, fontSize: 12, height: 1.4),
         ),
