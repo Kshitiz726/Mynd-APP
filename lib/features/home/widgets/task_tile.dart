@@ -227,8 +227,16 @@ class _Check extends StatelessWidget {
           color: done ? color : Colors.transparent,
           shape: BoxShape.circle,
           border: Border.all(color: done ? color : border, width: 2),
+          // Halved in the dark. A 10px blur of saturated colour at 0.4 on a
+          // near-black page is a glow around the tick, not a shadow under it.
           boxShadow: done
-              ? [BoxShadow(color: color.withValues(alpha: 0.4), blurRadius: 10, offset: const Offset(0, 3))]
+              ? [
+                  BoxShadow(
+                      color: color.withValues(
+                          alpha: context.isDark ? 0.18 : 0.4),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3))
+                ]
               : null,
         ),
         child: AnimatedSwitcher(
@@ -238,8 +246,13 @@ class _Check extends StatelessWidget {
             child: child,
           ),
           child: done
+              // The fill is the task's energy colour, and every one of those is
+              // a light tint in dark mode: white on them measured 2.15:1 to
+              // 2.45:1, so ticking a task made the tick disappear.
               ? Icon(OmIcons.byName('check'),
-                  key: const ValueKey('done'), size: 15, color: Colors.white)
+                  key: const ValueKey('done'),
+                  size: 15,
+                  color: OmColors.onFill(color))
               : const SizedBox.shrink(key: ValueKey('empty')),
         ),
       ),
@@ -273,7 +286,8 @@ class _StepRow extends StatelessWidget {
                 shape: BoxShape.circle,
               ),
               child: step.done
-                  ? Icon(OmIcons.byName('check'), size: 12, color: Colors.white)
+                  ? Icon(OmIcons.byName('check'),
+                      size: 12, color: OmColors.onFill(c.success))
                   : Text('$index', style: Theme.of(context).textTheme.labelSmall),
             ),
             const SizedBox(width: AppSpacing.md),
@@ -312,11 +326,12 @@ class _DeleteBackground extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(OmIcons.byName('trash'), size: 19, color: Colors.white),
+          Icon(OmIcons.byName('trash'),
+              size: 19, color: OmColors.onFill(c.error)),
           const SizedBox(width: 10),
-          const Text('delete',
+          Text('delete',
               style: TextStyle(
-                  color: Colors.white,
+                  color: OmColors.onFill(c.error),
                   fontWeight: FontWeight.w700,
                   fontSize: 14)),
         ],

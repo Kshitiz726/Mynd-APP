@@ -128,7 +128,7 @@ class _UpNextBannerState extends State<UpNextBanner> {
                                   shape: BoxShape.circle,
                                   border: Border.all(color: task.done ? c.success : c.border.withValues(alpha: 0.8), width: 2),
                                   boxShadow: task.done
-                                      ? [BoxShadow(color: c.success.withValues(alpha: 0.4), blurRadius: 10, offset: const Offset(0, 3))]
+                                      ? [BoxShadow(color: c.success.withValues(alpha: context.isDark ? 0.18 : 0.4), blurRadius: 10, offset: const Offset(0, 3))]
                                       : null,
                                 ),
                                 child: AnimatedSwitcher(
@@ -138,7 +138,7 @@ class _UpNextBannerState extends State<UpNextBanner> {
                                     child: child,
                                   ),
                                   child: task.done
-                                      ? Icon(OmIcons.byName('check'), key: const ValueKey('d'), size: 17, color: Colors.white)
+                                      ? Icon(OmIcons.byName('check'), key: const ValueKey('d'), size: 17, color: OmColors.onFill(c.success))
                                       : const SizedBox.shrink(key: ValueKey('e')),
                                 ),
                               ),

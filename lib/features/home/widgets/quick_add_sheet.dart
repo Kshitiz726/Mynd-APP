@@ -132,7 +132,8 @@ class _Option extends StatelessWidget {
                 gradient: LinearGradient(colors: [c.primary, c.flow]),
                 borderRadius: BorderRadius.circular(15),
               ),
-              child: Icon(OmIcons.byName(icon), color: Colors.white, size: 22),
+              child: Icon(OmIcons.byName(icon),
+                  color: OmColors.onFill(c.primary), size: 22),
             ),
             const SizedBox(width: AppSpacing.md),
             Expanded(

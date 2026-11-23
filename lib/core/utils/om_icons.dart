@@ -98,9 +98,34 @@ abstract final class OmIcons {
     'share': LucideIcons.share2,
     'bookmark': LucideIcons.bookmark,
     'userX': LucideIcons.userX,
+    // Device, legal and mail. These were asked for by screens that had been
+    // shipping a blank circle instead: the version and licence rows in About,
+    // "mark all read" in notifications, and the two mail screens.
+    'smartphone': LucideIcons.smartphone,
+    'code': LucideIcons.code,
+    'checkCheck': LucideIcons.checkCheck,
+    'mail': LucideIcons.mail,
+    'shield': LucideIcons.shield,
+    'external-link': LucideIcons.externalLink,
   };
 
-  static IconData byName(String name) => _map[name] ?? LucideIcons.circle;
+  /// The icon for [name], or a circle if there is no such icon.
+  ///
+  /// The fallback asserts in debug rather than only in review. A name that is
+  /// not in the map is a typo or a new icon somebody forgot to add, and the
+  /// silent circle is indistinguishable from a deliberate one: five of them
+  /// shipped this way, including on the About screen. Release builds still get
+  /// the circle, because a missing icon is not worth crashing over.
+  static IconData byName(String name) {
+    final icon = _map[name];
+    assert(icon != null, 'OmIcons has no icon named "$name". Add it to _map.');
+    return icon ?? LucideIcons.circle;
+  }
+
+  /// Whether [name] resolves to a real icon. Lets the test that scans the source
+  /// for icon names collect every bad one instead of stopping at the assert on
+  /// the first.
+  static bool has(String name) => _map.containsKey(name);
 
   /// Solid counterparts, for the *active* state of a toggle.
   ///

@@ -475,8 +475,10 @@ class _Bubble extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        gradient: mine ? c.brandGradient : null,
-        color: mine ? null : c.surface,
+        // Solid, like the coach's bubbles. A gradient across something this
+        // small is a smudge rather than a sweep, and a column of them reads as
+        // noise.
+        color: mine ? c.brandSolid : c.surface,
         borderRadius: radius,
         border: mine ? null : Border.all(color: c.border),
       ),
@@ -715,7 +717,8 @@ class _Composer extends StatelessWidget {
             child: Container(
               width: 46,
               height: 46,
-              decoration: BoxDecoration(gradient: c.brandGradient, shape: BoxShape.circle),
+              decoration:
+                  BoxDecoration(color: c.brandSolid, shape: BoxShape.circle),
               alignment: Alignment.center,
               child: const Icon(Icons.arrow_upward_rounded, color: Colors.white, size: 22),
             ),

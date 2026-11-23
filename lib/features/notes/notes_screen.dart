@@ -53,7 +53,10 @@ class _NotesScreenState extends State<NotesScreen> {
               BoxShadow(color: c.accent.withValues(alpha: 0.45), blurRadius: 18, offset: const Offset(0, 8)),
             ],
           ),
-          child: Icon(OmIcons.byName('plus'), color: Colors.white, size: 28),
+          // Ink on the peach, like every other accent-filled control: white
+          // on it is 2.04:1 in light and 1.88:1 in dark.
+          child: Icon(OmIcons.byName('plus'),
+              color: OmColors.onFill(c.accent), size: 28),
         ),
       ),
       body: SafeArea(

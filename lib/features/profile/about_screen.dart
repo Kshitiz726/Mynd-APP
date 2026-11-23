@@ -105,7 +105,10 @@ class _Glow extends StatelessWidget {
           shape: BoxShape.circle,
           gradient: RadialGradient(
             colors: [
-              color.withValues(alpha: context.isDark ? 0.22 : 0.18),
+              // Dimmer in dark, not brighter. A coloured halo blooms against
+              // near-black, so the alpha that reads as a soft wash on paper
+              // reads as a glow effect here.
+              color.withValues(alpha: context.isDark ? 0.12 : 0.18),
               color.withValues(alpha: 0.0),
             ],
           ),

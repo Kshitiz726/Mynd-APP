@@ -15,6 +15,8 @@ import '../../core/utils/haptics.dart';
 import '../../core/utils/toast.dart';
 import '../../providers/nav_provider.dart';
 import '../../providers/health_consent_provider.dart';
+import '../../core/services/ai/ai_connections.dart';
+import '../../providers/ai_consent_provider.dart';
 import '../../providers/premium_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../widgets/om_switch.dart';
@@ -27,6 +29,8 @@ import 'connections_screen.dart';
 import 'account_data_screen.dart';
 import 'blocked_accounts_screen.dart';
 import 'health_data_screen.dart';
+import 'ai_data_screen.dart';
+import 'ai_models_screen.dart';
 import 'profile_identity.dart';
 
 /// Settings.
@@ -294,6 +298,16 @@ class ProfileScreen extends StatelessWidget {
               _ConsentRow(
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute<void>(builder: (_) => const HealthDataScreen()),
+                ),
+              ),
+              _AiModelRow(
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(builder: (_) => const AiModelsScreen()),
+                ),
+              ),
+              _AiConsentRow(
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(builder: (_) => const AiDataScreen()),
                 ),
               ),
               _Row(
@@ -569,6 +583,123 @@ class _ConsentRow extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('Health data',
+                      style: Theme.of(context).textTheme.bodyLarge),
+                  const SizedBox(height: 2),
+                  Text(
+                    since == null ? state : '$state · since $since',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: granted ? c.success : c.text2,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, size: 20, color: c.text2),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Which provider writes the coach's replies, with its state on the row.
+///
+/// Sits above the consent row because it is the question that comes first:
+/// who the data goes to is chosen here, and agreed to there.
+class _AiModelRow extends StatelessWidget {
+  const _AiModelRow({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.omColors;
+    final conn = context.watch<AiConnections>();
+    final p = conn.selected;
+    // The honest state, not the chosen one: a provider picked but never
+    // connected is not what is answering, and saying "Claude" here while the
+    // built-in model writes every reply would be a lie on a settings screen.
+    final needs = conn.selectedNeedsConnection;
+    final state = needs ? '${p.label} - not connected' : p.label;
+
+    return OmTappable(
+      onTap: () {
+        Haptics.light();
+        onTap();
+      },
+      feedback: OmTapFeedback.none,
+      pressedScale: 0.99,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: c.border.withValues(alpha: 0.5))),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.tune_rounded, size: 20, color: c.text),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Model', style: Theme.of(context).textTheme.bodyLarge),
+                  const SizedBox(height: 2),
+                  Text(
+                    state,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: needs ? c.error : c.text2,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, size: 20, color: c.text2),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The AI data-sharing row, sibling to [_ConsentRow]. Same shape, because it is
+/// the same kind of decision: whether data leaves the account, read back with
+/// its current state rather than a bare label.
+class _AiConsentRow extends StatelessWidget {
+  const _AiConsentRow({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.omColors;
+    final consent = context.watch<AiConsentProvider>();
+    final granted = consent.granted;
+    final at = consent.decidedAt?.toLocal();
+
+    final state = granted ? 'On' : (consent.needsDecision ? 'Not set' : 'Off');
+    final since = at == null ? null : '${at.day}/${at.month}/${at.year}';
+
+    return OmTappable(
+      onTap: () {
+        Haptics.light();
+        onTap();
+      },
+      feedback: OmTapFeedback.none,
+      pressedScale: 0.99,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: c.border.withValues(alpha: 0.5))),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.auto_awesome_outlined, size: 20, color: c.text),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Coach & AI',
                       style: Theme.of(context).textTheme.bodyLarge),
                   const SizedBox(height: 2),
                   Text(

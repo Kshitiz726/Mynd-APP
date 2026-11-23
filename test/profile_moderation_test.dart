@@ -8,6 +8,8 @@ import 'package:ourmynd/features/community/user_profile_sheet.dart';
 import 'package:ourmynd/features/profile/blocked_accounts_screen.dart';
 import 'package:ourmynd/features/profile/profile_screen.dart';
 import 'package:ourmynd/providers/health_consent_provider.dart';
+import 'package:ourmynd/providers/ai_consent_provider.dart';
+import 'package:ourmynd/core/services/ai/ai_connections.dart';
 import 'package:ourmynd/providers/nav_provider.dart';
 import 'package:ourmynd/providers/premium_provider.dart';
 import 'package:ourmynd/providers/settings_provider.dart';
@@ -32,6 +34,8 @@ void main() {
           ChangeNotifierProvider(create: (_) => PremiumProvider()),
           ChangeNotifierProvider(create: (_) => NavProvider()),
           ChangeNotifierProvider.value(value: HealthConsentProvider.instance),
+          ChangeNotifierProvider.value(value: AiConsentProvider.instance),
+          ChangeNotifierProvider.value(value: AiConnections.instance),
         ],
         child: MaterialApp(
           theme: AppTheme.light(),

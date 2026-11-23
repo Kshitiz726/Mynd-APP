@@ -338,9 +338,9 @@ class _PostCard extends StatelessWidget {
                       color: c.primary,
                       borderRadius: BorderRadius.circular(AppRadius.pill),
                     ),
-                    child: const Text('Read the original',
+                    child: Text('Read the original',
                         style: TextStyle(
-                            color: Colors.white,
+                            color: OmColors.onFill(c.primary),
                             fontWeight: FontWeight.w700,
                             fontSize: 16)),
                   ),

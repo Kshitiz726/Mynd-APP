@@ -372,7 +372,8 @@ class _NewPostFab extends StatelessWidget {
             ),
           ],
         ),
-        child: const Icon(Icons.add_rounded, size: 30, color: Colors.white),
+        child: Icon(Icons.add_rounded,
+            size: 30, color: OmColors.onFill(c.accent)),
       ),
     );
   }
@@ -429,7 +430,9 @@ class _HeroCard extends StatelessWidget {
                             border: Border.all(color: c.surface, width: 2),
                           ),
                           alignment: Alignment.center,
-                          child: const Icon(Icons.person_rounded, size: 15, color: Colors.white),
+                          child: Icon(Icons.person_rounded,
+                              size: 15,
+                              color: OmColors.onFill(_dots[i % _dots.length])),
                         ),
                       ),
                   ],
@@ -525,7 +528,9 @@ class _CmTabs extends StatelessWidget {
                     height: 3,
                     width: t == current ? 22 : 0,
                     decoration: BoxDecoration(
-                      gradient: c.brandGradient,
+                      // A 3px tab underline. Nothing can be seen across three
+                      // pixels except the colour it ends on.
+                      color: c.brandSolid,
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -947,7 +952,8 @@ class _PostCard extends StatelessWidget {
                             shape: BoxShape.circle,
                             border: Border.all(color: c.surface, width: 2),
                           ),
-                          child: Icon(mood.icon, size: 10, color: Colors.white),
+                          child: Icon(mood.icon,
+                              size: 10, color: OmColors.onFill(moodColor)),
                         ),
                       ),
                   ],
@@ -1955,7 +1961,11 @@ class _ConvoTile extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
               decoration: BoxDecoration(color: c.primary, borderRadius: BorderRadius.circular(AppRadius.pill)),
-              child: Text('${convo.unread}', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+              child: Text('${convo.unread}',
+                  style: TextStyle(
+                      color: OmColors.onFill(c.primary),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700)),
             ),
           ],
         ],

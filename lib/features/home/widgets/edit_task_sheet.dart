@@ -114,7 +114,11 @@ class _EditTaskSheetState extends State<EditTaskSheet> {
                   borderRadius: BorderRadius.circular(16),
                 ),
                 alignment: Alignment.center,
-                child: const Text('Save Changes', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16)),
+                child: Text('Save Changes',
+                    style: TextStyle(
+                        color: OmColors.onFill(c.primary),
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16)),
               ),
             ),
             const SizedBox(height: AppSpacing.sm),

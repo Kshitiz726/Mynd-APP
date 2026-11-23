@@ -122,7 +122,13 @@ class _AlarmWakeScreenState extends State<AlarmWakeScreen> {
                             color: c.primary,
                             borderRadius: BorderRadius.circular(AppRadius.control),
                           ),
-                          child: Text('Stop', style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Colors.white, fontWeight: FontWeight.w700)),
+                          child: Text('Stop',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(
+                                      color: OmColors.onFill(c.primary),
+                                      fontWeight: FontWeight.w700)),
                         ),
                       ),
                       const SizedBox(height: AppSpacing.lg),

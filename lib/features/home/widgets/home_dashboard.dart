@@ -171,17 +171,18 @@ class HomeHero extends StatelessWidget {
                     ),
                     borderRadius: BorderRadius.circular(AppRadius.pill),
                     boxShadow: [
-                      BoxShadow(color: c.accent.withValues(alpha: 0.4), blurRadius: 12, offset: const Offset(0, 4)),
+                      BoxShadow(color: c.accent.withValues(alpha: context.isDark ? 0.14 : 0.4), blurRadius: 12, offset: const Offset(0, 4)),
                     ],
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(OmIcons.byName('flame'), size: 15, color: Colors.white),
+                      Icon(OmIcons.byName('flame'),
+                          size: 15, color: OmColors.onFill(c.accent)),
                       const SizedBox(width: 4),
                       Text('$done',
                           style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                                color: Colors.white,
+                                color: OmColors.onFill(c.accent),
                                 fontWeight: FontWeight.w800,
                               )),
                     ],
@@ -697,7 +698,8 @@ class _GoalRow extends StatelessWidget {
                   border: Border.all(color: complete ? c.primary : c.border, width: 2),
                 ),
                 child: complete
-                    ? Icon(OmIcons.byName('check'), size: 16, color: Colors.white)
+                    ? Icon(OmIcons.byName('check'),
+                        size: 16, color: OmColors.onFill(c.primary))
                     : null,
               ),
             ),

@@ -12,6 +12,8 @@ import 'package:ourmynd/providers/focus_provider.dart';
 import 'package:ourmynd/providers/habit_provider.dart';
 import 'package:ourmynd/providers/task_provider.dart';
 import 'package:ourmynd/providers/health_consent_provider.dart';
+import 'package:ourmynd/providers/ai_consent_provider.dart';
+import 'package:ourmynd/core/services/ai/ai_connections.dart';
 import 'package:ourmynd/providers/memory_provider.dart';
 import 'package:ourmynd/providers/premium_provider.dart';
 import 'package:ourmynd/providers/settings_provider.dart';
@@ -43,6 +45,8 @@ void main() {
           ChangeNotifierProvider(create: (_) => MemoryProvider()),
           ChangeNotifierProvider(create: (_) => PremiumProvider()),
           ChangeNotifierProvider.value(value: HealthConsentProvider.instance),
+          ChangeNotifierProvider.value(value: AiConsentProvider.instance),
+          ChangeNotifierProvider.value(value: AiConnections.instance),
         ],
         child: MaterialApp(
           theme: AppTheme.light(),

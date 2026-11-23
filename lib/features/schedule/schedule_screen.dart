@@ -73,6 +73,13 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     final c = context.omColors;
     final tasks = context.watch<TaskProvider>();
 
+    // Cool lilac, so the tab reads apart from Home's peach. It has to be picked
+    // per theme: the light value is a pale tint of the page, and painting that
+    // same near-white over a dark surface was a 13.5:1 glare panel at the top of
+    // the screen rather than a wash. primaryTint is the palette's own lilac at
+    // each end, so the two agree by construction.
+    final wash = context.isDark ? c.primaryTint : const Color(0xFFE8E4FF);
+
     return Stack(
       children: [
         Positioned.fill(
@@ -82,8 +89,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                 center: const Alignment(0, -1.05),
                 radius: 1.25,
                 colors: [
-                  const Color(0xFFE8E4FF), // cool lilac, so the tab reads apart from Home's peach
-                  Color.lerp(const Color(0xFFE8E4FF), c.surface, 0.55)!,
+                  wash,
+                  Color.lerp(wash, c.surface, 0.55)!,
                   c.surface,
                 ],
                 stops: const [0.0, 0.42, 0.85],

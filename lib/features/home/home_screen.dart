@@ -331,14 +331,22 @@ class SleepScheduleBarX extends StatelessWidget {
             child: Container(
               height: 40,
               padding: const EdgeInsets.symmetric(horizontal: 14),
+              // Flat, and barely lit.
+              //
+              // A gradient across a 40px pill is a few pixels of drift that
+              // reads as a rendering artefact rather than as design, and a
+              // 12px blur of brand colour at 0.28 on a near-black page is a
+              // halo around the button, not a shadow under it. Together they
+              // were the loudest control on the screen.
               decoration: BoxDecoration(
-                gradient: c.brandGradient,
+                color: c.brandSolid,
                 borderRadius: BorderRadius.circular(AppRadius.pill),
                 boxShadow: [
                   BoxShadow(
-                    color: c.primary.withValues(alpha: 0.28),
-                    blurRadius: 12,
-                    offset: const Offset(0, 5),
+                    color: c.primary
+                        .withValues(alpha: context.isDark ? 0.10 : 0.22),
+                    blurRadius: context.isDark ? 8 : 12,
+                    offset: const Offset(0, 4),
                   ),
                 ],
               ),

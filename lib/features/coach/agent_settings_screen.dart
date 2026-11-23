@@ -119,6 +119,7 @@ class _AgentSettingsScreenState extends State<AgentSettingsScreen> {
                       agent: a,
                       size: 96,
                       mood: AgentMood.idle,
+                      emotion: _s.emotion,
                     ),
                   ),
                   const SizedBox(height: AppSpacing.xl),

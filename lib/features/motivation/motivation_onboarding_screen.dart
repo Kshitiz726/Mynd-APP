@@ -525,10 +525,10 @@ class _Cta extends StatelessWidget {
         ),
         child: Text(
           label,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 16.5,
             fontWeight: FontWeight.w800,
-            color: Colors.white,
+            color: OmColors.onFill(c.primary),
           ),
         ),
       ),

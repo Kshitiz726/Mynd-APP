@@ -54,6 +54,18 @@ void main() {
     );
   }
 
+  /// Open the session options.
+  ///
+  /// The length grid, the scene chips and the body doubling row moved off the
+  /// main screen into one sheet behind "change", so the page can lead with
+  /// starting a session instead of configuring one. Every control survived
+  /// intact, so the assertions below are unchanged - they just have to open
+  /// the sheet first, the way somebody using the app now does.
+  Future<void> openOptions(WidgetTester tester) async {
+    await tester.tap(find.text('change'));
+    await tester.pumpAndSettle();
+  }
+
   testWidgets('greets the user by name and surfaces the block on the clock',
       (tester) async {
     final tasks = TaskProvider()..addTasks([inProgress()]);
@@ -107,6 +119,12 @@ void main() {
     expect(find.text('Read Atomic Habits'), findsOneWidget);
     expect(find.text('new focus'), findsOneWidget);
 
+    // The saved strip sits below the start card now, which puts it off the
+    // default 800x600 test surface even though it is an ordinary scroll on a
+    // real phone. Bring it into view before tapping, or the tap lands on
+    // nothing and the failure looks like the card is broken.
+    await tester.ensureVisible(find.text('Read Atomic Habits'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Read Atomic Habits'));
     await tester.pump();
 
@@ -134,6 +152,7 @@ void main() {
     final tasks = TaskProvider()..addTasks([inProgress()]);
     await tester.pumpWidget(host(tasks, FocusProvider()));
     await tester.pumpAndSettle();
+    await openOptions(tester);
 
     expect(find.text('body doubling'), findsOneWidget);
     expect(tester.takeException(), isNull,
@@ -167,14 +186,22 @@ void main() {
     final tasks = TaskProvider()..addTasks([inProgress()]);
     await tester.pumpWidget(host(tasks, FocusProvider()));
     await tester.pumpAndSettle();
+    await openOptions(tester);
+
+    // Scoped to the sheet. The chosen length's name is also printed on the
+    // start card behind it, which is deliberate - the summary must never hide
+    // what is set - so an unscoped finder would now see two "pomodoro"s and
+    // fail for the wrong reason. Inside the sheet, one each is still the rule.
+    Finder inSheet(String text) =>
+        find.descendant(of: find.byType(BottomSheet), matching: find.text(text));
 
     for (final named in ['sprint', 'pomodoro', 'deep work', 'flow']) {
-      expect(find.text(named), findsOneWidget, reason: '$named is not on the grid');
+      expect(inSheet(named), findsOneWidget, reason: '$named is not on the grid');
     }
     for (final len in ['15 min', '25 min', '45 min', '90 min']) {
-      expect(find.text(len), findsOneWidget, reason: '$len is not on the grid');
+      expect(inSheet(len), findsOneWidget, reason: '$len is not on the grid');
     }
-    expect(find.text('custom'), findsOneWidget);
+    expect(inSheet('custom'), findsOneWidget);
 
     // Each tile shows the preset's own "use it when", which the model has
     // always carried and the pills had no room to print.
@@ -198,6 +225,7 @@ void main() {
     final tasks = TaskProvider()..addTasks([inProgress()]);
     await tester.pumpWidget(host(tasks, FocusProvider()));
     await tester.pumpAndSettle();
+    await openOptions(tester);
 
     expect(find.text('start pomodoro · 25m'), findsOneWidget);
 
@@ -225,6 +253,7 @@ void main() {
     final tasks = TaskProvider()..addTasks([inProgress()]);
     await tester.pumpWidget(host(tasks, FocusProvider()));
     await tester.pumpAndSettle();
+    await openOptions(tester);
 
     final switchFinder = find.byWidgetPredicate((w) => w is Switch).last;
     final before = tester.getTopLeft(switchFinder);

@@ -116,7 +116,8 @@ class _JoinByCodeCardState extends State<JoinByCodeCard> {
                   width: 38,
                   height: 38,
                   alignment: Alignment.center,
-                  decoration: BoxDecoration(gradient: c.brandGradient, shape: BoxShape.circle),
+                  decoration:
+                  BoxDecoration(color: c.brandSolid, shape: BoxShape.circle),
                   child: _busy
                       ? const SizedBox(
                           width: 15,

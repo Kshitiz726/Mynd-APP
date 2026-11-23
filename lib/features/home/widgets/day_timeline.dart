@@ -373,7 +373,7 @@ class _NowIndicatorState extends State<_NowIndicator> {
               borderRadius: BorderRadius.circular(AppRadius.pill)),
           child: Text('NOW',
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: Colors.white,
+                    color: OmColors.onFill(c.primary),
                     fontWeight: FontWeight.w800,
                     fontSize: 9,
                     letterSpacing: 0.8,
@@ -467,7 +467,7 @@ class _TimelineBlock extends StatelessWidget {
                   task.done
                       ? _CheckCircle(
                           done: true,
-                          color: const Color(0xFF22C55E),
+                          color: c.success,
                           onTap: () {
                             Haptics.medium();
                             context.read<TaskProvider>().toggleDone(task);
@@ -584,7 +584,7 @@ class _TimelineBlock extends StatelessWidget {
                           _BlockAction(
                             icon: 'check',
                             tooltip: 'done',
-                            tint: const Color(0xFF16A34A),
+                            tint: c.success,
                             filled: true,
                             onTap: () {
                               Haptics.medium();
@@ -604,7 +604,7 @@ class _TimelineBlock extends StatelessWidget {
                             width: 46,
                             height: 46,
                             decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.55),
+                              color: c.inset,
                               shape: BoxShape.circle,
                             ),
                             child: Icon(taskIcon(task.title),
@@ -676,6 +676,7 @@ class _BlockAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.omColors;
     return Tooltip(
       message: tooltip,
       child: OmTappable(
@@ -687,9 +688,14 @@ class _BlockAction extends StatelessWidget {
           height: 36,
           alignment: Alignment.center,
           decoration: BoxDecoration(
+            // The dismiss cross lives in this disc. A translucent white one
+            // over a dark card composites to a light grey blob, and the cross
+            // inside it - c.text2 - then measured 1.02:1 against it: the
+            // control was there, the right size, and invisible. c.inset goes
+            // the other way in the dark, where it is 6.23:1.
             color: filled
                 ? tint.withValues(alpha: 0.16)
-                : Colors.white.withValues(alpha: 0.55),
+                : c.inset,
             shape: BoxShape.circle,
             border:
                 filled ? Border.all(color: tint.withValues(alpha: 0.40)) : null,

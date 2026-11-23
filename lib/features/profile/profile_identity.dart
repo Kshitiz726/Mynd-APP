@@ -37,6 +37,21 @@ class _ProfileIdentityState extends State<ProfileIdentity> {
 
   String get _name => ApiConfig.instance.displayName ?? 'your account';
 
+  /// The handle, but only when it is something a person would recognise.
+  ///
+  /// A guest account's handle is the address the server minted to create it,
+  /// `guest-<uuid>@guest.ourmynd.app`. That is machinery, not an identity:
+  /// printing fifty characters of it under somebody's name reads as an email
+  /// address they do not have and cannot use, and it is the first thing on the
+  /// screen for exactly the people who chose not to hand over an identity in
+  /// the first place. Signed-in accounts still show theirs.
+  String? get _presentableHandle {
+    final h = ApiConfig.instance.handle;
+    if (h == null || h.isEmpty) return null;
+    if (h.startsWith('guest-') || h.endsWith('@guest.ourmynd.app')) return null;
+    return h;
+  }
+
   Future<void> _pickPicture(ImageSource source) async {
     try {
       // Resized on the phone rather than the server: a 12MP camera photo is
@@ -211,7 +226,7 @@ class _ProfileIdentityState extends State<ProfileIdentity> {
   @override
   Widget build(BuildContext context) {
     final c = context.omColors;
-    final handle = ApiConfig.instance.handle;
+    final handle = _presentableHandle;
     final name = _name;
 
     return Center(

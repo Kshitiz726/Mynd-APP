@@ -75,7 +75,17 @@ class _DayPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.omColors;
-    final fg = selected ? Colors.white : c.text;
+    // Filled with the brand indigo, not with c.text.
+    //
+    // c.text is near-white in dark mode, so a selected pill was a 15.5:1
+    // white tile on a near-black page - the brightest object in the app, and
+    // on the one screen you tap seven of them in a row. Fixing the number's
+    // contrast (it was white on white) did nothing about the glare; the fill
+    // itself was the problem. brandSolid sits at 3.84:1 against the page:
+    // clearly selected, nothing like a flashbulb, and the same fill the
+    // length tiles and filter chips already use.
+    final fill = c.brandSolid;
+    final fg = selected ? OmColors.onFill(fill) : c.text;
 
     return OmTappable(
       onTap: onTap,
@@ -87,7 +97,7 @@ class _DayPill extends StatelessWidget {
           duration: const Duration(milliseconds: 260),
           curve: Curves.easeOutCubic,
           decoration: BoxDecoration(
-            color: selected ? c.text : c.surface,
+            color: selected ? fill : c.surface,
             borderRadius: BorderRadius.circular(22),
             border: Border.all(
               color: selected
@@ -116,7 +126,7 @@ class _DayPill extends StatelessWidget {
                 isToday ? 'today' : DateFormat.E().format(day).toLowerCase(),
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                       color: selected
-                          ? Colors.white
+                          ? fg
                           : isToday
                               ? c.primary
                               : c.text2,
@@ -132,7 +142,7 @@ class _DayPill extends StatelessWidget {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: hasBlocks
-                      ? (selected ? Colors.white : c.primary)
+                      ? (selected ? fg : c.primary)
                       : Colors.transparent,
                 ),
               ),

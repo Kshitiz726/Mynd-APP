@@ -17,6 +17,8 @@ import '../community/user_profile_sheet.dart';
 import '../../models/focus_mode.dart';
 import '../../providers/focus_provider.dart';
 import '../../providers/focus_room_provider.dart';
+import '../../providers/agent_provider.dart';
+import '../../widgets/agent_avatar.dart';
 import '../../widgets/om_avatar.dart';
 import '../../widgets/om_button.dart';
 import '../../widgets/om_tappable.dart';
@@ -292,7 +294,13 @@ class _BodyDoublingScreenState extends State<BodyDoublingScreen> {
   }
 }
 
-/// Concentric pulsing rings around a search glyph - the "looking…" affordance.
+/// Concentric pulsing rings around the coach, already at work.
+///
+/// This used to be a `users` glyph on a filled disc, which said "two people"
+/// and nothing else - and painted white on the disc, which in dark mode is
+/// 2.40:1. Body doubling's whole pitch is that somebody is working alongside
+/// you, so while it looks for a partner it shows exactly that: your coach,
+/// head down at a laptop, waiting for you to join.
 class _PulsingFinder extends StatefulWidget {
   const _PulsingFinder({required this.color});
   final Color color;
@@ -333,11 +341,11 @@ class _PulsingFinderState extends State<_PulsingFinder> with SingleTickerProvide
                   ),
                 );
               }),
-              Container(
-                width: 70,
-                height: 70,
-                decoration: BoxDecoration(color: widget.color, shape: BoxShape.circle),
-                child: Icon(OmIcons.byName('users'), color: Colors.white, size: 30),
+              AgentAvatar(
+                agent: context.watch<AgentProvider>().agent,
+                size: 86,
+                mood: AgentMood.working,
+                showRing: false,
               ),
             ],
           );
