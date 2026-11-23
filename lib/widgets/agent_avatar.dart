@@ -1,43 +1,50 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
-import '../core/theme/app_colors.dart';
 import '../models/agent.dart';
+import '../providers/settings_provider.dart';
+import 'om_character.dart';
 
 /// What the avatar is doing, which is the only thing that drives its motion.
 enum AgentMood {
-  /// Sitting there. Breathing, and not much else.
+  /// Sitting there. Breathing, blinking, and not much else.
   idle,
 
   /// The turn has been sent and nothing has come back yet.
   thinking,
 
-  /// Tokens are arriving.
+  /// Tokens are arriving, so the character is at a laptop putting them there.
   speaking,
+
+  /// Head down on something that is not a reply: a focus session, a job
+  /// running in the background.
+  working,
+
+  /// Nothing to do, and visibly enjoying it.
+  playing,
 }
 
 /// The agent's face, alive.
 ///
-/// One controller, running continuously, with the three states reading
-/// different things off the same clock. That matters: starting and stopping
-/// controllers on a state change is what produces the little jolt where a
-/// character snaps back to rest before it starts the next animation, and the
-/// whole point of this is that it looks like something rather than like a
-/// widget swapping.
+/// This used to be `Image.asset` with a transform on it. A bitmap has no
+/// parts, so the only motion available was sliding and scaling the whole
+/// picture - which is why "thinking" and "replying" were the same bob at two
+/// speeds, and why it read as a sticker being jiggled rather than as a
+/// character. [OmCharacter] draws the same creature as a rig with a body,
+/// arms, eyes and props, so it can actually sit at a laptop and type.
 ///
-/// Idle is a slow breath and a gentle bob. Thinking leans the head, bounces
-/// faster and puts three dots above it - a character that is visibly working,
-/// not a spinner sitting next to a picture. Speaking is a quicker, smaller
-/// pulse with a ring that keeps time, so a long reply reads as ongoing rather
-/// than as frozen.
-class AgentAvatar extends StatefulWidget {
+/// The PNGs in assets/agents are still the source of truth for what each
+/// agent looks like; this is that design rebuilt in paths, recoloured from
+/// each agent's accent.
+class AgentAvatar extends StatelessWidget {
   const AgentAvatar({
     super.key,
     required this.agent,
     required this.size,
     this.mood = AgentMood.idle,
     this.showRing = true,
+    this.showThought = true,
+    this.emotion,
     this.onTap,
   });
 
@@ -49,91 +56,49 @@ class AgentAvatar extends StatefulWidget {
   /// rings is noise.
   final bool showRing;
 
+  /// The character's own thought cloud while it is thinking. Off where a
+  /// bigger one is already being drawn over the top, so there are not two.
+  final bool showThought;
+
+  /// Overrides the face this agent rests in. Null uses how the agent ships,
+  /// which is what every screen wants except the one where you are changing
+  /// it and watching the preview.
+  final AgentEmotion? emotion;
+
   final VoidCallback? onTap;
 
-  @override
-  State<AgentAvatar> createState() => _AgentAvatarState();
-}
-
-class _AgentAvatarState extends State<AgentAvatar>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _c = AnimationController(
-    vsync: this,
-    // A long period that the three states divide down into their own rhythms,
-    // rather than three controllers to keep in step.
-    duration: const Duration(milliseconds: 2400),
-  )..repeat();
-
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
-  }
+  /// The three shipped faces, reproduced from the agent's mood rather than
+  /// hardcoded per id, so a tuned agent actually looks like the mood it is in.
+  static (OmCharacterEyes, OmCharacterMouth) _faceFor(AgentEmotion e) =>
+      switch (e) {
+        AgentEmotion.calm =>
+          (OmCharacterEyes.closed, OmCharacterMouth.soft),
+        AgentEmotion.upbeat =>
+          (OmCharacterEyes.open, OmCharacterMouth.smile),
+        AgentEmotion.focused =>
+          (OmCharacterEyes.open, OmCharacterMouth.soft),
+        AgentEmotion.gentle =>
+          (OmCharacterEyes.worried, OmCharacterMouth.frown),
+        AgentEmotion.firedUp =>
+          (OmCharacterEyes.open, OmCharacterMouth.smile),
+      };
 
   @override
   Widget build(BuildContext context) {
-    final a = widget.agent;
-    final s = widget.size;
+    final a = agent;
+    final s = size;
+    final reduceMotion =
+        context.select<SettingsProvider, bool>((x) => x.reduceMotion);
 
-    final face = AnimatedBuilder(
-      animation: _c,
-      builder: (context, child) {
-        final t = _c.value;
-        final (scale, dy, tilt) = switch (widget.mood) {
-          // One slow breath per cycle, and a bob half a beat behind it so the
-          // two never peak together and read as a single pulse.
-          AgentMood.idle => (
-              1 + 0.022 * math.sin(t * 2 * math.pi),
-              -2.0 * math.sin(t * 2 * math.pi + 0.8),
-              0.012 * math.sin(t * 2 * math.pi * 0.5),
-            ),
-          // Three times the rate, leaning into the thought.
-          AgentMood.thinking => (
-              1 + 0.045 * math.sin(t * 2 * math.pi * 3),
-              -4.0 * math.sin(t * 2 * math.pi * 3).abs(),
-              -0.075 + 0.03 * math.sin(t * 2 * math.pi * 1.5),
-            ),
-          // Small and quick, like speech rather than effort.
-          AgentMood.speaking => (
-              1 + 0.03 * math.sin(t * 2 * math.pi * 4),
-              -1.5 * math.sin(t * 2 * math.pi * 4),
-              0.02 * math.sin(t * 2 * math.pi * 2),
-            ),
-        };
+    final pose = switch (mood) {
+      AgentMood.idle => OmCharacterPose.idle,
+      AgentMood.thinking => OmCharacterPose.thinking,
+      AgentMood.speaking => OmCharacterPose.typing,
+      AgentMood.working => OmCharacterPose.working,
+      AgentMood.playing => OmCharacterPose.playing,
+    };
 
-        return Transform.translate(
-          offset: Offset(0, dy),
-          child: Transform.rotate(
-            angle: tilt,
-            child: Transform.scale(scale: scale, child: child),
-          ),
-        );
-      },
-      child: ClipOval(
-        child: Image.asset(
-          a.asset,
-          width: s,
-          height: s,
-          fit: BoxFit.cover,
-          // A missing asset must not take the header down with it. The agent's
-          // accent is a face of sorts: it still says which one is selected.
-          errorBuilder: (_, __, ___) => Container(
-            width: s,
-            height: s,
-            color: a.accent.withValues(alpha: 0.25),
-            alignment: Alignment.center,
-            child: Text(
-              a.name.characters.first,
-              style: TextStyle(
-                fontSize: s * 0.42,
-                fontWeight: FontWeight.w800,
-                color: a.accent,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
+    final (eyes, mouth) = _faceFor(emotion ?? a.defaults.emotion);
 
     Widget out = SizedBox(
       width: s,
@@ -142,152 +107,149 @@ class _AgentAvatarState extends State<AgentAvatar>
         alignment: Alignment.center,
         clipBehavior: Clip.none,
         children: [
-          if (widget.showRing)
-            AnimatedBuilder(
-              animation: _c,
-              builder: (context, _) => CustomPaint(
-                size: Size.square(s),
-                painter: _RingPainter(
-                  colour: a.accent,
-                  t: _c.value,
-                  mood: widget.mood,
-                ),
-              ),
-            ),
-          face,
-          if (widget.mood == AgentMood.thinking)
-            Positioned(
-              top: -s * 0.14,
-              right: -s * 0.04,
-              child: AnimatedBuilder(
-                animation: _c,
-                builder: (context, _) =>
-                    _ThinkingDots(t: _c.value, colour: a.accent, size: s * 0.3),
-              ),
-            ),
+          if (showRing)
+            _Ring(colour: a.accent, mood: mood, animate: !reduceMotion),
+          OmCharacter(
+            size: s,
+            // Ember is the one with the quiff; it is what tells the three
+            // apart in silhouette.
+            palette:
+                OmCharacterPalette.from(a.accent, quiff: a.id == 'ember'),
+            pose: pose,
+            restingEyes: eyes,
+            restingMouth: mouth,
+            // So a picker grid is not a chorus line blinking in unison.
+            seed: a.id.hashCode,
+            animate: !reduceMotion,
+            showThought: showThought,
+          ),
         ],
       ),
     );
 
-    if (widget.onTap != null) {
+    if (onTap != null) {
       out = GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: widget.onTap,
+        onTap: onTap,
         child: out,
       );
     }
     return Semantics(
-      label: switch (widget.mood) {
+      label: switch (mood) {
         AgentMood.idle => '${a.name}, your coach',
         AgentMood.thinking => '${a.name} is thinking',
         AgentMood.speaking => '${a.name} is replying',
+        AgentMood.working => '${a.name} is working',
+        AgentMood.playing => '${a.name}, your coach',
       },
-      button: widget.onTap != null,
+      button: onTap != null,
       child: out,
     );
   }
 }
 
-/// The ring around the face. Idle it is a faint static hairline; working, it is
-/// an arc that travels, so there is a moving part even when the bob is at the
-/// top or bottom of its travel and momentarily still.
+/// The ring around the character.
+///
+/// Idle it is a faint static hairline; working, it is an arc that travels, so
+/// there is a moving part even at the instant the character's own motion is at
+/// the top or bottom of its travel and momentarily still.
+class _Ring extends StatefulWidget {
+  const _Ring({required this.colour, required this.mood, required this.animate});
+
+  final Color colour;
+  final AgentMood mood;
+  final bool animate;
+
+  @override
+  State<_Ring> createState() => _RingState();
+}
+
+class _RingState extends State<_Ring> with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2400),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.animate) _c.repeat();
+  }
+
+  @override
+  void didUpdateWidget(covariant _Ring old) {
+    super.didUpdateWidget(old);
+    if (widget.animate != old.animate) {
+      widget.animate ? _c.repeat() : _c.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+        animation: _c,
+        builder: (context, _) => CustomPaint(
+          size: Size.infinite,
+          painter: _RingPainter(
+            colour: widget.colour,
+            t: _c.value,
+            busy: widget.mood == AgentMood.thinking ||
+                widget.mood == AgentMood.speaking ||
+                widget.mood == AgentMood.working,
+            fast: widget.mood == AgentMood.speaking,
+          ),
+        ),
+      );
+}
+
 class _RingPainter extends CustomPainter {
-  _RingPainter({required this.colour, required this.t, required this.mood});
+  _RingPainter({
+    required this.colour,
+    required this.t,
+    required this.busy,
+    required this.fast,
+  });
 
   final Color colour;
   final double t;
-  final AgentMood mood;
+  final bool busy;
+  final bool fast;
 
   @override
   void paint(Canvas canvas, Size size) {
     final r = size.shortestSide / 2;
     final centre = Offset(size.width / 2, size.height / 2);
 
-    final track = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = r * 0.055
-      ..color = colour.withValues(alpha: mood == AgentMood.idle ? 0.16 : 0.22);
-    canvas.drawCircle(centre, r * 1.06, track);
+    canvas.drawCircle(
+      centre,
+      r * 1.02,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = r * 0.055
+        ..color = colour.withValues(alpha: busy ? 0.22 : 0.16),
+    );
 
-    if (mood == AgentMood.idle) return;
-
-    final sweep = mood == AgentMood.thinking ? math.pi * 0.5 : math.pi * 0.28;
-    final speed = mood == AgentMood.thinking ? 2.0 : 3.0;
-    final arc = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = r * 0.075
-      ..strokeCap = StrokeCap.round
-      ..color = colour.withValues(alpha: 0.85);
+    if (!busy) return;
 
     canvas.drawArc(
-      Rect.fromCircle(center: centre, radius: r * 1.06),
-      t * 2 * math.pi * speed,
-      sweep,
+      Rect.fromCircle(center: centre, radius: r * 1.02),
+      t * 2 * 3.1415926 * (fast ? 3.0 : 2.0),
+      fast ? 0.88 : 1.57,
       false,
-      arc,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = r * 0.075
+        ..strokeCap = StrokeCap.round
+        ..color = colour.withValues(alpha: 0.85),
     );
   }
 
   @override
   bool shouldRepaint(_RingPainter old) =>
-      old.t != t || old.mood != mood || old.colour != colour;
-}
-
-/// Three dots in a little bubble, rising in turn. The thing a character does
-/// while it thinks, rather than the thing a progress indicator does.
-class _ThinkingDots extends StatelessWidget {
-  const _ThinkingDots({
-    required this.t,
-    required this.colour,
-    required this.size,
-  });
-
-  final double t;
-  final Color colour;
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.omColors;
-    return Container(
-      padding: EdgeInsets.symmetric(
-          horizontal: size * 0.22, vertical: size * 0.17),
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(size),
-        boxShadow: [
-          BoxShadow(
-            color: c.shadow.withValues(alpha: 0.16),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (var i = 0; i < 3; i++) ...[
-            if (i > 0) SizedBox(width: size * 0.13),
-            Transform.translate(
-              // A third of a cycle apart, so they rise as a wave rather than
-              // together.
-              offset: Offset(
-                0,
-                -size * 0.14 *
-                    math.max(0, math.sin((t * 3 - i / 3) * 2 * math.pi)),
-              ),
-              child: Container(
-                width: size * 0.16,
-                height: size * 0.16,
-                decoration: BoxDecoration(
-                  color: colour.withValues(alpha: 0.9),
-                  shape: BoxShape.circle,
-                ),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
+      old.t != t || old.busy != busy || old.fast != fast || old.colour != colour;
 }

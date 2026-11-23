@@ -267,7 +267,13 @@ class Agent {
   /// including who it is wrong for.
   final String bestFor;
 
+  /// The original render of this agent. Nothing draws it any more - the
+  /// avatar is painted by OmCharacter from [accent] - but it is the picture
+  /// that drawing is meant to match, so it stays as the reference.
   final String asset;
+
+  /// The one colour the whole character is derived from: coat, face patch,
+  /// eyes and blush are all mixed from it, so a new agent needs no artwork.
   final Color accent;
 
   /// The character block of the system prompt.
