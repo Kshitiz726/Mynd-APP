@@ -380,7 +380,10 @@ class _RefreshBadge extends StatelessWidget {
             child: Icon(
               OmIcons.byName('refresh'),
               size: 17,
-              color: busy ? Colors.white : c.primary,
+              // White on the dark theme's periwinkle is 2.40:1, under the
+              // 3:1 a non-text control needs, so the spinner faded out of its
+              // own badge exactly while it was spinning.
+              color: busy ? OmColors.onFill(c.primary) : c.primary,
             ),
           ),
         ),

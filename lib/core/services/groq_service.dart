@@ -54,8 +54,20 @@ class GroqService {
   /// Lightweight model for summarisation (saves tokens).
   static const _summaryModel = 'openai/gpt-oss-20b';
 
-  /// See the note above - this is what keeps a reply in the reply.
-  static const _reasoningEffort = 'low';
+  /// How much the model is allowed to think before it answers.
+  ///
+  /// Was 'low', paired with a 1024-token ceiling, and that pairing was the
+  /// single biggest cause of flat, going-through-the-motions replies: a
+  /// reasoning model told not to reason answers from the surface of the
+  /// prompt. The therapeutic stance the system prompt now asks for is exactly
+  /// the kind of instruction that needs thinking to follow, because getting
+  /// the meaning underneath what somebody said is not a surface operation.
+  ///
+  /// Raised to 'medium' together with [_chatMaxTokens], which is the condition
+  /// the note above sets: the thinking comes out of the same budget, so the
+  /// budget had to grow first or replies come back empty. Do not raise one of
+  /// these without the other.
+  static const _reasoningEffort = 'medium';
 
   // Raised from 512, and not for longer replies.
   //
@@ -66,7 +78,12 @@ class GroqService {
   // personas and the email instructions landed, which pushed ordinary turns
   // into that margin. The replies are still capped by the prompt telling the
   // agent how long to be, not by this number.
-  static const _chatMaxTokens = 1024;
+  // Raised again, from 1024, when _reasoningEffort went to 'medium'. Thinking
+  // and reply share this budget, so a medium-effort turn needs headroom the
+  // 1024 did not leave. Reply length is still governed by the prompt, not by
+  // this number: what the extra room buys is a better-considered reply, not a
+  // longer one.
+  static const _chatMaxTokens = 3072;
   static const _summaryMaxTokens = 300;
 
   final _client = http.Client();

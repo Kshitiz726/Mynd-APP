@@ -122,6 +122,7 @@ class SpeechService {
   Future<String> stopAndTranscribe() async {
     if (!_recording) return '';
     _recording = false;
+    lastError = null;
     await _levelSub?.cancel();
     _levelSub = null;
     try {
@@ -157,6 +158,22 @@ class SpeechService {
       return text;
     } catch (e) {
       debugPrint('[voice] transcription failed: $e');
+      // Kept, so the caller can say why rather than guess. Every failure here
+      // used to come out as an empty string, which the UI could only report
+      // as "didn't catch that" - the same sentence for a mumble, an expired
+      // session, and a refusal to send audio to the provider at all.
+      lastError = switch (e) {
+        GroqException(statusCode: 401) =>
+          'Your session expired. Sign in again.',
+        GroqException(statusCode: 403) =>
+          'Sending a voice note means sending the audio to our AI provider, '
+              'and you have not agreed to that. You can turn it on in '
+              'Settings.',
+        GroqException(statusCode: 408) =>
+          'That took too long. Check your connection and try again.',
+        GroqException() => 'Could not reach the server. Try again in a moment.',
+        _ => null,
+      };
       return '';
     }
   }

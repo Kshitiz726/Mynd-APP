@@ -9,6 +9,7 @@ import '../../../core/utils/om_icons.dart';
 import '../../../models/energy_level.dart';
 import '../../../models/task.dart';
 import '../../../providers/task_provider.dart';
+import '../../../widgets/om_mic_button.dart';
 import '../../../widgets/om_tappable.dart';
 
 void showBrainDumpSheet(BuildContext context) {
@@ -75,6 +76,12 @@ String brainDumpError(Object e) => switch (e) {
       CoachLimitException() =>
         'That hit the daily coach limit, which it should not - please report this.',
       GroqException(statusCode: 401) => 'Your session expired. Sign in again.',
+      // The server refuses to send anything to the AI provider without
+      // agreement on file. Reported as a reason rather than as a network
+      // fault, which is what the generic branch below would have called it.
+      GroqException(statusCode: 403) =>
+        'Breaking this down means sending it to our AI provider, and you have '
+            'not agreed to that. You can turn it on in Settings.',
       GroqException(statusCode: 408) =>
         'That took too long. Check your connection and try again.',
       GroqException(statusCode: 502) =>
@@ -96,6 +103,10 @@ class BrainDumpSheet extends StatefulWidget {
 class _BrainDumpSheetState extends State<BrainDumpSheet> {
   final _controller = TextEditingController();
   bool _processing = false;
+
+  /// True while the mic has the floor, so the sheet can say so in the one place
+  /// the user is already reading.
+  bool _listening = false;
 
   /// Why the last attempt failed, shown inside the sheet.
   ///
@@ -153,9 +164,55 @@ class _BrainDumpSheetState extends State<BrainDumpSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Brain Dump', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
-            const SizedBox(height: 4),
-            Text('Dump your messy thoughts. AI will break them into actionable tasks.', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: c.text2)),
+            // Title block and mic on one line. The mic belongs level with the
+            // heading rather than under the field: a full-width "Process with
+            // AI" already owns the bottom of the sheet, and a second button
+            // down there would read as a choice between two ways to finish
+            // rather than as a second way to fill the box.
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Brain Dump',
+                          style: Theme.of(context)
+                              .textTheme
+                              .headlineSmall
+                              ?.copyWith(fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 4),
+                      Text(
+                        _listening
+                            ? 'listening… tap the mic again when you finish'
+                            : 'Dump it, typed or spoken. AI breaks it into tasks.',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: _listening ? c.primary : c.text2),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                OmMicButton(
+                  controller: _controller,
+                  size: 46,
+                  enabled: !_processing,
+                  // Into the sheet's own error slot. A SnackBar draws at the
+                  // bottom of the Scaffold, underneath this sheet, which is how
+                  // a refused mic came to fail completely silently.
+                  onError: (m) => setState(() => _error = m),
+                  onListeningChanged: (v) {
+                    if (mounted) setState(() => _listening = v);
+                  },
+                  onTranscript: (_) {
+                    // A transcript that landed clears whatever the last
+                    // failure said, so the sheet is not still apologising over
+                    // words that are now sitting in the box.
+                    if (mounted && _error != null) setState(() => _error = null);
+                  },
+                ),
+              ],
+            ),
             const SizedBox(height: AppSpacing.lg),
             TextField(
               controller: _controller,
@@ -201,18 +258,34 @@ class _BrainDumpSheetState extends State<BrainDumpSheet> {
                   gradient: LinearGradient(colors: [c.primary, c.flow]),
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
-                    BoxShadow(color: c.primary.withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 4)),
+                    BoxShadow(color: c.primary.withValues(alpha: context.isDark ? 0.12 : 0.3), blurRadius: 12, offset: const Offset(0, 4)),
                   ],
                 ),
                 alignment: Alignment.center,
-                child: _processing 
-                    ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                // Measured against the fill, not assumed to be white. In dark
+                // mode the palette's fills are the light ones, so a hardcoded
+                // white label on them inverts and the button reads as blank.
+                child: _processing
+                    ? SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                              OmColors.onFill(c.primary)),
+                        ),
+                      )
                     : Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(OmIcons.byName('sparkles'), color: Colors.white, size: 20),
+                          Icon(OmIcons.byName('sparkles'),
+                              color: OmColors.onFill(c.primary), size: 20),
                           const SizedBox(width: 8),
-                          const Text('Process with AI', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16)),
+                          Text('Process with AI',
+                              style: TextStyle(
+                                  color: OmColors.onFill(c.primary),
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 16)),
                         ],
                       ),
               ),

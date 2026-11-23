@@ -287,11 +287,15 @@ class _VoiceDumpSheetState extends State<VoiceDumpSheet> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(OmIcons.byName(icon), color: Colors.white, size: 18),
+            Icon(OmIcons.byName(icon),
+                      color: OmColors.onFill(c.primary), size: 18),
             const SizedBox(width: 8),
+            // The icon beside it was already measured against the fill; the
+            // label was not, so in dark mode it went white on a light gradient
+            // and the button read as empty.
             Text(label,
-                style: const TextStyle(
-                    color: Colors.white,
+                style: TextStyle(
+                    color: OmColors.onFill(c.primary),
                     fontWeight: FontWeight.w700,
                     fontSize: 15)),
           ],

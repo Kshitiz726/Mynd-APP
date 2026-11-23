@@ -10,14 +10,21 @@ import '../../core/utils/om_icons.dart';
 import '../../models/chat_message.dart';
 import '../../providers/coach_provider.dart';
 import '../../providers/health_consent_provider.dart';
+import '../../providers/ai_consent_provider.dart';
 import '../../providers/memory_provider.dart';
 import '../../providers/premium_provider.dart';
 import '../../providers/agent_provider.dart';
 import '../../widgets/agent_avatar.dart';
+import '../../widgets/om_back_button.dart';
 import '../../widgets/om_glass.dart';
+import '../../widgets/om_mic_button.dart';
 import '../../widgets/om_push_drawer.dart';
 import '../../widgets/om_tappable.dart';
 import '../onboarding/health_consent_screen.dart';
+import '../onboarding/ai_consent_screen.dart';
+import '../../core/services/ai/ai_connections.dart';
+import '../../core/services/ai/ai_router.dart';
+import '../profile/widgets/ai_connect_sheet.dart';
 import 'agent_picker_screen.dart';
 import 'widgets/email_approval_sheet.dart';
 import '../../core/services/email_approval.dart';
@@ -29,7 +36,19 @@ import '../../widgets/thinking_cloud.dart';
 /// Design is 100% unchanged from the prototype. [_send] and message state route
 /// through [CoachProvider] → Groq, reached through our own server.
 class CoachScreen extends StatefulWidget {
-  const CoachScreen({super.key});
+  const CoachScreen({super.key, this.pushed = false});
+
+  /// True when this was pushed as its own route rather than shown as the chat
+  /// tab. It decides which control the header draws, and it has to be told
+  /// rather than worked out: see the header for why `Navigator.canPop()` is the
+  /// wrong question.
+  ///
+  /// Getting this wrong is a dead end, not a cosmetic slip. A pushed route sits
+  /// over the shell, so there is no nav bar, and the drawer button is inert
+  /// because OmPushDrawer only exists inside the shell. With no back control
+  /// either, "Need help? Talk to Mynd" from Focus led to a screen with no way
+  /// out at all.
+  final bool pushed;
 
   @override
   State<CoachScreen> createState() => _CoachScreenState();
@@ -168,6 +187,35 @@ class _CoachScreenState extends State<CoachScreen> {
     // endpoint - the coach opens as normal with health context off, rather
     // than showing a consent screen whose answer cannot be recorded and taking
     // the whole feature down with it.
+    // The floor, checked before the health question below. The coach's replies
+    // are written by a third-party AI provider, so what you type is sent off
+    // the account to them, and 5.1.2(i) requires agreement before that happens.
+    // This gates the whole feature, not half its context: declining it is
+    // declining the thing the coach is. The rest of the app is a tab away and
+    // untouched.
+    //
+    // Unlike the health gate below, this one does NOT wait for the server to
+    // confirm there is no answer on file. It used to, on the same reasoning,
+    // and the result was that with /consent/ai returning 404 the disclosure
+    // never appeared at all and the chat sent messages to the provider without
+    // anybody being asked. Deferring the question until a server can be reached
+    // is defensible for health context, which only enriches a reply. It is not
+    // defensible here, where the question is whether the words may leave the
+    // account at all. The answer is recorded on the device and synced after, so
+    // there is no longer any such thing as a moment it cannot be answered.
+    final ai = context.watch<AiConsentProvider>();
+    // Asked again when the recipient changes, not only when nobody has
+    // answered. Agreement is to a named company: somebody who said yes while
+    // the built-in model was answering has not agreed to their words going to
+    // Anthropic through Puter, and 5.1.2(i) is explicit that the app has to
+    // specify who the data is sent to.
+    if (ai.mustAsk || ai.needsReconsentFor(AiRouter.instance.activeCompany)) {
+      return AiConsentScreen(onDecided: (_) {});
+    }
+    if (ai.declined) {
+      return const _CoachNeedsAiConsent();
+    }
+
     final consent = context.watch<HealthConsentProvider>();
     if (consent.mustAsk) {
       return HealthConsentScreen(onDecided: (_) {});
@@ -237,9 +285,8 @@ class _CoachScreenState extends State<CoachScreen> {
                   8, AppSpacing.screenTop, AppSpacing.screenH, 8),
               child: Row(
                 children: [
-                  // The drawer, always. This is the chat tab: the panel is the
-                  // only route to side chats and to Profile, so the control has
-                  // one job.
+                  // The drawer when this is the chat tab, a back arrow when it
+                  // was pushed.
                   //
                   // It used to be `if (Navigator.canPop())` show a back arrow
                   // instead, which sounds reasonable and is not: canPop is a
@@ -247,12 +294,24 @@ class _CoachScreenState extends State<CoachScreen> {
                   // anything at all was pushed over this screen. Tapping the
                   // quota pill flipped the hamburger into a back arrow, which
                   // looked like the sidebar glitching, because in a sense it
-                  // was. Nothing pushes CoachScreen anyway - the tab and the
-                  // route are its only two call sites, and the route already
-                  // asks for no back button - so the branch could only ever
-                  // fire by accident.
-                  _DrawerButton(
-                      onTap: () => OmPushDrawer.of(context)?.open()),
+                  // was.
+                  //
+                  // The fix for that was to drop the branch, on the grounds
+                  // that nothing pushes CoachScreen. That was not true:
+                  // "Need help? Talk to Mynd" in Focus pushes this route, and
+                  // on that path the drawer button is inert (OmPushDrawer lives
+                  // in the shell, so `of(context)` is null here) and there is no
+                  // nav bar, which left no way off the screen.
+                  //
+                  // So the branch is back, on `widget.pushed` instead. It is
+                  // fixed when the screen is built rather than re-read from the
+                  // navigator on every frame, so pushing a sheet over the chat
+                  // cannot change it.
+                  if (widget.pushed)
+                    OmBackButton(onTap: () => Navigator.of(context).maybePop())
+                  else
+                    _DrawerButton(
+                        onTap: () => OmPushDrawer.of(context)?.open()),
                   const SizedBox(width: 4),
                   // The agent's face, and it is a button: tapping it is the
                   // fastest route to switching who you are talking to.
@@ -270,6 +329,7 @@ class _CoachScreenState extends State<CoachScreen> {
                         agent: agents.agent,
                         size: 44,
                         mood: _moodFor(coach),
+                        showThought: false,
                         onTap: () => AgentPickerScreen.open(context),
                       ),
                       Positioned(
@@ -404,6 +464,7 @@ class _CoachScreenState extends State<CoachScreen> {
                         ),
                         const SizedBox(height: 10),
                       ],
+                      const _ProviderConnectBanner(),
                       _CoachInput(controller: _controller, onSend: _send),
                     ],
                   ],
@@ -550,12 +611,22 @@ class _ChatBubble extends StatelessWidget {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: BoxDecoration(
-                  gradient: c.brandGradient,
+                  // Flat, not a gradient. A bubble is too small to carry one:
+                  // it comes out as a few pixels of drift that reads as a
+                  // rendering fault, and against a dark page it reads as
+                  // cheap. Every messaging app worth copying uses a solid
+                  // fill here.
+                  color: c.brandSolid,
                   borderRadius: radius,
                   boxShadow: [
                     BoxShadow(
-                      color: c.primary.withValues(alpha: 0.28),
-                      blurRadius: 16,
+                      // Barely there in dark. A brand-coloured shadow at 0.28
+                      // behind a brand-coloured bubble is not a shadow, it is
+                      // a glow, and a column of glowing bubbles is the single
+                      // thing that made this screen look unfinished.
+                      color: c.primary
+                          .withValues(alpha: context.isDark ? 0.10 : 0.22),
+                      blurRadius: context.isDark ? 10 : 16,
                       offset: const Offset(0, 6),
                     ),
                   ],
@@ -602,7 +673,7 @@ class _CoachHero extends StatelessWidget {
           AgentAvatar(
             agent: agent,
             size: 128,
-            mood: AgentMood.idle,
+            mood: AgentMood.playing,
             onTap: () => AgentPickerScreen.open(context),
           ),
           const SizedBox(height: 22),
@@ -1006,7 +1077,7 @@ class _SendKey extends StatelessWidget {
               child: Icon(
                 Icons.arrow_upward_rounded,
                 size: 20,
-                color: ready ? Colors.white : c.text2,
+                color: ready ? OmColors.onFill(c.primary) : c.text2,
               ),
             ),
           ),
@@ -1016,65 +1087,295 @@ class _SendKey extends StatelessWidget {
   }
 }
 
-class _CoachInput extends StatelessWidget {
+/// The composer.
+///
+/// Stateful only so that voice has somewhere to speak from. A mic that is 40px
+/// across cannot print "microphone access is turned off for OurMynd", and a
+/// SnackBar is drawn at the bottom of the Scaffold, underneath the keyboard
+/// that is up at exactly the moment a dictation fails. The line above the pill
+/// is the one place on this screen that is both visible and free.
+class _CoachInput extends StatefulWidget {
   const _CoachInput({required this.controller, required this.onSend});
 
   final TextEditingController controller;
   final ValueChanged<String> onSend;
 
   @override
+  State<_CoachInput> createState() => _CoachInputState();
+}
+
+class _CoachInputState extends State<_CoachInput> {
+  /// What voice last had to say for itself, or null. Cleared on a timer rather
+  /// than left to sit there, because by the time you have read it you have
+  /// usually already acted on it.
+  String? _notice;
+  int _noticeSeq = 0;
+
+  bool _listening = false;
+
+  void _say(String message) {
+    if (!mounted) return;
+    final seq = ++_noticeSeq;
+    setState(() => _notice = message);
+    Future<void>.delayed(const Duration(seconds: 5), () {
+      // Only the notice that set the timer may clear it, or a second failure
+      // would be wiped by the first one's expiry.
+      if (mounted && seq == _noticeSeq) setState(() => _notice = null);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final c = context.omColors;
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(AppRadius.pill),
-        boxShadow: [
-          BoxShadow(
-            color: c.shadow.withValues(alpha: context.isDark ? 0.45 : 0.10),
-            blurRadius: 20,
-            offset: const Offset(0, 6),
-          )
-        ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Height is animated rather than toggled, so the composer rises under
+        // the notice instead of jumping out from under the thumb on it.
+        AnimatedSize(
+          duration: const Duration(milliseconds: 240),
+          curve: Curves.easeOutCubic,
+          alignment: Alignment.bottomLeft,
+          child: _notice == null
+              ? const SizedBox(width: double.infinity)
+              : Padding(
+                  padding: const EdgeInsets.only(left: 14, bottom: 6),
+                  child: Text(
+                    _notice!,
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodySmall
+                        ?.copyWith(color: c.text2, height: 1.3),
+                  ),
+                ),
+        ),
+        Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(AppRadius.pill),
+            boxShadow: [
+              BoxShadow(
+                color: c.shadow.withValues(alpha: context.isDark ? 0.45 : 0.10),
+                blurRadius: 20,
+                offset: const Offset(0, 6),
+              )
+            ],
+          ),
+          // Frosted in light, solid in dark.
+          //
+          // Glass works over a pale page: there is enough light behind it for
+          // the blur to read as depth. Over a near-black one at 0.45 there is
+          // nothing to frost, so it came out as a muddy translucent smear that
+          // shifted colour depending on which bubble happened to be behind it.
+          // A solid raised surface with a hairline border is what a dark theme
+          // wants, and it also stops the typing field changing colour as the
+          // chat scrolls.
+          child: OmGlass(
+            borderRadius: AppRadius.pill,
+            blur: context.isDark ? 0 : 26,
+            opacity: context.isDark ? 1.0 : 0.86,
+            padding: const EdgeInsets.fromLTRB(16, 6, 6, 6),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: widget.controller,
+                    textCapitalization: TextCapitalization.sentences,
+                    onSubmitted: widget.onSend,
+                    // Flutter does not dismiss the keyboard on a tap elsewhere
+                    // on a touch device - the default only does that on desktop
+                    // - so without this the keyboard stayed up over everything
+                    // it was covering, and tapping the drawer, the agent's face
+                    // or another tab did nothing about it.
+                    onTapOutside: (_) =>
+                        FocusManager.instance.primaryFocus?.unfocus(),
+                    minLines: 1,
+                    maxLines: 4,
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodyMedium
+                        ?.copyWith(color: c.text, fontSize: 15),
+                    decoration: InputDecoration(
+                      // The hint carries the state while the mic is live. The
+                      // field is where the words are about to appear, so it is
+                      // where somebody who has just started talking is looking.
+                      hintText: _listening ? 'listening…' : 'ask anything…',
+                      hintStyle: Theme.of(context)
+                          .textTheme
+                          .bodyMedium
+                          ?.copyWith(
+                              color: _listening ? c.primary : c.text2,
+                              fontSize: 15),
+                      border: InputBorder.none,
+                      isCollapsed: true,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                OmMicButton(
+                  controller: widget.controller,
+                  size: 36,
+                  onError: _say,
+                  onListeningChanged: (v) {
+                    if (mounted) setState(() => _listening = v);
+                  },
+                ),
+                const SizedBox(width: 4),
+                _SendKey(controller: widget.controller, onSend: widget.onSend),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Shown in the coach tab when the user has declined to let their messages be
+/// sent to the third-party AI provider. Not a dead end: the coach is simply off
+/// until they change their mind, which the button here lets them do, and every
+/// other tab is unaffected. See [AiConsentScreen] for the decision itself.
+class _CoachNeedsAiConsent extends StatelessWidget {
+  const _CoachNeedsAiConsent();
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.omColors;
+    final t = Theme.of(context).textTheme;
+    return Scaffold(
+      backgroundColor: c.bg,
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenH),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(color: c.primaryTint, shape: BoxShape.circle),
+                  alignment: Alignment.center,
+                  child: Icon(OmIcons.byName('sparkles'), color: c.primary, size: 26),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                Text('the coach is off', style: t.titleLarge, textAlign: TextAlign.center),
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  'The coach needs to send what you type to a third-party AI '
+                  'provider to reply, and you have not agreed to that. Nothing '
+                  'is sent in the meantime, and the rest of the app works as '
+                  'normal.',
+                  textAlign: TextAlign.center,
+                  style: t.bodyMedium?.copyWith(color: c.text2, height: 1.5),
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                OmTappable(
+                  onTap: () {
+                    Haptics.medium();
+                    Navigator.of(context).push(MaterialPageRoute<void>(
+                      // `routeContext` is this route's own, deliberately, not
+                      // the enclosing `context`.
+                      //
+                      // Recording the answer notifies listeners synchronously,
+                      // so by the time onDecided runs the gate above has
+                      // already rebuilt: `declined` is false, this screen has
+                      // left the tree, and its context is deactivated.
+                      // Navigator.of threw on it, the pushed route was never
+                      // popped, and somebody who had just pressed "agree, open
+                      // the coach" was left sitting on the disclosure they had
+                      // agreed to, with no way forward.
+                      //
+                      // OnboardingGate carries the same note about the same
+                      // mistake, one route over.
+                      builder: (routeContext) => AiConsentScreen(
+                        onDecided: (_) => Navigator.of(routeContext).maybePop(),
+                      ),
+                    ));
+                  },
+                  feedback: OmTapFeedback.none,
+                  pressedScale: 0.97,
+                  child: Container(
+                    height: 52,
+                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      gradient: c.brandGradient,
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
+                    ),
+                    child: const Text(
+                      'review and turn on the coach',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 15.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
-      child: OmGlass(
-        borderRadius: AppRadius.pill,
-        blur: 26,
-        opacity: context.isDark ? 0.45 : 0.86,
-        padding: const EdgeInsets.fromLTRB(16, 6, 6, 6),
-        child: Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: controller,
-                textCapitalization: TextCapitalization.sentences,
-                onSubmitted: onSend,
-                // Flutter does not dismiss the keyboard on a tap elsewhere on
-                // a touch device - the default only does that on desktop - so
-                // without this the keyboard stayed up over everything it was
-                // covering, and tapping the drawer, the agent's face or
-                // another tab did nothing about it.
-                onTapOutside: (_) =>
-                    FocusManager.instance.primaryFocus?.unfocus(),
-                minLines: 1,
-                maxLines: 4,
-                style: Theme.of(context)
-                    .textTheme
-                    .bodyMedium
-                    ?.copyWith(color: c.text, fontSize: 15),
-                decoration: InputDecoration(
-                  hintText: 'ask anything…',
-                  hintStyle: Theme.of(context)
-                      .textTheme
-                      .bodyMedium
-                      ?.copyWith(color: c.text2, fontSize: 15),
-                  border: InputBorder.none,
-                  isCollapsed: true,
+    );
+  }
+}
+
+/// Sits above the composer when the chosen provider has no key yet.
+///
+/// Deliberately not a wall. The router falls back to the built-in provider, so
+/// the coach still answers; what is wrong is only that it is not answering the
+/// way they asked it to. Blocking the conversation over that would punish them
+/// for a setting, so this states the situation in one line and offers the fix
+/// right where they noticed it.
+///
+/// It disappears by itself the moment the key lands, because it watches the
+/// connection rather than holding its own copy of the answer.
+class _ProviderConnectBanner extends StatelessWidget {
+  const _ProviderConnectBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    final conn = context.watch<AiConnections>();
+    if (!conn.selectedNeedsConnection) return const SizedBox.shrink();
+
+    final c = context.omColors;
+    final t = Theme.of(context).textTheme;
+    final p = conn.selected;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: OmTappable(
+        onTap: () {
+          Haptics.light();
+          AiConnectSheet.open(context, p);
+        },
+        feedback: OmTapFeedback.none,
+        pressedScale: 0.99,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: c.surfaceAlt,
+            borderRadius: BorderRadius.circular(AppRadius.control),
+            border: Border.all(color: c.border.withValues(alpha: 0.6)),
+          ),
+          child: Row(
+            children: [
+              Icon(OmIcons.byName('sparkles'), size: 17, color: c.primary),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '${p.label} is selected but not connected, so the built in '
+                  'model is replying for now.',
+                  style: t.bodySmall?.copyWith(color: c.text2, height: 1.35),
                 ),
               ),
-            ),
-            const SizedBox(width: 6),
-            _SendKey(controller: controller, onSend: onSend),
-          ],
+              const SizedBox(width: 8),
+              Text('Connect',
+                  style: t.labelLarge
+                      ?.copyWith(color: c.primary, fontWeight: FontWeight.w700)),
+            ],
+          ),
         ),
       ),
     );

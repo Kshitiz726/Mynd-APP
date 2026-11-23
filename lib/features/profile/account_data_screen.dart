@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import '../../core/config/store_policy.dart';
 import '../../core/constants/app_spacing.dart';
 import '../../core/routes/app_routes.dart';
 import '../../core/services/account_scope.dart';
@@ -237,11 +238,19 @@ class _AccountDataScreenState extends State<AccountDataScreen> {
                         style: t.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
                     const SizedBox(height: AppSpacing.sm),
                     Text(
+                      // The billing sentence only where the build can sell.
+                      // It named Stripe, on a screen that is not gated, so an
+                      // iOS user who can not buy anything was being warned
+                      // about a processor this app never puts in front of them
+                      // - and the privacy policy now says, truthfully, that no
+                      // payment is taken. Naming no provider keeps it correct
+                      // on the builds that do sell, whoever processes it.
                       'Your account and all of its contents are removed. This '
                       'is immediate and cannot be undone. Signing in again '
-                      'afterwards creates a brand new, empty account.\n\n'
-                      'If you have a subscription, cancel it first — deleting '
-                      'the account does not stop Stripe billing on its own.',
+                      'afterwards creates a brand new, empty account.'
+                      '${StorePolicy.canSell ? '\n\nIf you have a '
+                          'subscription, cancel it first: deleting the '
+                          'account does not stop billing on its own.' : ''}',
                       style: t.bodyMedium?.copyWith(color: c.text2, height: 1.55),
                     ),
                     const SizedBox(height: AppSpacing.lg),
