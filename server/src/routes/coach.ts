@@ -4,7 +4,7 @@ import { config } from '../config.js';
 import { db } from '../db.js';
 import { requireAuth } from '../auth.js';
 import { billingStore, isPremium, type Tier } from '../services/billing.js';
-import { hasAiConsent } from './consent.js';
+import { requireAiConsent } from './consent.js';
 
 /**
  * The coach model, proxied.
@@ -171,7 +171,7 @@ async function bumpUsage(userId: string, day: string): Promise<void> {
  * read "4 used" and both proceed. The insert returns the post-increment count,
  * and the decision is made on that.
  */
-r.post('/coach/turn', requireAuth, async (req, res, next) => {
+r.post('/coach/turn', requireAuth, requireAiConsent, async (req, res, next) => {
   try {
     const tz = req.headers['x-timezone'] as string | undefined;
     const week = weekKey(tz);
@@ -268,24 +268,10 @@ r.get('/coach/quota', requireAuth, async (req, res, next) => {
  * upstream SSE body is piped through untouched so the client's existing parser
  * did not have to change.
  */
-r.post('/coach/completions', requireAuth, async (req, res, next) => {
+r.post('/coach/completions', requireAuth, requireAiConsent, async (req, res, next) => {
   try {
     if (!config.groqApiKey) {
       return res.status(503).json({ error: 'coach is not configured on the server' });
-    }
-
-    // The permission gate, enforced where the data actually leaves. The app
-    // asks before the first turn, but the app is not the thing that can be
-    // trusted to - a modified client, or a direct call, would skip the screen
-    // and not the send. So the send itself is refused here when there is no
-    // agreement on file. Only where there is a database to hold the record:
-    // dev without one has no users table to consult and no real provider key
-    // either, so there is nothing to gate.
-    if (config.hasDb && !(await hasAiConsent(req.user.id))) {
-      return res.status(403).json({
-        error: 'ai data-sharing consent required',
-        code: 'ai_consent_required',
-      });
     }
 
     const parsed = CompletionRequest.safeParse(req.body);
@@ -414,7 +400,7 @@ async function motivationUsageToday(userId: string, day: string): Promise<number
   return row?.count ?? 0;
 }
 
-r.post('/coach/motivation', requireAuth, async (req, res, next) => {
+r.post('/coach/motivation', requireAuth, requireAiConsent, async (req, res, next) => {
   try {
     if (!config.groqApiKey) {
       return res.status(503).json({ error: 'not configured on the server' });
@@ -549,7 +535,7 @@ const ExtractRequest = z.object({
 /// surfaces as "could not read that" rather than as a short plan.
 const EXTRACT_CEILING = { extract: 1500, plan: 4000, feed: 2600 } as const;
 
-r.post('/coach/extract', requireAuth, async (req, res, next) => {
+r.post('/coach/extract', requireAuth, requireAiConsent, async (req, res, next) => {
   try {
     if (!config.groqApiKey) {
       return res.status(503).json({ error: 'coach is not configured on the server' });
@@ -593,7 +579,7 @@ r.post('/coach/extract', requireAuth, async (req, res, next) => {
   }
 });
 
-r.post('/coach/transcribe', requireAuth, async (req, res, next) => {
+r.post('/coach/transcribe', requireAuth, requireAiConsent, async (req, res, next) => {
   try {
     if (!config.groqApiKey) {
       return res.status(503).json({ error: 'coach is not configured on the server' });

@@ -1,5 +1,7 @@
 import { Router } from 'express';
+import type { NextFunction, Request, Response } from 'express';
 import { db } from '../db.js';
+import { config } from '../config.js';
 import { requireAuth } from '../auth.js';
 
 /**
@@ -235,6 +237,79 @@ export async function hasAiConsent(userId: string): Promise<boolean> {
   if (!row) return false;
   return row.ai_consent_granted === true &&
     row.ai_consent_version === AI_DISCLOSURE_VERSION;
+}
+
+/**
+ * Refuse any request that would send this user's content to a third-party AI
+ * without their agreement on file.
+ *
+ * Middleware rather than a line inside one handler, because the gate was a
+ * line inside one handler and it only ever guarded `/coach/completions`. Four
+ * other routes send user content to exactly the same provider - the chat turn,
+ * the motivation line, brain-dump extraction, and voice transcription - and
+ * all four were open. Somebody who declined could still have their words, and
+ * their recorded audio, sent to Groq by any of them. Guideline 5.1.2(i) asks
+ * that the data is not shared without permission; it does not ask that one
+ * endpoint of five honours it.
+ *
+ * Mounted per route rather than on the whole router so that read-only routes
+ * such as `/coach/quota`, which send nothing anywhere, keep working for a user
+ * who has declined. Declining turns the coach off, not the account.
+ *
+ * Only where there is a database to consult: a dev instance without one has no
+ * users table and no real provider key either, so there is nothing to gate.
+ */
+export async function requireAiConsent(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  if (!config.hasDb) return next();
+  const userId = req.user?.id;
+  // No identity, no agreement. requireAuth runs first on every route that uses
+  // this, so reaching here without one would be a wiring mistake - fail closed
+  // rather than fall through to the provider.
+  if (!userId) {
+    res.status(403).json({
+      error: 'ai data-sharing consent required',
+      code: 'ai_consent_required',
+    });
+    return;
+  }
+
+  let granted: boolean;
+  try {
+    granted = await hasAiConsent(userId);
+  } catch (err) {
+    // The lookup itself failed, which is not the same as the user saying no.
+    //
+    // It has to be caught here. Express 4 does not catch a rejection thrown
+    // out of async middleware, so without this the first request on a server
+    // whose migration has not been run takes down the process rather than
+    // returning anything. That is a live risk, not a theoretical one: this
+    // gate reads ai_consent_granted, and that column arrives with
+    // 20261122000000_ai_consent.sql.
+    //
+    // Answered 503 rather than 403, because "we could not check" must not be
+    // reported to somebody as "you declined" - and never by letting the
+    // request through, which would send their words to the provider on the
+    // strength of a failed check.
+    console.error('[consent] ai consent lookup failed', err);
+    res.status(503).json({
+      error: 'could not check AI data-sharing consent',
+      code: 'ai_consent_unavailable',
+    });
+    return;
+  }
+
+  if (!granted) {
+    res.status(403).json({
+      error: 'ai data-sharing consent required',
+      code: 'ai_consent_required',
+    });
+    return;
+  }
+  next();
 }
 
 /** Shape the current AI-consent state for the client. */
