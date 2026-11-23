@@ -240,8 +240,9 @@ void main() {
 
     test('the fallback address is the server that is actually running', () {
       // A phone that has never reached the website uses this, so it must not
-      // be left pointing at a host that has been retired.
-      expect(ApiConfig.hostedApi, 'https://ourmynd-server-3bvh.onrender.com');
+      // be left pointing at a host that has been retired. It has to agree with
+      // the primary in deploy/servers.json, which the group below checks.
+      expect(ApiConfig.hostedApi, 'https://ourmynd-server.onrender.com');
     });
 
     test('the file url is the live one unless a build overrides it', () {

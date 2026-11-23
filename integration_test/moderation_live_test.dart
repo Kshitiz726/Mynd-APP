@@ -2,6 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
+
+
+//Widget test with security left!
+
+
+
+
+
+
 import 'package:ourmynd/core/services/api_client.dart';
 import 'package:ourmynd/core/services/session_store.dart';
 import 'package:ourmynd/models/community/blocked_user.dart';

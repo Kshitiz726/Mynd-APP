@@ -23,8 +23,15 @@ class ApiConfig {
   /// Since build 20 this is only the last resort. [ServerDirectory] reads the
   /// live address from the website at launch, so this constant is what a phone
   /// uses before it has ever reached that file, or if the file is unreachable.
-  /// It was moved off ourmynd-server.onrender.com when that host was suspended.
-  static const String hostedApi = 'https://ourmynd-server-3bvh.onrender.com';
+  ///
+  /// It has to name whichever server is actually running, which is why it moves
+  /// when that changes: it went to ourmynd-server-3bvh when the original host
+  /// was suspended, and back again now that ourmynd-server is the one in
+  /// service. Both are permanently in the allowlist, so the standby needs no
+  /// release to be switched to - only `deploy/servers.json` changes for that.
+  /// This constant is the one piece that does take a build, because a phone
+  /// that has never reached the file has nothing else to go on.
+  static const String hostedApi = 'https://ourmynd-server.onrender.com';
 
   /// What this binary was built with: the dart-define if one was passed, else
   /// [hostedApi].

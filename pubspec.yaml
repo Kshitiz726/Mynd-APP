@@ -106,9 +106,11 @@ flutter:
   assets:
     - assets/audio/
     - assets/puter/
-    # The agent faces. Shipped rather than fetched: the avatar is on screen
-    # before anything else has loaded, and a coach with a missing face is worse
-    # than a coach with a plain one.
+    # The agent renders. No longer drawn by the app: OmCharacter paints the
+    # same creature as paths, which is what let it start moving its arms
+    # instead of sliding a picture up and down. These are kept as the design
+    # the drawing is held to, and they are about 780K of the bundle - safe to
+    # drop from this list once nothing needs to compare against them.
     - assets/agents/
     - assets/soul/
     - assets/sfx/
@@ -116,6 +118,17 @@ flutter:
     # mark the user tapped. flutter_launcher_icons only reads it at build time;
     # displaying it inside the app needs it shipped as well.
     - assets/branding/app_icon.png
+    # Inter and Atkinson Hyperlegible, shipped rather than fetched.
+    #
+    # google_fonts downloads from fonts.gstatic.com on first use by default,
+    # which sends every user's IP address to Google before they have agreed to
+    # anything. EU courts have repeatedly held that to be a GDPR breach, and it
+    # is undisclosed third-party transmission of exactly the kind App Review
+    # flagged elsewhere in this app. Bundling them removes the request, and
+    # also means the first launch is not dependent on a network round trip for
+    # the text to render. Both families are SIL Open Font License, so shipping
+    # them is permitted. Runtime fetching is turned off in AppTypography.
+    - assets/google_fonts/
 
   # The orb is generated on the GPU rather than decoded from a video, which is
   # why there is no longer an assets/video/ directory: fluid.mp4 and the still

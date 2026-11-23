@@ -16,9 +16,20 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   /// Call sites allowed to spend a coaching message.
   ///
-  /// Empty today, and that is the honest state of the app: the live coach runs
-  /// on Puter, so nothing in here talks to the metered route at all.
-  const conversational = <String>{};
+  /// One entry, and it is the real conversation. The coach no longer runs on
+  /// Puter: a live turn goes through [AiRouter], which picks the provider and
+  /// falls back to the built-in Groq backend. That backend is the metered
+  /// route, and metering it is the entire point, because that turn is the user
+  /// talking to the coach.
+  ///
+  /// Everything else in the app must stay off it. The feed, goals, mood,
+  /// memory, soul and brain dump all go to GroqService.extract on the
+  /// unmetered route, and they must keep doing so even though the chat has
+  /// moved: a provider migration is exactly the kind of change that quietly
+  /// drags internal calls onto the user's quota.
+  const conversational = <String>{
+    'lib/core/services/ai/ai_router.dart:20',
+  };
 
   test("the app's own work does not go through the metered coach route", () {
     final offenders = <String>[];
