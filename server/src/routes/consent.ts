@@ -29,6 +29,17 @@ import { requireAuth } from '../auth.js';
 export const PRIVACY_POLICY_VERSION = '2026-08-25';
 
 /**
+ * The version of the AI data-sharing disclosure this build asks people to
+ * agree to, before anything they type reaches the third-party AI provider.
+ *
+ * Bump it when the disclosure changes materially - a different provider, a new
+ * category of data sent - so that everyone whose agreement names an older
+ * version is asked again. Owned by the server, like the policy version, so a
+ * change reaches every installed client at once.
+ */
+export const AI_DISCLOSURE_VERSION = '2026-11-22';
+
+/**
  * The `user_state` documents that carry health-related information.
  *
  * A deliberately narrow list. `mood` is a record of mental state over time and
@@ -182,6 +193,147 @@ r.get('/consent/health/history', requireAuth, async (req, res, next) => {
     const events = await db.manyOrNone(
       `select granted, policy_version, source, occurred_at
          from health_consent_events
+        where user_id = $1
+        order by occurred_at desc
+        limit 100`,
+      [req.user.id],
+    );
+    res.json({ events });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ============ AI DATA-SHARING CONSENT ============
+//
+// The coach's replies come from a third-party AI provider (Groq), so the user's
+// messages leave the account to a company that is not us. 5.1.2(i) requires
+// agreement before that happens. Stored and shaped like health consent, but
+// kept separate because it is the floor the coach cannot run below, not the
+// optional enrichment health consent governs. See the migration for why.
+
+type AiConsentRow = {
+  ai_consent_granted: boolean | null;
+  ai_consent_decided_at: Date | null;
+  ai_consent_version: string | null;
+};
+
+/**
+ * Whether this user's messages may be sent to the third-party AI right now.
+ *
+ * Agreement given against a superseded disclosure version does not count, for
+ * the same reason it does not for health consent: a re-ask that still honoured
+ * the old answer would be cosmetic. Fails closed - any row we cannot read, or a
+ * version mismatch, is "no".
+ */
+export async function hasAiConsent(userId: string): Promise<boolean> {
+  const row = await db.oneOrNone<AiConsentRow>(
+    `select ai_consent_granted, ai_consent_decided_at, ai_consent_version
+       from users where id = $1`,
+    [userId],
+  );
+  if (!row) return false;
+  return row.ai_consent_granted === true &&
+    row.ai_consent_version === AI_DISCLOSURE_VERSION;
+}
+
+/** Shape the current AI-consent state for the client. */
+function describeAi(row: AiConsentRow | null) {
+  const granted = row?.ai_consent_granted ?? null;
+  const version = row?.ai_consent_version ?? null;
+  const stale = granted === true && version !== AI_DISCLOSURE_VERSION;
+  return {
+    granted: stale ? null : granted,
+    decidedAt: stale ? null : (row?.ai_consent_decided_at ?? null),
+    disclosureVersion: version,
+    currentDisclosureVersion: AI_DISCLOSURE_VERSION,
+    needsDecision: granted === null || stale,
+  };
+}
+
+/** The signed-in user's current AI data-sharing consent state. */
+r.get('/consent/ai', requireAuth, async (req, res, next) => {
+  try {
+    const row = await db.oneOrNone<AiConsentRow>(
+      `select ai_consent_granted, ai_consent_decided_at, ai_consent_version
+         from users where id = $1`,
+      [req.user.id],
+    );
+    res.json(describeAi(row));
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Record a decision. Body:
+ * { granted: boolean, source?: 'coach'|'settings'|'connect'|'retry' }.
+ *
+ * `granted` is required and has no default, for the same reason as health
+ * consent: a missing field treated as yes would be the bundled, pre-agreed
+ * consent the guideline forbids, moved from the UI to the API. The disclosure
+ * version is taken from the server, never the request.
+ */
+
+/**
+ * Where the answer was given. An allowlist, so a client cannot write arbitrary
+ * text into the audit trail, and an explicit one, so a new screen is a
+ * deliberate addition here rather than something that silently lands as
+ * 'coach'.
+ *
+ *   coach    - the gate in front of the conversation
+ *   settings - the AI data screen
+ *   connect  - the disclosure shown when connecting a provider, which is now
+ *              the first place most people meet it
+ *   retry    - a decision taken offline, reaching us on a later sync. The
+ *              answer is the user's; only its arrival is delayed.
+ */
+const AI_CONSENT_SOURCES = ['coach', 'settings', 'connect', 'retry'] as const;
+type AiConsentSource = (typeof AI_CONSENT_SOURCES)[number];
+
+r.post('/consent/ai', requireAuth, async (req, res, next) => {
+  try {
+    const granted = req.body?.granted;
+    if (typeof granted !== 'boolean') {
+      return res.status(400).json({ error: 'granted must be true or false' });
+    }
+    // Falls back rather than rejecting: an older or newer client naming a
+    // source we do not know must still be able to record the decision. Losing
+    // a consent answer over a label would be the worse failure by far.
+    const claimed = req.body?.source;
+    const source: AiConsentSource =
+      AI_CONSENT_SOURCES.includes(claimed) ? claimed : 'coach';
+
+    // One transaction, so the evidence and the gate cannot disagree.
+    const row = await db.tx(async (t) => {
+      await t.none(
+        `insert into ai_consent_events (user_id, granted, disclosure_version, source)
+         values ($1, $2, $3, $4)`,
+        [req.user.id, granted, AI_DISCLOSURE_VERSION, source],
+      );
+      return t.one<AiConsentRow>(
+        `update users
+            set ai_consent_granted    = $2,
+                ai_consent_decided_at = now(),
+                ai_consent_version    = $3
+          where id = $1
+        returning ai_consent_granted, ai_consent_decided_at, ai_consent_version`,
+        [req.user.id, granted, AI_DISCLOSURE_VERSION],
+      );
+    });
+
+    res.json(describeAi(row));
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** The AI-consent audit trail for this account, newest first. */
+r.get('/consent/ai/history', requireAuth, async (req, res, next) => {
+  try {
+    const events = await db.manyOrNone(
+      `select granted, disclosure_version, source, occurred_at
+         from ai_consent_events
         where user_id = $1
         order by occurred_at desc
         limit 100`,

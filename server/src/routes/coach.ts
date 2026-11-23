@@ -4,6 +4,7 @@ import { config } from '../config.js';
 import { db } from '../db.js';
 import { requireAuth } from '../auth.js';
 import { billingStore, isPremium, type Tier } from '../services/billing.js';
+import { hasAiConsent } from './consent.js';
 
 /**
  * The coach model, proxied.
@@ -271,6 +272,20 @@ r.post('/coach/completions', requireAuth, async (req, res, next) => {
   try {
     if (!config.groqApiKey) {
       return res.status(503).json({ error: 'coach is not configured on the server' });
+    }
+
+    // The permission gate, enforced where the data actually leaves. The app
+    // asks before the first turn, but the app is not the thing that can be
+    // trusted to - a modified client, or a direct call, would skip the screen
+    // and not the send. So the send itself is refused here when there is no
+    // agreement on file. Only where there is a database to hold the record:
+    // dev without one has no users table to consult and no real provider key
+    // either, so there is nothing to gate.
+    if (config.hasDb && !(await hasAiConsent(req.user.id))) {
+      return res.status(403).json({
+        error: 'ai data-sharing consent required',
+        code: 'ai_consent_required',
+      });
     }
 
     const parsed = CompletionRequest.safeParse(req.body);
