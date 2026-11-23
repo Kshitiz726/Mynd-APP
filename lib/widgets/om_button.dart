@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../core/constants/app_durations.dart';
 import '../core/constants/app_spacing.dart';
 import '../core/theme/app_colors.dart';
 import '../providers/settings_provider.dart';
+import 'om_tappable.dart' show softPress;
 
 enum OmButtonVariant { accent, primary, soft, ghost }
 
@@ -48,11 +48,19 @@ class _OmButtonState extends State<OmButton> {
 
     final (Color bg, Color fg, Gradient? gradient, List<BoxShadow> shadow, BoxBorder? border) =
         switch (widget.variant) {
+      // Ink on the orange, not white. White on this peach measures 2.04:1 in
+      // light and 1.88:1 in dark - the least readable thing in the app, on its
+      // most-pressed button ("start pomodoro"). Ink on the same fill is 8.99:1
+      // and 9.76:1, and reads the way a warm button is meant to.
+      //
+      // The halo is also cut in the dark. A 22px blur of saturated orange at
+      // 0.42 over a near-black page is not a shadow, it is a glow, and it is
+      // exactly the "too much gradient" the dark theme kept being accused of.
       OmButtonVariant.accent => (
           c.accent,
-          Colors.white,
+          OmColors.onFill(c.accent),
           null,
-          [BoxShadow(color: c.accent.withValues(alpha: 0.42), blurRadius: 22, spreadRadius: -2, offset: const Offset(0, 10))],
+          [BoxShadow(color: c.accent.withValues(alpha: context.isDark ? 0.20 : 0.42), blurRadius: 22, spreadRadius: -2, offset: const Offset(0, 10))],
           null,
         ),
       // The premium CTA: brand gradient + a soft indigo glow.
@@ -60,7 +68,7 @@ class _OmButtonState extends State<OmButton> {
           c.primary,
           Colors.white,
           c.brandGradient,
-          [BoxShadow(color: c.primary.withValues(alpha: 0.40), blurRadius: 24, spreadRadius: -2, offset: const Offset(0, 12))],
+          [BoxShadow(color: c.primary.withValues(alpha: context.isDark ? 0.18 : 0.40), blurRadius: 24, spreadRadius: -2, offset: const Offset(0, 12))],
           null,
         ),
       OmButtonVariant.soft => (
@@ -73,10 +81,15 @@ class _OmButtonState extends State<OmButton> {
       OmButtonVariant.ghost => (Colors.transparent, c.text2, null, const <BoxShadow>[], null),
     };
 
+    // The same cushioned press as OmTappable, which this widget does not go
+    // through. Slow enough in that it reads as give rather than a click, and
+    // settling on the way out without overshooting back past rest.
     final child = AnimatedScale(
-      scale: _pressed ? 0.97 : 1,
-      duration: reduceMotion ? Duration.zero : AppDurations.fast,
-      curve: Curves.easeOutCubic,
+      scale: _pressed ? softPress(0.97) : 1,
+      duration: reduceMotion
+          ? Duration.zero
+          : Duration(milliseconds: _pressed ? 140 : 320),
+      curve: _pressed ? Curves.easeOutSine : Curves.easeOutCubic,
       child: Container(
         width: widget.expand ? double.infinity : null,
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),

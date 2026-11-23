@@ -75,7 +75,13 @@ class OmGlass extends StatelessWidget {
     Widget pane = ClipRRect(
       borderRadius: radius,
       child: BackdropFilter(
-        filter: lowStim
+        // The saturation boost is a light-mode trick. Frosted glass over a
+        // bright, busy page looks washed out without it, so the colours behind
+        // get pushed back up. Over a near-black page there is almost nothing
+        // to wash out, and the same boost instead takes the few saturated
+        // pixels that are there - a brand bubble, an accent dot - and smears
+        // them across the pane as coloured drift. Plain blur in dark.
+        filter: lowStim || dark
             ? ImageFilter.blur(sigmaX: blur, sigmaY: blur)
             : ImageFilter.compose(
                 outer: const ColorFilter.matrix(_saturate150),
@@ -95,10 +101,18 @@ class OmGlass extends StatelessWidget {
           ),
           child: Stack(
             children: [
-              if (sheen && !lowStim)
+              if (sheen && !lowStim && !dark)
                 // The lit edge. A diagonal wash that dies out well before the
                 // middle, so it is an edge catching light rather than a
                 // gradient across the whole pane.
+                //
+                // Off in dark. The effect is a surface catching light from
+                // somewhere, which is a thing that happens on a lit page; on a
+                // dark one there is no light for it to catch, so a white
+                // diagonal over every card reads as a gradient somebody added
+                // for the sake of it. Dark surfaces separate by their own fill
+                // and a hairline border instead, which is how dark interfaces
+                // that look deliberate do it.
                 Positioned.fill(
                   child: IgnorePointer(
                     child: DecoratedBox(

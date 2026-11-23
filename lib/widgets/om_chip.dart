@@ -30,15 +30,22 @@ class OmChip extends StatelessWidget {
         curve: Curves.easeOutCubic,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
         decoration: BoxDecoration(
-          color: selected ? c.primary : c.surfaceAlt,
+          // The brand indigo, not c.primary. c.primary is the *light*
+          // periwinkle in dark mode, so a selected chip was a pale fill with
+          // a white label on it at 2.40:1 - the backlog filter you had just
+          // picked was the one you could no longer read. brandSolid is the
+          // deep end in both themes, and it matches the selected length tiles
+          // and the coach's bubbles.
+          color: selected ? c.brandSolid : c.surfaceAlt,
           borderRadius: BorderRadius.circular(AppRadius.chip),
           border: Border.all(
-            color: selected ? c.primary : c.border.withValues(alpha: 0.6),
+            color: selected ? c.brandSolid : c.border.withValues(alpha: 0.6),
           ),
           boxShadow: selected
               ? [
                   BoxShadow(
-                    color: c.primary.withValues(alpha: 0.28),
+                    color: c.primary
+                        .withValues(alpha: context.isDark ? 0.14 : 0.28),
                     blurRadius: 12,
                     offset: const Offset(0, 4),
                   ),
@@ -49,13 +56,15 @@ class OmChip extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (icon != null) ...[
-              Icon(icon, size: 15, color: selected ? Colors.white : c.text2),
+              Icon(icon,
+                  size: 15,
+                  color: selected ? OmColors.onFill(c.brandSolid) : c.text2),
               const SizedBox(width: 6),
             ],
             Text(
               label,
               style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: selected ? Colors.white : c.text,
+                    color: selected ? OmColors.onFill(c.brandSolid) : c.text,
                     fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
                     height: 1.3,
                   ),

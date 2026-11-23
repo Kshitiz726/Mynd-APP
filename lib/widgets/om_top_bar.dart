@@ -138,7 +138,11 @@ class OmTopBarAction extends StatelessWidget {
             alignment: Alignment.center,
             clipBehavior: Clip.none,
             children: [
-              Icon(icon, size: 20, color: filled ? Colors.white : c.text),
+              // White only holds on a dark fill, and c.primary is the light
+              // periwinkle in dark mode: 2.40:1, under the 3:1 an icon needs.
+              Icon(icon,
+                  size: 20,
+                  color: filled ? OmColors.onFill(c.primary) : c.text),
               if (showDot)
                 Positioned(
                   right: 9,
