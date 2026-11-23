@@ -1,0 +1,5 @@
+{
+  "primary": "https://ourmynd-server.onrender.com",
+  "api": "https://ourmynd-server.onrender.com",
+  "help": "The live address for the OurMynd app. The app reads this file at launch and uses the address in it, so moving the app to another server is an edit here plus a publish - no new build, no App Review. One server runs at a time: ourmynd-server holds the database and the JWT_SECRET, and ourmynd-server-3bvh is suspended. To switch, put the other address in both fields and publish; the app already trusts it, so no release is needed. Only list a second address here once both servers share one DATABASE_URL and one JWT_SECRET - otherwise a failover signs everybody out instead of saving them. The app only accepts addresses it trusts (lib/core/services/server_directory.dart), so editing this file cannot send anybody's session somewhere new. Source of truth: deploy/servers.json in the app repo."
+}
