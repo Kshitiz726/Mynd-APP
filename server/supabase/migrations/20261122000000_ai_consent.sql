@@ -55,3 +55,52 @@ create index if not exists ai_consent_events_user_idx
 
 -- No update/delete path in the app: rows go only when the account does, by the
 -- cascade above. An audit trail the audited party can edit is not one.
+
+-- ============ ROW LEVEL SECURITY ============
+-- Same treatment as health_consent_events, which this table is the sibling of.
+-- Without it this would be the one consent table in the schema that any
+-- connection pointed at this database could read in full.
+--
+-- Order matters. The hardening migration uses `force row level security`, not
+-- just `enable`, because enable alone exempts the table owner - which is the
+-- role the API connects as, so the policies would be decorative. The flip side
+-- is that forcing it before the server has a policy of its own locks the
+-- server out of its own table. So: policies first, switch on last.
+
+-- The API server's own access. The role is read from the policy that already
+-- exists on health_consent_events rather than assumed, because `current_user`
+-- is not the same thing when this runs through the Supabase SQL editor as it
+-- is when it runs through `npm run migrate`, and guessing wrong here is what
+-- locks the server out.
+do $$
+declare api_role text;
+begin
+  select roles[1] into api_role
+    from pg_policies
+   where tablename = 'health_consent_events'
+     and policyname = 'api_server_full_access';
+
+  if api_role is null then
+    raise exception 'no api_server_full_access policy on health_consent_events; refusing to force RLS and lock the API out';
+  end if;
+
+  execute 'drop policy if exists api_server_full_access on ai_consent_events';
+  execute format('create policy api_server_full_access on ai_consent_events to %I using (true) with check (true)', api_role);
+end $$;
+
+-- Owner-only for any other role: a Supabase anon/authenticated client, a BI
+-- tool. Reads auth.uid() where Supabase provides it, and is skipped where it
+-- does not exist rather than creating a policy that references a missing
+-- function.
+do $$
+begin
+  if exists (select 1 from pg_proc where proname = 'uid'
+              and pronamespace = (select oid from pg_namespace where nspname = 'auth')) then
+    drop policy if exists own_rows on ai_consent_events;
+    create policy own_rows on ai_consent_events
+      using (user_id = auth.uid()) with check (user_id = auth.uid());
+  end if;
+end $$;
+
+alter table ai_consent_events enable row level security;
+alter table ai_consent_events force  row level security;
