@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/config/pro_features.dart';
 import '../../core/constants/app_spacing.dart';
+import '../../core/routes/app_routes.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/haptics.dart';
 import '../../core/utils/om_icons.dart';
@@ -11,6 +13,7 @@ import '../../core/utils/toast.dart';
 import '../../models/feed_post.dart';
 import '../../providers/coach_provider.dart';
 import '../../providers/feed_provider.dart';
+import '../../providers/premium_provider.dart';
 import '../../providers/nav_provider.dart';
 import '../../providers/agent_provider.dart';
 import '../../widgets/agent_avatar.dart';
@@ -35,6 +38,9 @@ class FeedScreen extends StatefulWidget {
 class _FeedScreenState extends State<FeedScreen> {
   bool _editing = false;
 
+  bool _canCustomise(BuildContext context) => ProFeatures.canCustomiseFeed(
+      premium: context.read<PremiumProvider>().isPremium);
+
   @override
   void initState() {
     super.initState();
@@ -58,7 +64,17 @@ class _FeedScreenState extends State<FeedScreen> {
           children: [
             _FeedHeader(
               editing: _editing,
+              locked: !_canCustomise(context),
               onToggleEdit: () {
+                // Rewriting the instructions is what the feed is generated
+                // from, so it is the whole of "customise your feed". A free
+                // user still gets a feed, built from the default brief; what
+                // Pro buys is saying what it should be about.
+                if (!_canCustomise(context)) {
+                  Haptics.light();
+                  Navigator.of(context).pushNamed(AppRoutes.paywall);
+                  return;
+                }
                 Haptics.light();
                 setState(() => _editing = !_editing);
               },
@@ -103,9 +119,14 @@ class _FeedScreenState extends State<FeedScreen> {
                     if (feed.editions.isEmpty && feed.loaded && !feed.writing)
                       _FeedEmpty(
                         problem: feed.problem,
-                        onEdit: () => setState(() => _editing = true),
-                        onRetry: () =>
-                            context.read<FeedProvider>().refresh(),
+                        onEdit: () {
+                          if (!_canCustomise(context)) {
+                            Navigator.of(context).pushNamed(AppRoutes.paywall);
+                            return;
+                          }
+                          setState(() => _editing = true);
+                        },
+                        onRetry: () => context.read<FeedProvider>().refresh(),
                       ),
 
                     for (final edition in feed.editions) ...[
@@ -120,8 +141,7 @@ class _FeedScreenState extends State<FeedScreen> {
                               ?.copyWith(fontWeight: FontWeight.w800),
                         ),
                       ),
-                      for (final post in edition.posts)
-                        _PostCard(post: post),
+                      for (final post in edition.posts) _PostCard(post: post),
                     ],
                   ],
                 ),
@@ -136,9 +156,19 @@ class _FeedScreenState extends State<FeedScreen> {
 
 /// Mynd's face, its name, and the way into the instructions.
 class _FeedHeader extends StatelessWidget {
-  const _FeedHeader({required this.editing, required this.onToggleEdit});
+  const _FeedHeader({
+    required this.editing,
+    required this.locked,
+    required this.onToggleEdit,
+  });
 
   final bool editing;
+
+  /// Still tappable when locked - it routes to the paywall rather than doing
+  /// nothing. A control that silently ignores a tap reads as broken, and the
+  /// person tapping it is the one considering paying.
+  final bool locked;
+
   final VoidCallback onToggleEdit;
 
   @override
@@ -154,68 +184,75 @@ class _FeedHeader extends StatelessWidget {
       child: SizedBox(
         width: double.infinity,
         child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              AgentAvatar(
-                agent: context.watch<AgentProvider>().agent,
-                size: 72,
-                mood: AgentMood.idle,
-              ),
-              // The pill overlaps the face's lower edge, as in the reference,
-              // rather than sitting under it as a separate label.
-              Transform.translate(
-                offset: const Offset(0, -12),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: c.surfaceAlt,
-                    borderRadius: BorderRadius.circular(AppRadius.pill),
+          alignment: Alignment.center,
+          children: [
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AgentAvatar(
+                  agent: context.watch<AgentProvider>().agent,
+                  size: 72,
+                  mood: AgentMood.idle,
+                ),
+                // The pill overlaps the face's lower edge, as in the reference,
+                // rather than sitting under it as a separate label.
+                Transform.translate(
+                  offset: const Offset(0, -12),
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: c.surfaceAlt,
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
+                    ),
+                    child: Text(
+                      context.watch<AgentProvider>().agent.name,
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w700),
+                    ),
                   ),
-                  child: Text(
-                    context.watch<AgentProvider>().agent.name,
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w700),
+                ),
+              ],
+            ),
+            Positioned(
+              right: 0,
+              child: Semantics(
+                label: locked
+                    ? 'feed instructions, included with Pro'
+                    : 'feed instructions',
+                button: true,
+                child: OmTappable(
+                  onTap: onToggleEdit,
+                  feedback: OmTapFeedback.none,
+                  pressedScale: 0.9,
+                  child: Container(
+                    width: 46,
+                    height: 46,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: editing
+                          ? c.primary.withValues(alpha: 0.16)
+                          : c.surfaceAlt,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      OmIcons.byName(
+                          locked ? 'lock' : (editing ? 'close' : 'sliders')),
+                      size: 20,
+                      color: editing
+                          ? c.primary
+                          : locked
+                              ? c.text2
+                              : c.text,
+                    ),
                   ),
                 ),
-              ),
-            ],
-          ),
-          Positioned(
-            right: 0,
-            child: Semantics(
-              label: 'feed instructions',
-              button: true,
-              child: OmTappable(
-              onTap: onToggleEdit,
-              feedback: OmTapFeedback.none,
-              pressedScale: 0.9,
-              child: Container(
-                width: 46,
-                height: 46,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: editing
-                      ? c.primary.withValues(alpha: 0.16)
-                      : c.surfaceAlt,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  OmIcons.byName(editing ? 'close' : 'sliders'),
-                  size: 20,
-                  color: editing ? c.primary : c.text,
-                ),
-              ),
               ),
             ),
-          ),
-        ],
-      ),
+          ],
+        ),
       ),
     );
   }
@@ -309,8 +346,7 @@ class _PostCard extends StatelessWidget {
                         if (host != null && host != post.source) ...[
                           const SizedBox(height: 2),
                           Text(host,
-                              style:
-                                  TextStyle(color: c.text2, fontSize: 13)),
+                              style: TextStyle(color: c.text2, fontSize: 13)),
                         ],
                       ],
                     ),
@@ -391,8 +427,8 @@ class _PostCard extends StatelessWidget {
                   children: [
                     Text(
                       post.title,
-                      style: t.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w800, height: 1.25),
+                      style: t.titleLarge
+                          ?.copyWith(fontWeight: FontWeight.w800, height: 1.25),
                     ),
                     const SizedBox(height: 6),
                     _PostBody(post: post, onOpen: () => _openSource(context)),
@@ -425,7 +461,8 @@ class _PostCard extends StatelessWidget {
                             // hotlinked. The post reads perfectly without one,
                             // so a failure collapses the picture rather than
                             // leaving a broken glyph under real writing.
-                            errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                            errorBuilder: (_, __, ___) =>
+                                const SizedBox.shrink(),
                             loadingBuilder: (ctx, child, progress) =>
                                 progress == null
                                     ? child
@@ -439,7 +476,6 @@ class _PostCard extends StatelessWidget {
               ),
             ],
           ),
-
           const SizedBox(height: AppSpacing.lg),
           Row(
             children: [
@@ -625,16 +661,16 @@ class _ActionIcon extends StatelessWidget {
       label: label,
       button: true,
       child: OmTappable(
-      onTap: onTap,
-      feedback: OmTapFeedback.none,
-      pressedScale: 0.88,
-      child: Icon(
-        filled ? OmIcons.solid(icon) : OmIcons.byName(icon),
-        size: 22,
-        // A liked post is marked in the app's accent, not in red: the heart is
-        // a bookmark here, and nothing about it leaves the phone.
-        color: filled ? c.primary : c.text2,
-      ),
+        onTap: onTap,
+        feedback: OmTapFeedback.none,
+        pressedScale: 0.88,
+        child: Icon(
+          filled ? OmIcons.solid(icon) : OmIcons.byName(icon),
+          size: 22,
+          // A liked post is marked in the app's accent, not in red: the heart is
+          // a bookmark here, and nothing about it leaves the phone.
+          color: filled ? c.primary : c.text2,
+        ),
       ),
     );
   }

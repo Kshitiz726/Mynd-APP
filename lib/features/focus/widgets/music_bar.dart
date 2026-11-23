@@ -3,16 +3,21 @@ import 'dart:async';
 import 'package:audioplayers/audioplayers.dart' as ap;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/config/pro_features.dart';
+import '../../../core/routes/app_routes.dart';
 import '../../../core/constants/app_spacing.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../core/services/api_client.dart';
 import '../../../core/utils/music_link.dart';
+import '../../../core/utils/om_icons.dart';
 import '../../../core/utils/music_playback.dart';
 import '../../../core/utils/toast.dart';
+import '../../../providers/premium_provider.dart';
 import '../../../models/room_music.dart';
 import '../../../widgets/om_tappable.dart';
 
@@ -299,9 +304,8 @@ class _MusicBarState extends State<MusicBar> {
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 12,
-                  color: widget.onScene
-                      ? Colors.white70
-                      : context.omColors.text2,
+                  color:
+                      widget.onScene ? Colors.white70 : context.omColors.text2,
                 ),
               ),
             ],
@@ -475,6 +479,14 @@ class _MusicLinkSheet extends StatefulWidget {
 }
 
 class _MusicLinkSheetState extends State<_MusicLinkSheet> {
+  /// Whether music from the internet is out of reach on this plan.
+  ///
+  /// Read from the provider each build rather than captured once, so that
+  /// subscribing and coming back to this sheet shows the field rather than
+  /// the upsell.
+  bool get _streamLocked => !ProFeatures.canStreamMusic(
+      premium: context.watch<PremiumProvider>().isPremium);
+
   final _controller = TextEditingController();
 
   /// Errors from picking, kept apart from the paste field's own error.
@@ -579,39 +591,78 @@ class _MusicLinkSheetState extends State<_MusicLinkSheet> {
               style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 4),
           Text(
-            'type what you want to hear and the closest match plays. or '
-            'paste a link: an audio link plays here, while YouTube and '
-            'Spotify open in their own apps.',
+            _streamLocked
+                ? 'play a track from this device on any plan. searching for '
+                    'music and pasting links are part of Pro.'
+                : 'type what you want to hear and the closest match plays. or '
+                    'paste a link: an audio link plays here, while YouTube and '
+                    'Spotify open in their own apps.',
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: AppSpacing.lg),
-          TextField(
-            controller: _controller,
-            autofocus: true,
-            textInputAction: TextInputAction.done,
-            onChanged: (_) => setState(() {}),
-            decoration: InputDecoration(
-              hintText: 'a song name, or paste a link',
-              errorText: widget.error ?? _pickError ?? _searchError,
-              suffixIcon: _searching
-                  ? const Padding(
-                      padding: EdgeInsets.all(12),
-                      child: SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+          // The search field is the whole of "music from the internet", so it
+          // is the thing that is gated. The file picker below stays open on
+          // every plan: a focus timer that cannot play anything at all would
+          // be a worse free tier than the one that exists today, and this is
+          // meant to add a reason to upgrade rather than take something away.
+          if (_streamLocked)
+            OmTappable(
+              onTap: () {
+                Navigator.of(context).pop();
+                Navigator.of(context).pushNamed(AppRoutes.paywall);
+              },
+              child: Container(
+                width: double.infinity,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                decoration: BoxDecoration(
+                  color: c.primary.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(AppRadius.control),
+                  border: Border.all(color: c.primary.withValues(alpha: 0.35)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(OmIcons.byName('lock'), size: 16, color: c.primary),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Search any track with Pro',
+                        style: TextStyle(
+                            color: c.primary, fontWeight: FontWeight.w700),
                       ),
-                    )
-                  : null,
-              filled: true,
-              fillColor: c.surfaceAlt,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide.none,
+                    ),
+                  ],
+                ),
               ),
+            )
+          else
+            TextField(
+              controller: _controller,
+              autofocus: true,
+              textInputAction: TextInputAction.done,
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(
+                hintText: 'a song name, or paste a link',
+                errorText: widget.error ?? _pickError ?? _searchError,
+                suffixIcon: _searching
+                    ? const Padding(
+                        padding: EdgeInsets.all(12),
+                        child: SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    : null,
+                filled: true,
+                fillColor: c.surfaceAlt,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+              onSubmitted: _submitRaw,
             ),
-            onSubmitted: _submitRaw,
-          ),
           if (preview != null) ...[
             const SizedBox(height: AppSpacing.sm),
             Row(

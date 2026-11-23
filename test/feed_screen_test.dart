@@ -10,7 +10,9 @@ import 'package:ourmynd/core/theme/app_theme.dart';
 import 'package:ourmynd/features/feed/feed_screen.dart';
 import 'package:ourmynd/models/agent.dart';
 import 'package:ourmynd/models/feed_post.dart';
+import 'package:ourmynd/core/config/store_policy.dart';
 import 'package:ourmynd/providers/agent_provider.dart';
+import 'package:ourmynd/providers/premium_provider.dart';
 import 'package:ourmynd/providers/coach_provider.dart';
 import 'package:ourmynd/providers/energy_provider.dart';
 import 'package:ourmynd/providers/feed_provider.dart';
@@ -32,6 +34,12 @@ import 'package:ourmynd/providers/task_provider.dart';
 /// already on disk, which is the state the screen is in every time it is
 /// opened after the first.
 void main() {
+  // These exercise the instructions editor, which is a Pro feature now. A
+  // build that cannot sell hands the paid features out, which is the lever
+  // that already exists for exactly this - no fake entitlement needed.
+  setUp(() => StorePolicy.debugCanSellOverride = false);
+  tearDown(() => StorePolicy.debugCanSellOverride = null);
+
   TestWidgetsFlutterBinding.ensureInitialized();
 
   /// Bounded pumps, not pumpAndSettle.
@@ -75,6 +83,8 @@ void main() {
           ChangeNotifierProvider(create: (_) => NavProvider()),
           ChangeNotifierProvider(create: (_) => MotivationProvider()),
           ChangeNotifierProvider(create: (_) => AgentProvider()),
+          // The feed gates its instructions editor on entitlement now.
+          ChangeNotifierProvider(create: (_) => PremiumProvider()),
           // Built out rather than faked: Discuss hands a post to the real
           // coach, and a stub here would pass whatever that call became.
           ChangeNotifierProvider(

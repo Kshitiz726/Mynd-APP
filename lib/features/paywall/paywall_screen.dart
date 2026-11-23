@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/config/pro_features.dart';
 import '../../core/constants/app_spacing.dart';
 import '../../core/services/billing_service.dart';
 import '../../core/theme/app_colors.dart';
@@ -45,11 +46,20 @@ class _TierInfo {
 ///
 /// Every line here has to be something the app actually does, checked against
 /// the code that enforces it, because this screen is the one place where a
-/// vague claim becomes a charge on somebody's card. Two things are gated
-/// today and only two: the daily message cap (coach_screen.dart,
-/// kFreeCoachMessageLimit) and editing your memory by hand
-/// (memory_screen.dart). Nothing else in the app reads the tier at all, so
-/// nothing else may be claimed here.
+/// vague claim becomes a charge on somebody's card - and because App Review
+/// opens the app, looks for what the subscription promised, and rejects the
+/// build when the two disagree.
+///
+/// Each benefit below resolves to a gate in ProFeatures:
+///
+///   unlimited messages  -> coach_screen.dart, kCoachWeeklyLimit
+///   every coach         -> ProFeatures.agentAvailable, agent_picker_screen
+///   streaming music     -> ProFeatures.canStreamMusic, music_bar
+///   feed customisation  -> ProFeatures.canCustomiseFeed, feed_screen
+///   bigger memory       -> ProFeatures.memoryContext, coach_screen
+///   editable memory     -> ProFeatures.canEditMemory, memory_screen
+///
+/// Nothing may be added here without a gate behind it first.
 ///
 /// One paid tier, not two. There used to be a Plus and a Pro, and Pro's only
 /// distinct benefit was "everything in Plus" - it unlocked nothing Plus did
@@ -67,9 +77,11 @@ const _tiers = [
     tagline: 'Talk to Mynd as much as you need.',
     benefits: [
       'Unlimited messages with Mynd',
-      'Edit your memory by hand',
-      'Everything in the free plan',
-      'Support a small, independent app',
+      'Every coach, not just Ember',
+      'Search and stream any music while you focus',
+      'Make the Feed about what you choose',
+      'A memory ${ProFeatures.proMemoryContext ~/ ProFeatures.freeMemoryContext}x '
+          'deeper, and editable by hand',
     ],
     colors: [Color(0xFF6D3BF0), Color(0xFFF0B24A)],
   ),
@@ -81,10 +93,11 @@ const _tiers = [
 /// looks like: there is no task cap and no habit cap anywhere in the app, so
 /// the old "3 active tasks max" and "1 habit tracker" were describing limits
 /// that do not exist and undersold the free plan to no purpose.
-const _freeBenefits = [
+final _freeBenefits = [
   '5 messages a day with Mynd',
+  'Ember, your starting coach',
   'Unlimited tasks, habits and notes',
-  'Focus sessions, rooms and ambience',
+  'Focus sessions, rooms and music from your device',
   'Your full planner and reminders',
   'Read your memory, but not edit it',
 ];

@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/config/pro_features.dart';
+
 import '../core/services/groq_service.dart';
 import '../models/user_memory.dart';
 import 'health_consent_provider.dart';
@@ -293,7 +295,12 @@ than inventing a personality.''',
 
   /// What the coach is given. Empty string when there is nothing worth sending,
   /// so the prompt builder can skip the block entirely.
-  String get promptBlock {
+  ///
+  /// [parkedLimit] is how many parked thoughts to include, which is one of the
+  /// things a subscription buys. Defaulted to the free allowance rather than
+  /// required, so a caller that has not been taught about entitlement gives
+  /// away less rather than more.
+  String promptBlock({int parkedLimit = ProFeatures.freeMemoryContext}) {
     final named = _preferredName != null && _preferredName!.isNotEmpty;
     if (_memory.isEmpty && _parked.isEmpty && !named) return '';
     final buffer = StringBuffer();
@@ -304,7 +311,7 @@ than inventing a personality.''',
       buffer.writeln('WHAT YOU KNOW ABOUT THIS USER:');
       buffer.writeln(_memory.text);
     }
-    final recent = _parked.take(5).toList();
+    final recent = _parked.take(parkedLimit).toList();
     if (recent.isNotEmpty) {
       buffer.writeln('\nThoughts they parked recently (do not list these back '
           'unless they bring one up):');

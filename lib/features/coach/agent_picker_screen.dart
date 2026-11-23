@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/config/pro_features.dart';
 import '../../core/constants/app_spacing.dart';
+import '../../core/routes/app_routes.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/haptics.dart';
 import '../../core/utils/om_icons.dart';
 import '../../models/agent.dart';
 import '../../providers/agent_provider.dart';
 import '../../providers/coach_provider.dart';
+import '../../providers/premium_provider.dart';
 import '../../widgets/agent_avatar.dart';
 import '../../widgets/om_back_button.dart';
 import '../../widgets/om_tappable.dart';
@@ -31,6 +34,7 @@ class AgentPickerScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.omColors;
     final agents = context.watch<AgentProvider>();
+    final premium = context.watch<PremiumProvider>().isPremium;
 
     return Scaffold(
       backgroundColor: c.bg,
@@ -40,7 +44,8 @@ class AgentPickerScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(8, AppSpacing.md, AppSpacing.screenH, 0),
+              padding: const EdgeInsets.fromLTRB(
+                  8, AppSpacing.md, AppSpacing.screenH, 0),
               child: Row(
                 children: [
                   OmBackButton(onTap: () => Navigator.of(context).maybePop()),
@@ -83,12 +88,23 @@ class AgentPickerScreen extends StatelessWidget {
                       agent: a,
                       selected: a.id == agents.selectedId,
                       customised: agents.isCustomised(a),
+                      // Locked rather than hidden. Somebody deciding whether
+                      // to subscribe should be able to see what the other
+                      // coaches are; a hidden feature sells nothing and reads
+                      // as the app having only one.
+                      locked:
+                          !ProFeatures.agentAvailable(a.id, premium: premium),
                       onSelect: () {
+                        if (!ProFeatures.agentAvailable(a.id,
+                            premium: premium)) {
+                          Haptics.light();
+                          Navigator.of(context).pushNamed(AppRoutes.paywall);
+                          return;
+                        }
                         Haptics.success();
                         agents.select(a.id);
                       },
-                      onConfigure: () =>
-                          AgentSettingsScreen.open(context, a),
+                      onConfigure: () => AgentSettingsScreen.open(context, a),
                     ),
                 ],
               ),
@@ -134,8 +150,9 @@ class _UsageCardState extends State<_UsageCard> {
 
     final uncapped = limit == null && used != null;
     final known = used != null;
-    final fraction =
-        (limit == null || limit == 0 || used == null) ? 0.0 : (used / limit).clamp(0.0, 1.0);
+    final fraction = (limit == null || limit == 0 || used == null)
+        ? 0.0
+        : (used / limit).clamp(0.0, 1.0);
     final left = coach.remainingToday;
 
     return Container(
@@ -215,6 +232,7 @@ class _AgentCard extends StatelessWidget {
   const _AgentCard({
     required this.agent,
     required this.selected,
+    required this.locked,
     required this.customised,
     required this.onSelect,
     required this.onConfigure,
@@ -222,6 +240,10 @@ class _AgentCard extends StatelessWidget {
 
   final Agent agent;
   final bool selected;
+
+  /// Shown, but not yours yet. See the note at the call site for why these are
+  /// not simply hidden.
+  final bool locked;
   final bool customised;
   final VoidCallback onSelect;
   final VoidCallback onConfigure;
@@ -257,15 +279,17 @@ class _AgentCard extends StatelessWidget {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  AgentAvatar(
-                    agent: agent,
-                    size: 62,
-                    // Selected one is alive; the rest are still, so the eye
-                    // goes to the current choice instead of to four things
-                    // moving at once.
-                    mood: selected ? AgentMood.idle : AgentMood.idle,
-                    showRing: selected,
-                  ),
+                  Opacity(
+                      opacity: locked ? 0.45 : 1,
+                      child: AgentAvatar(
+                        agent: agent,
+                        size: 62,
+                        // Selected one is alive; the rest are still, so the eye
+                        // goes to the current choice instead of to four things
+                        // moving at once.
+                        mood: selected ? AgentMood.idle : AgentMood.idle,
+                        showRing: selected,
+                      )),
                   const SizedBox(width: AppSpacing.lg),
                   Expanded(
                     child: Column(
@@ -280,6 +304,35 @@ class _AgentCard extends StatelessWidget {
                             if (selected)
                               Icon(Icons.check_circle_rounded,
                                   size: 19, color: agent.accent),
+                            // A word, not just a padlock glyph. "PRO" says
+                            // what the thing costs; a padlock on its own only
+                            // says no, and leaves somebody guessing whether
+                            // it is a subscription or something they have to
+                            // unlock by using the app.
+                            if (locked)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: agent.accent.withValues(alpha: 0.16),
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(OmIcons.byName('lock'),
+                                        size: 11, color: agent.accent),
+                                    const SizedBox(width: 4),
+                                    Text('PRO',
+                                        style: TextStyle(
+                                          color: agent.accent,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w900,
+                                          letterSpacing: 0.5,
+                                        )),
+                                  ],
+                                ),
+                              ),
                           ],
                         ),
                         const SizedBox(height: 2),
@@ -296,7 +349,8 @@ class _AgentCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: AppSpacing.lg),
-              Text(agent.description, style: t.bodyLarge?.copyWith(height: 1.5)),
+              Text(agent.description,
+                  style: t.bodyLarge?.copyWith(height: 1.5)),
               const SizedBox(height: AppSpacing.md),
               Container(
                 padding: const EdgeInsets.symmetric(
@@ -307,8 +361,7 @@ class _AgentCard extends StatelessWidget {
                 ),
                 child: Text(
                   agent.bestFor,
-                  style: TextStyle(
-                      color: c.text, height: 1.45, fontSize: 13.5),
+                  style: TextStyle(color: c.text, height: 1.45, fontSize: 13.5),
                 ),
               ),
               const SizedBox(height: AppSpacing.lg),

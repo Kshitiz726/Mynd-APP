@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/config/store_policy.dart';
+import '../../core/config/pro_features.dart';
 import '../../core/constants/app_spacing.dart';
 import '../../core/routes/app_routes.dart';
 import '../../core/theme/app_colors.dart';
@@ -227,7 +228,13 @@ class _CoachScreenState extends State<CoachScreen> {
     // next message, not next launch.
     final memory = context.watch<MemoryProvider>();
     context.read<CoachProvider>()
-      ..setUserMemory(memory.promptBlock)
+      // How much of what you parked the coach gets to see is one of the
+      // things a subscription buys. Read here rather than inside the memory
+      // provider, because entitlement is the server's answer and the provider
+      // has no business knowing about billing.
+      ..setUserMemory(memory.promptBlock(
+          parkedLimit: ProFeatures.memoryContext(
+              premium: context.watch<PremiumProvider>().isPremium)))
       ..setPreferredName(memory.preferredName);
 
     // Straight to the chat. This used to sit behind a Puter sign-in wall, which
@@ -245,9 +252,14 @@ class _CoachScreenState extends State<CoachScreen> {
     // Who is coaching goes in before the next turn is built. Watched rather
     // than read once, so changing agent or nudging a slider takes effect on the
     // next message rather than at next launch.
+    // Whoever is entitled to answer, not whoever is selected. A lapsed
+    // subscriber keeps their choice but is answered by the free coach, and
+    // the name on screen has to be that same one or the chat is signed by
+    // somebody who did not write it.
+    final speaking = agents.agentFor(premium: isPremium);
     context.read<CoachProvider>()
-      ..setAgentBlock(agents.promptBlock)
-      ..setAgentName(agents.agent.name);
+      ..setAgentBlock(agents.promptBlockFor(premium: isPremium))
+      ..setAgentName(speaking.name);
     return Consumer<CoachProvider>(
       builder: (context, coach, _) {
         // Free tier: after the daily message budget the composer locks behind
@@ -326,7 +338,7 @@ class _CoachScreenState extends State<CoachScreen> {
                     alignment: Alignment.topCenter,
                     children: [
                       AgentAvatar(
-                        agent: agents.agent,
+                        agent: speaking,
                         size: 44,
                         mood: _moodFor(coach),
                         showThought: false,
@@ -336,7 +348,7 @@ class _CoachScreenState extends State<CoachScreen> {
                         top: -30,
                         child: ThinkingCloud(
                           visible: coach.isLoading && !coach.isStreaming,
-                          colour: agents.agent.accent,
+                          colour: speaking.accent,
                         ),
                       ),
                     ],
@@ -347,7 +359,7 @@ class _CoachScreenState extends State<CoachScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(agents.agent.name,
+                        Text(speaking.name,
                             style: Theme.of(context)
                                 .textTheme
                                 .titleLarge

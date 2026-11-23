@@ -35,7 +35,7 @@ void main() {
     await p.init();
     await p.select('ember');
 
-    final block = p.promptBlock;
+    final block = p.promptBlockFor(premium: true);
     expect(block, contains('EMBER'));
     expect(block, contains('encouraging'));
     // Ember ships warm and high energy.
@@ -48,9 +48,9 @@ void main() {
     await p.init();
 
     await p.select('ember');
-    final bright = p.promptBlock;
+    final bright = p.promptBlockFor(premium: true);
     await p.select('hush');
-    final quiet = p.promptBlock;
+    final quiet = p.promptBlockFor(premium: true);
 
     expect(bright, isNot(quiet));
   });
@@ -89,11 +89,11 @@ void main() {
     await second.init();
     expect(second.selectedId, 'ember');
     expect(second.settingsFor(ember).emotion, AgentEmotion.gentle);
-    expect(second.promptBlock, contains('Call me by my first name.'));
+    expect(second.promptBlockFor(premium: true), contains('Call me by my first name.'));
 
     await second.resetToDefaults(ember);
     expect(second.settingsFor(ember).emotion, ember.defaults.emotion);
-    expect(second.promptBlock, isNot(contains('Call me by my first name.')));
+    expect(second.promptBlockFor(premium: true), isNot(contains('Call me by my first name.')));
   });
 
   test('custom wording is appended last so it can override a slider', () {
