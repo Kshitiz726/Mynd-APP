@@ -1,0 +1,122 @@
+<!--
+  ============================================================================
+  EDITS TO ourmynd.com/privacy  —  4 changes, not 1.
+
+  I audited the whole live page, not just section 4. Three more problems sit
+  outside it:
+
+    * "OpenAI" appears TWICE. Section 4 and section 6 both name it. You do
+      not send anything to OpenAI.
+    * "Groq" appears ZERO times. It is your default provider and it receives
+      every coach message and all voice-note audio.
+    * Voice notes are absent from the page entirely. "voice", "recording",
+      "microphone" and "transcription" return no matches anywhere, yet audio
+      is uploaded to Groq and AudioData is declared in the app's
+      PrivacyInfo.xcprivacy. Apple's letter asks the policy to identify what
+      the app collects.
+    * Section 6 names Fly.io as the host. The API runs on Render
+      (onrender.com). VERIFY before changing - if you still run something on
+      Fly, leave it and add Render alongside.
+
+  Work through EDIT 1 to EDIT 4 below. Markup matches the page as served:
+  h2 / p / ul / li / strong only.
+
+  Two carried-over claims are marked VERIFY in EDIT 1. Read
+  appreview/privacy-policy-section-4.md before publishing.
+  ============================================================================
+-->
+
+
+<!-- ===========================================================================
+     EDIT 1 of 4  —  SECTION 4, replace wholesale.
+
+     FIND:    <h2>4. AI Processing and Third-Party AI Providers</h2>
+     THROUGH: the end of that section, stopping BEFORE the <hr> that precedes
+              <h2>5. Personalisation and Profiling</h2>
+     REPLACE WITH everything between the markers below.
+     ======================================================================== -->
+<!-- ---------- EDIT 1 BEGIN ---------- -->
+
+      <h2>4. AI Processing and Third-Party AI Providers</h2>
+
+      <p>The coach does not run on your phone. To write a reply, what you send has to be transmitted to an AI provider outside OurMynd. This section sets out exactly what is sent, who it is sent to, and what they may do with it.</p>
+
+      <p><strong>We ask before any of it happens.</strong> The first time you open the coach, the app shows you a disclosure naming the provider and asks you to agree. Nothing is sent to any AI provider until you do. You can withdraw at any time in Settings, after which the coach stops and nothing further is sent. Declining affects the coach only; the rest of the app is unchanged.</p>
+
+      <p><strong>What is sent</strong></p>
+      <ul>
+      <li>The messages you type to the coach.</li>
+      <li>The context the coach is given to answer with: the relevant parts of your goals, tasks, routines and saved memory.</li>
+      <li><strong>Your mood and memory entries, only if you have separately agreed to that.</strong> Health-related context is governed by its own permission, asked separately. If you decline it, the coach still works and that context is not included.</li>
+      <li><strong>Voice-note audio, if you record one.</strong> Voice notes are uploaded and converted to text so that the coach can read them.</li>
+      </ul>
+
+      <p>We do not send your name, your email address, your payment details or your location to any AI provider.</p>
+
+      <p><strong>Who it is sent to</strong></p>
+      <ul>
+      <li><strong>Groq, Inc.</strong> (United States) is the default provider, and handles both coaching replies and voice-note transcription. Unless you have connected your own account with another provider, Groq is the only AI provider that receives your data.</li>
+      <li>If you choose to connect your own AI account, the app can instead route your messages through <strong>Puter</strong>, which passes them to the model you select: <strong>Anthropic</strong> (Claude models) or <strong>Google</strong> (Gemini models). This is off by default. It happens only if you connect an account yourself, and the app names the provider on screen and asks for your agreement again before switching, because agreeing to one recipient is not agreeing to another.</li>
+      <li>We do not send your data to OpenAI.</li>
+      </ul>
+
+      <p><strong>What they may do with it</strong></p>
+      <ul>
+      <li>These providers act as our processors. They may use your data only to produce the response they return to us, and only on our instructions. They may not use it for their own purposes.</li>
+      <li><strong>Your conversations are not used to train AI models.</strong> Our agreements with these providers prohibit the use of data submitted through their business interfaces to train or improve their models.</li>
+      <li>Your data is encrypted in transit. Providers may retain content briefly for abuse monitoring where their own legal obligations require it, and then delete it.</li>
+      <li>These providers are in the United States. Transfers are made under the UK International Data Transfer Addendum and the EU Standard Contractual Clauses, and we have satisfied ourselves that they offer protection equivalent to that required under UK and EU data protection law.</li>
+      <li>If we change AI provider, we will update this policy before the change takes effect, and the app will ask for your agreement again before anything is sent to the new one.</li>
+      </ul>
+
+      <p>OurMynd is a coaching and productivity tool and is not a medical device, therapist, or crisis service. Please see our <a href="/terms">Terms &amp; Conditions</a>.</p>
+
+<!-- ---------- EDIT 1 END ---------- -->
+
+
+<!-- ===========================================================================
+     EDIT 2 of 4  —  SECTION 2, "Information you provide directly".
+
+     Voice notes are nowhere on the page. Add this bullet DIRECTLY AFTER the
+     "Conversations:" item and BEFORE "Tasks and goals:".
+     ======================================================================== -->
+<!-- ---------- EDIT 2 BEGIN ---------- -->
+
+      <li><strong>Voice notes:</strong> if you record a voice note, the audio is uploaded and converted to text so the coach can read it. We keep the resulting text as part of your conversation. The audio itself is not retained after transcription.</li>
+
+<!-- ---------- EDIT 2 END ---------- -->
+<!--
+     VERIFY: the last sentence says the audio is not retained. Confirm your
+     server does not keep the uploaded file. If it does, say how long for.
+-->
+
+
+<!-- ===========================================================================
+     EDIT 3 of 4  —  SECTION 6, "How We Share Your Information".
+
+     FIND this line:
+       AI providers (Anthropic, OpenAI) to generate coaching responses
+     REPLACE WITH:
+     ======================================================================== -->
+<!-- ---------- EDIT 3 BEGIN ---------- -->
+
+      <li><strong>AI providers</strong> to generate coaching responses and transcribe voice notes: <strong>Groq</strong> by default, and <strong>Puter</strong> with <strong>Anthropic</strong> or <strong>Google</strong> if you connect your own AI account. See section 4.</li>
+
+<!-- ---------- EDIT 3 END ---------- -->
+
+
+<!-- ===========================================================================
+     EDIT 4 of 4  —  SECTION 6, hosting line.  *** VERIFY FIRST ***
+
+     The live page says:
+       Hosting, database and authentication (Supabase, Fly.io, Google, Apple)
+     Your API runs on Render (ourmynd-server.onrender.com). There is a stale
+     server/fly.toml in the repo, which is probably where Fly.io came from.
+
+     If nothing of yours still runs on Fly, replace that line with:
+     ======================================================================== -->
+<!-- ---------- EDIT 4 BEGIN ---------- -->
+
+      <li><strong>Hosting, database and authentication</strong> (Supabase, Render, Google, Apple) to run the App and sign you in</li>
+
+<!-- ---------- EDIT 4 END ---------- -->

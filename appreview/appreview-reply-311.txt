@@ -1,0 +1,54 @@
+Reply to App Review, Submission ID 862687da-e3f9-46db-8cd2-a090ab5bdc00
+Guideline 3.1.1, version 1.0 (19)
+
+DRAFT. Check the wording, then paste into Resolution Center.
+
+---
+
+Hello,
+
+Thank you for the review. We would like to provide detail on the 3.1.1 point,
+because we believe the build under review does not contain a purchase path on
+iOS, and we want to make sure we fix the right thing.
+
+Build 19 cannot sell anything on iOS. The app has a single switch that decides
+whether a build is allowed to sell, in lib/core/config/store_policy.dart, and it
+returns false on iOS. Everything that could lead to a purchase is behind it:
+
+1. The paywall screen is not registered as a route on iOS, so there is no way to
+   reach it, including by deep link.
+2. The checkout call and the billing portal call both return immediately on iOS
+   without opening anything.
+3. No upgrade button is rendered anywhere in the app on iOS.
+4. The plan card in Settings is not tappable on iOS.
+5. The message quota text on iOS does not mention Plus, Pro or any price.
+
+Rather than show an iOS user a paywall they could not complete, this build gives
+the paid features away at no charge on iOS. There is no digital content in the
+iOS build that is withheld pending payment, and no mechanism in the iOS build by
+which a payment can be made.
+
+We have also confirmed there is no purchase page reachable from the links inside
+the app. The only external links are our terms, privacy and copyright pages, and
+our website has no pricing, plans, upgrade or subscribe page.
+
+We are not disputing the finding so much as asking for help reproducing it. If a
+purchase path was reached on the iPad Air 11-inch (M3), could you tell us which
+screen it was reached from, and what it displayed? We will fix it immediately.
+
+If the finding refers to subscriptions being available on our website or on
+Android, those are separate storefronts and are not offered or referenced inside
+the iOS app.
+
+We are separately planning In-App Purchase so that iOS users can buy Plus and
+Pro through StoreKit rather than receiving them at no charge, and we will submit
+those products for review when they are ready.
+
+Thank you for your time.
+
+---
+
+NOTE, not part of the reply: the 5.1.1(i) / 5.1.2(i) points in the same
+rejection are answered separately. Do not send a combined reply claiming the
+privacy work is complete until the consent endpoint is deployed, because the
+in-app disclosure syncs to a server route that currently returns 404.

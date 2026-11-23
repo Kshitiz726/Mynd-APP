@@ -1,0 +1,63 @@
+Re: Submission ID 862687da-e3f9-46db-8cd2-a090ab5bdc00
+Version 1.0 (19) | Guideline 2.1(a) - Performance - App Completeness
+
+Hello,
+
+Thank you for the detailed report. The review date, device and OS version you
+included let us identify the cause precisely.
+
+What caused it
+
+The failure was in our backend service, not in the submitted binary.
+
+On October 30, the date of your review, our hosting provider suspended our API
+host after the account exceeded a resource limit on its plan. While suspended,
+the host returned HTTP 503 Service Unavailable to every request.
+
+Sign in with Apple, Sign in with Google and guest sign in all authenticate
+against that same API, which is why all three failed together with an identical
+error rather than failing individually. The app was correctly surfacing the
+server error it received.
+
+What we have fixed
+
+The API host is restored and serving normally. We have also moved the backend
+to a dedicated paid hosting plan, so the resource limit that caused the
+suspension no longer applies and the service runs continuously.
+
+What we verified on iPad
+
+We reproduced your review environment rather than testing only on our own
+devices. On an iPad Air 11-inch, the same device family used in your review, we
+installed version 1.0 (19) and confirmed that the app launches, the sign in
+screen renders correctly, guest sign in completes, and the authenticated
+screens load live data from our API without errors.
+
+The app is built for iPhone and so runs on iPad in iPhone compatibility mode.
+That is the configuration your reviewer used, and it now behaves exactly as it
+does on iPhone.
+
+What we verified on iPhone
+
+On the identical build now in review, all three sign in paths complete
+successfully and reach the authenticated app: Continue with Apple, Continue
+with Google, and Continue as guest. We also confirmed the backend is returning
+healthy responses and that our payment configuration is intact and unchanged.
+
+Signing in without an account
+
+The first screen offers a "Continue as guest" button. One tap creates a session
+and opens the full app with every feature available. No account, credentials,
+email address or demo data are needed at any point, on either device.
+
+No new binary is required
+
+The defect was entirely server side and has been resolved server side. The
+build you already have is correct and unmodified, so we respectfully ask that
+you continue your review of it rather than requiring a new submission.
+
+We are glad to provide any further detail that would help.
+
+Kind regards,
+Anj
+OurMynd

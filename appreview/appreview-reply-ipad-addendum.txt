@@ -1,0 +1,19 @@
+Additional detail: verification on iPad
+
+Following up on our previous message with one point specific to the device
+used in your review.
+
+We installed version 1.0 (19) on an iPad Air 11-inch and confirmed that the
+app launches, the sign in screen renders correctly, guest sign in completes,
+and the authenticated screens load live data from our API without errors.
+
+The app is built for iPhone and therefore runs on iPad in iPhone compatibility
+mode, which is the configuration your reviewer used. It now behaves there
+exactly as it does on iPhone.
+
+The "Continue as guest" button on the first screen gives full access with a
+single tap on iPad as well, with no account or credentials required.
+
+Kind regards,
+Anj
+OurMynd
