@@ -57,6 +57,16 @@ dependencies:
   livekit_client: ^2.3.0
   audioplayers: ^6.1.0
 
+  # In-app purchase, because on iOS there is no alternative. Guideline 3.1.1
+  # requires digital content unlocked inside the app to be sold through
+  # StoreKit, and the reader-app and external-link carve-outs do not cover a
+  # productivity app selling its own features - which is why StorePolicy
+  # refused to sell on iOS at all rather than show a paywall nobody could
+  # complete. The official Flutter plugin rather than a third-party wrapper or
+  # a subscription SaaS: entitlement is already decided by our own server, so
+  # the only job here is StoreKit itself.
+  in_app_purchase: ^3.3.1
+
   # Real Google OAuth sign-in (web uses Google Identity Services under the hood;
   # client id is set via the meta tag in web/index.html).
   google_sign_in: ^6.2.1

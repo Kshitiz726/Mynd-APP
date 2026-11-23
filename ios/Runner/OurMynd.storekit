@@ -1,0 +1,71 @@
+{
+  "identifier": "2C63888F-28F0-4481-BE6D-DCE7A7ACE732",
+  "nonRenewingSubscriptions": [],
+  "products": [],
+  "settings": {
+    "_applicationInternalID": "6838455123",
+    "_developerTeamID": "",
+    "_failTransactionsEnabled": false,
+    "_lastSynchronizedDate": 0,
+    "_locale": "en_GB",
+    "_storefront": "GBR",
+    "_storeKitErrors": []
+  },
+  "subscriptionGroups": [
+    {
+      "id": "F6FADFA7-E5C1-4B62-9362-DA5CC13DA58A",
+      "localizations": [],
+      "name": "OurMynd Premium",
+      "subscriptions": [
+        {
+          "adHocOffers": [],
+          "codeOffers": [],
+          "displayPrice": "6.99",
+          "familyShareable": false,
+          "groupNumber": 1,
+          "internalID": "972770615",
+          "introductoryOffer": null,
+          "localizations": [
+            {
+              "description": "All coaches, unlimited chat, more memory.",
+              "displayName": "OurMynd Pro",
+              "locale": "en_GB"
+            }
+          ],
+          "productID": "com.ourmynd.app.pro.monthly",
+          "recurringSubscriptionPeriod": "P1M",
+          "referenceName": "OurMynd Pro Monthly",
+          "subscriptionGroupID": "F6FADFA7-E5C1-4B62-9362-DA5CC13DA58A",
+          "type": "RecurringSubscription",
+          "winBackOffers": []
+        },
+        {
+          "adHocOffers": [],
+          "codeOffers": [],
+          "displayPrice": "49.99",
+          "familyShareable": false,
+          "groupNumber": 1,
+          "internalID": "701808285",
+          "introductoryOffer": null,
+          "localizations": [
+            {
+              "description": "All coaches, unlimited chat, more memory.",
+              "displayName": "OurMynd Pro",
+              "locale": "en_GB"
+            }
+          ],
+          "productID": "com.ourmynd.app.pro.yearly",
+          "recurringSubscriptionPeriod": "P1Y",
+          "referenceName": "OurMynd Pro Yearly",
+          "subscriptionGroupID": "F6FADFA7-E5C1-4B62-9362-DA5CC13DA58A",
+          "type": "RecurringSubscription",
+          "winBackOffers": []
+        }
+      ]
+    }
+  ],
+  "version": {
+    "major": 3,
+    "minor": 0
+  }
+}
