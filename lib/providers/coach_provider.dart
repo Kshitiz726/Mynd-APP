@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -13,6 +14,8 @@ import '../core/services/coach_memory_service.dart';
 import '../core/services/coach_prompt_builder.dart';
 import '../core/services/feed_instructions_service.dart';
 import '../core/services/groq_service.dart';
+import '../core/services/ai/ai_router.dart';
+import '../core/services/ai/chat_backend.dart';
 import '../core/services/email_approval.dart';
 import '../core/services/email_intent.dart';
 import '../core/services/mail_service.dart';
@@ -23,6 +26,7 @@ import 'energy_provider.dart';
 import 'focus_provider.dart';
 import 'habit_provider.dart';
 import 'health_consent_provider.dart';
+import 'ai_consent_provider.dart';
 import 'mood_provider.dart';
 import 'reminders_provider.dart';
 import 'settings_provider.dart';
@@ -82,7 +86,10 @@ class CoachProvider extends ChangeNotifier {
     _agentName = name;
     if (_messages.length == 1 && _messages.first.id == 'welcome') {
       _messages[0] = ChatMessage.welcome(_name, agentName: _agentName);
-      notifyListeners();
+      // Deferred, for the same reason as setPreferredName below: _buildChat
+      // pushes the agent name in from its build method, so a plain notify
+      // here lands mid-build and throws.
+      _notifyWhenSafe();
     }
   }
 
@@ -157,8 +164,27 @@ class CoachProvider extends ChangeNotifier {
     _preferredName = value;
     if (_messages.length == 1 && _messages.first.id == 'welcome') {
       _messages[0] = ChatMessage.welcome(_name, agentName: _agentName);
-      notifyListeners();
+      _notifyWhenSafe();
     }
+  }
+
+  /// [notifyListeners], but safe to call while the tree is building.
+  ///
+  /// CoachScreen pushes the preferred name and the agent name in from its
+  /// `build`, and both setters rewrite the welcome line when the value
+  /// arrives, so the notify landed mid-build and threw "setState() or
+  /// markNeedsBuild() called during build". The chat still rendered, which is
+  /// why it survived: a red screen in the log and nothing more.
+  ///
+  /// Deferring to the end of the frame is the standard remedy. Outside a build
+  /// it notifies immediately, so nothing waits a frame for no reason.
+  void _notifyWhenSafe() {
+    if (SchedulerBinding.instance.schedulerPhase ==
+        SchedulerPhase.persistentCallbacks) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => notifyListeners());
+      return;
+    }
+    notifyListeners();
   }
 
   final _contextBuilder = CoachContextBuilder.instance;
@@ -487,6 +513,29 @@ class CoachProvider extends ChangeNotifier {
     final text = raw.trim();
     if (text.isEmpty || _isLoading) return;
 
+    // The floor, re-checked at the send itself, for the race where consent is
+    // withdrawn in Settings while a message is being typed. Catching it here
+    // means that withdrawal does not cost a metered turn on a request the
+    // server is about to refuse with 403.
+    //
+    // Keyed on `declined`, a settled no, NOT on `!granted`. The two differ
+    // only while an answer is being established, and in that window the screen
+    // gate has already stopped anyone reaching the composer: it now asks as
+    // soon as there is no answer on file, without waiting for the server.
+    // Keying this on `!granted` would therefore add nothing except a way to
+    // reject a message on a screen that should not have opened - and it was
+    // exactly that, before the gate asked offline, that produced a chat which
+    // opened normally and then refused every message typed into it.
+    //
+    // The server's 403 on /coach/completions is the real enforcement. This is
+    // defence in depth for one case the screen gate cannot see: consent
+    // withdrawn in Settings while a message is already being typed.
+    if (AiConsentProvider.instance.declined) {
+      _errorMessage = 'The coach is off until you agree to AI replies.';
+      notifyListeners();
+      return;
+    }
+
     // Cancel any in-flight stream.
     await _streamSub?.cancel();
     _streamSub = null;
@@ -524,46 +573,56 @@ class CoachProvider extends ChangeNotifier {
 
     // Claim a turn before generating.
     //
-    // The reply itself is produced by Puter inside the WebView, on the user's
-    // own account, so it never reaches our server and cannot be metered by
-    // watching the traffic. The entitlement is therefore checked separately,
-    // and it is checked *here* rather than in the UI because the counter this
-    // replaced lived in SharedPreferences and reset with app data.
-    try {
-      final turn = await ApiClient.instance.spendCoachTurn();
-      _remainingToday = turn.remaining;
-      _usedThisWeek = turn.used ?? _usedThisWeek;
-      _weeklyLimit = turn.limit;
-      _limitReached = false;
-    } on CoachTurnRefused {
-      // Out of turns for today.
-      //
-      // The user's own message STAYS. Removing it was the old behaviour and it
-      // was the worst possible answer: you typed a sentence, pressed send, and
-      // watched it disappear with nothing said. That is indistinguishable from
-      // the app being broken, and it is why this was reported as "the chat
-      // doesn't work" rather than as "I ran out of messages". Words somebody
-      // typed are theirs; the app does not get to take them back.
-      //
-      // Only the empty placeholder is replaced, with the reason, so the answer
-      // is in the conversation where they are already looking rather than
-      // depending on a banner elsewhere on the screen rendering correctly.
-      debugPrint('[coach] turn refused: out of free messages for today');
-      assistantMsg
-        ..isStreaming = false
-        ..text = "That's this week's messages used up. They reset "
-            '${_resetsAtPhrase()}, or Plus raises the limit.';
-      _limitReached = true;
-      _remainingToday = 0;
-      _isLoading = false;
-      notifyListeners();
-      _turnDone?.complete('');
-      _turnDone = null;
-      return;
-    } catch (_) {
-      // Server unreachable. Allowed through: refusing to coach someone because
-      // the meter is down is worse than the occasional uncounted turn, and the
-      // count is reconciled on the next successful call.
+    // Claimed separately from the generation, because the generation does
+    // not always pass through our server: on the built-in provider it does,
+    // but somebody using their own Claude or Gemini account talks to them
+    // straight from the device, where there is no traffic of ours to meter.
+    //
+    // Checked here rather than in the UI because the counter this replaced
+    // lived in SharedPreferences and reset with app data.
+    // Only the built-in provider is metered, and that is what the cap is
+    // for: it rations OUR inference bill. Somebody who has connected their
+    // own Claude or Gemini account is paying their provider directly, so
+    // spending one of our free weekly turns would cap a conversation we are
+    // not paying for, and then tell them "Plus raises the limit" when Plus
+    // would change nothing about it.
+    if (AiRouter.instance.effective == AiProvider.groq) {
+      try {
+        final turn = await ApiClient.instance.spendCoachTurn();
+        _remainingToday = turn.remaining;
+        _usedThisWeek = turn.used ?? _usedThisWeek;
+        _weeklyLimit = turn.limit;
+        _limitReached = false;
+      } on CoachTurnRefused {
+        // Out of turns for today.
+        //
+        // The user's own message STAYS. Removing it was the old behaviour and it
+        // was the worst possible answer: you typed a sentence, pressed send, and
+        // watched it disappear with nothing said. That is indistinguishable from
+        // the app being broken, and it is why this was reported as "the chat
+        // doesn't work" rather than as "I ran out of messages". Words somebody
+        // typed are theirs; the app does not get to take them back.
+        //
+        // Only the empty placeholder is replaced, with the reason, so the answer
+        // is in the conversation where they are already looking rather than
+        // depending on a banner elsewhere on the screen rendering correctly.
+        debugPrint('[coach] turn refused: out of free messages for today');
+        assistantMsg
+          ..isStreaming = false
+          ..text = "That's this week's messages used up. They reset "
+              '${_resetsAtPhrase()}, or Plus raises the limit.';
+        _limitReached = true;
+        _remainingToday = 0;
+        _isLoading = false;
+        notifyListeners();
+        _turnDone?.complete('');
+        _turnDone = null;
+        return;
+      } catch (_) {
+        // Server unreachable. Allowed through: refusing to coach someone because
+        // the meter is down is worse than the occasional uncounted turn, and the
+        // count is reconciled on the next successful call.
+      }
     }
 
     try {
@@ -617,8 +676,17 @@ class CoachProvider extends ChangeNotifier {
         );
       }
 
-      // Stream the response.
-      final stream = _ai.streamCompletion(messages);
+      // Stream the response, through whichever provider is in play.
+      //
+      // This one call is the entire chat migration. Everything else the coach
+      // does - the reminder and email markers, the memory summary, the agent
+      // personas - rides in the message text above, so it crosses providers
+      // untouched. The app's other model work (feed, goals, mood, memory,
+      // soul, brain dump) deliberately does NOT come through here: it stays
+      // on GroqService.extract on our own unmetered route, because those are
+      // internals tuned against that model and nobody agreed to spend their
+      // personal Claude quota re-ranking a feed.
+      final stream = AiRouter.instance.streamCompletion(messages);
       _streamSub = stream.listen(
         (chunk) {
           // The prompt forbids dashes; this is the belt to that braces. Models
@@ -636,7 +704,12 @@ class CoachProvider extends ChangeNotifier {
             assistantMsg.text = e is CoachLimitException
                 ? "That's this week's messages used up. They reset "
                     '${_resetsAtPhrase()}, or Plus raises the limit.'
-                : "That didn't go through: ${_explain(e)}";
+                // A connected provider's own words. "Anthropic rejected your
+                // key" tells somebody what to do; the generic wording tells
+                // them only that something broke.
+                : e is ChatBackendException
+                    ? e.message
+                    : "That didn't go through: ${_explain(e)}";
             if (e is CoachLimitException) {
               _limitReached = true;
               _remainingToday = 0;

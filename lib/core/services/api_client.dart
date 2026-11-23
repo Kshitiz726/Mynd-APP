@@ -535,6 +535,18 @@ class ApiClient {
     return j['deletedDocuments'] as int? ?? 0;
   }
 
+  /// This account's consent to send coach messages to the third-party AI.
+  Future<Map<String, dynamic>> fetchAiConsent() => _get('/api/consent/ai');
+
+  /// Record an AI data-sharing decision. [source] is 'coach' or 'settings'; the
+  /// disclosure version is the server's, so the app cannot claim agreement to
+  /// a disclosure that was never shown.
+  Future<Map<String, dynamic>> setAiConsent({
+    required bool granted,
+    required String source,
+  }) =>
+      _post('/api/consent/ai', {'granted': granted, 'source': source});
+
   // ── Per-account state (the backlog and friends follow the account) ──
   /// The document parked under [key], with when it was last written, so the
   /// caller can tell whether the server's copy or the phone's is the newer one.

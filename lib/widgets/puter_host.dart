@@ -107,6 +107,13 @@ class _PuterHostState extends State<PuterHost> {
   /// user can authenticate once (token is cached by the WebView afterwards).
   /// Returns `true` SYNCHRONOUSLY so the native WebView doesn't stall waiting on
   /// the dialog lifecycle (awaiting the push froze the bridge on Windows).
+  ///
+  /// This should not fire during a normal sign-in, and if it does, the sign-in
+  /// will not work. The opener here is the 1x1 IgnorePointer surface above: a
+  /// suspended opener cannot drive a popup, so the pushed route paints blank and
+  /// `puter.auth.signIn()` rejects. Sign-in belongs to PuterConnectScreen, whose
+  /// opener is a visible, full-size WebView. Kept only as a fallback that fails
+  /// visibly rather than silently.
   Future<bool> _openAuthPopup(
     InAppWebViewController controller,
     CreateWindowAction action,

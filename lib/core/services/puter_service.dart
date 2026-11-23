@@ -261,8 +261,10 @@ class PuterService {
     if (!_authState.isClosed) _authState.add(v);
   }
 
-  /// Trigger Puter's sign-in popup; resolves the auth state via [authState].
-  Future<void> signIn() => _eval('window.omSignIn();');
+  // No signIn() here on purpose. The bridge is a 1x1 off-screen surface, so it
+  // is a suspended opener: window.open succeeds, then the popup paints blank
+  // and puter.auth.signIn() rejects. PuterConnectScreen does the sign-in in a
+  // visible WebView and hands the token back through [applyToken].
   void refreshAuth() => _eval('window.omAuthCheck();');
 
   /// Hand the off-screen bridge the token obtained by the visible Connect screen

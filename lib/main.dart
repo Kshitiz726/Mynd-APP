@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import 'core/routes/app_router.dart';
@@ -30,6 +31,8 @@ import 'providers/focus_room_provider.dart';
 import 'providers/goal_provider.dart';
 import 'providers/habit_provider.dart';
 import 'providers/health_consent_provider.dart';
+import 'providers/ai_consent_provider.dart';
+import 'core/services/ai/ai_connections.dart';
 import 'providers/memory_provider.dart';
 import 'providers/calendar_provider.dart';
 import 'providers/motivation_provider.dart';
@@ -74,6 +77,18 @@ void main() async {
   final bootAt = DateTime.now();
   WidgetsFlutterBinding.ensureInitialized();
 
+  // No font is fetched from Google, ever.
+  //
+  // google_fonts downloads from fonts.gstatic.com the first time a family is
+  // used unless this is turned off, which would send every user's IP address
+  // to a third party before they had agreed to anything. That is a GDPR
+  // problem in the EU and undisclosed third-party transmission everywhere
+  // else, which is the same family of issue App Review raised about the AI
+  // provider. Inter and Atkinson Hyperlegible are bundled instead (see the
+  // assets/google_fonts entry in pubspec.yaml), so this switch costs nothing
+  // and also means text renders on a first launch with no network.
+  GoogleFonts.config.allowRuntimeFetching = false;
+
   // Silence debug logging in release builds.
   //
   // debugPrint keeps working in release - it is not compiled out - so the
@@ -104,6 +119,8 @@ void main() async {
   // it treating a consenting user as if they had declined. The server is asked
   // straight after the session is restored, below.
   await _bootStep('health consent', HealthConsentProvider.instance.loadCached);
+  await _bootStep('ai consent', AiConsentProvider.instance.loadCached);
+  await _bootStep('ai connections', AiConnections.instance.load);
 
   // Which server this launch talks to, before anything talks to one.
   //
@@ -133,6 +150,7 @@ void main() async {
     // launches, and holding the splash open for it would make every cold start
     // wait on a request whose answer it almost always already has.
     unawaited(HealthConsentProvider.instance.refresh());
+    unawaited(AiConsentProvider.instance.refresh());
   }
 
   await _bootStep('alarms', AlarmService.instance.init);
@@ -170,6 +188,7 @@ void main() async {
     // would be wrong whichever way it pointed, but is worst when it silently
     // grants permission nobody on this account ever gave.
     unawaited(HealthConsentProvider.instance.clear());
+    unawaited(AiConsentProvider.instance.clear());
     // The key is what makes this a restart rather than a repaint. runApp on an
     // app that is already running *updates* the root widget, and an updated
     // MultiProvider keeps every object it has already built - so the incoming
@@ -269,6 +288,16 @@ class OurMyndApp extends StatelessWidget {
         // the same answer. See HealthConsentProvider.
         ChangeNotifierProvider<HealthConsentProvider>.value(
           value: HealthConsentProvider.instance,
+        ),
+        // The AI data-sharing gate. Separate object, same singleton reason: the
+        // coach gate reads it from the widget tree, the send path reads it from
+        // static code, and both must see one answer. See AiConsentProvider.
+        ChangeNotifierProvider<AiConsentProvider>.value(
+          value: AiConsentProvider.instance,
+        ),
+        // Which provider the coach talks through, and whether it is connected.
+        ChangeNotifierProvider<AiConnections>.value(
+          value: AiConnections.instance,
         ),
         // Declared before FocusProvider, which proxies onto it.
         ChangeNotifierProvider(create: (_) => FocusRoomProvider()),

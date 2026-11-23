@@ -47,7 +47,12 @@ abstract final class AppRouter {
       // its own, so bare it renders transparent over whatever is beneath.
       AppRoutes.focusActive => (_) => const RouteHost(child: FocusActiveScreen()),
       AppRoutes.focus => (_) => const RouteHost(child: FocusTabShell()),
-      AppRoutes.coach => (_) => const RouteHost(showBack: false, child: CoachScreen()),
+      // showBack stays false because CoachScreen draws the back control itself,
+      // inside its own header next to the avatar. `pushed: true` is what tells
+      // it to: without it this route has no nav bar and no back button, which is
+      // a dead end.
+      AppRoutes.coach => (_) =>
+          const RouteHost(showBack: false, child: CoachScreen(pushed: true)),
       _ => (_) => const AppShell(),
       };
 
