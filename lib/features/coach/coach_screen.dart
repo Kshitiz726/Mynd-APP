@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -17,6 +18,7 @@ import '../../providers/premium_provider.dart';
 import '../../providers/agent_provider.dart';
 import '../../widgets/agent_avatar.dart';
 import '../../widgets/om_back_button.dart';
+import '../../providers/settings_provider.dart';
 import '../../widgets/om_glass.dart';
 import '../../widgets/om_mic_button.dart';
 import '../../widgets/om_push_drawer.dart';
@@ -289,201 +291,203 @@ class _CoachScreenState extends State<CoachScreen> {
         return Scaffold(
           backgroundColor: Colors.transparent,
           body: Column(
-          children: [
-            // Messenger-style header: back to the previous tab, Mynd's avatar
-            // with a live "active" dot, name + subtitle, and the connect chip.
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                  8, AppSpacing.screenTop, AppSpacing.screenH, 8),
-              child: Row(
-                children: [
-                  // The drawer when this is the chat tab, a back arrow when it
-                  // was pushed.
-                  //
-                  // It used to be `if (Navigator.canPop())` show a back arrow
-                  // instead, which sounds reasonable and is not: canPop is a
-                  // live reading of the stack, so the icon changed the instant
-                  // anything at all was pushed over this screen. Tapping the
-                  // quota pill flipped the hamburger into a back arrow, which
-                  // looked like the sidebar glitching, because in a sense it
-                  // was.
-                  //
-                  // The fix for that was to drop the branch, on the grounds
-                  // that nothing pushes CoachScreen. That was not true:
-                  // "Need help? Talk to Mynd" in Focus pushes this route, and
-                  // on that path the drawer button is inert (OmPushDrawer lives
-                  // in the shell, so `of(context)` is null here) and there is no
-                  // nav bar, which left no way off the screen.
-                  //
-                  // So the branch is back, on `widget.pushed` instead. It is
-                  // fixed when the screen is built rather than re-read from the
-                  // navigator on every frame, so pushing a sheet over the chat
-                  // cannot change it.
-                  if (widget.pushed)
-                    OmBackButton(onTap: () => Navigator.of(context).maybePop())
-                  else
-                    _DrawerButton(
-                        onTap: () => OmPushDrawer.of(context)?.open()),
-                  const SizedBox(width: 4),
-                  // The agent's face, and it is a button: tapping it is the
-                  // fastest route to switching who you are talking to.
-                  //
-                  // The thinking cloud sits over the top of the head and is
-                  // allowed to overflow the row, which is why the Stack is
-                  // unclipped and the avatar keeps its own 44px footprint:
-                  // reserving space for the cloud would shift the whole header
-                  // every time the coach started composing.
-                  Stack(
-                    clipBehavior: Clip.none,
-                    alignment: Alignment.topCenter,
-                    children: [
-                      AgentAvatar(
-                        agent: speaking,
-                        size: 44,
-                        mood: _moodFor(coach),
-                        showThought: false,
-                        onTap: () => AgentPickerScreen.open(context),
-                      ),
-                      Positioned(
-                        top: -30,
-                        child: ThinkingCloud(
-                          visible: coach.isLoading && !coach.isStreaming,
-                          colour: speaking.accent,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(speaking.name,
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleLarge
-                                ?.copyWith(
-                                    fontSize: 19, fontWeight: FontWeight.w800)),
-                        const _CoachSubtitle(),
-                      ],
-                    ),
-                  ),
-                  // History and new chat used to sit here. Both are in the side
-                  // panel now, which is one tap away on the left of this very
-                  // row, and a control that exists twice on one screen is a
-                  // control somebody has to think about twice.
-                ],
-              ),
-            ),
-            Expanded(
-              child: ListView.builder(
-                controller: _scroll,
-                // Drag the conversation, lose the keyboard. The expected
-                // gesture in every chat app, and the one people reach for
-                // first when the keyboard is covering what they want to read.
-                keyboardDismissBehavior:
-                    ScrollViewKeyboardDismissBehavior.onDrag,
+            children: [
+              // Messenger-style header: back to the previous tab, Mynd's avatar
+              // with a live "active" dot, name + subtitle, and the connect chip.
+              Padding(
                 padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.screenH,
-                  AppSpacing.xl,
-                  AppSpacing.screenH,
-                  AppSpacing.md,
-                ),
-                // Before the first exchange the screen is mostly empty, so it
-                // leads with the orb and the question instead of one lonely
-                // bubble in the corner.
-                itemCount: coach.messages.length +
-                    (coach.isLoading && !coach.isStreaming ? 1 : 0) +
-                    (coach.messages.length <= 1
-                        ? (memory.needsName ? 2 : 1)
-                        : 0),
-                itemBuilder: (context, i) {
-                  if (coach.messages.length <= 1) {
-                    if (i == 0) {
-                      // The orb, then one way back into everything before it.
-                      // Just the hero. The way back to an old chat is the
-                      // side panel, and this was the third place it appeared.
-                      return const _CoachHero();
-                    }
-                    i -= 1;
-                    // Before anything else is asked of them, the one question
-                    // we cannot answer ourselves.
-                    if (memory.needsName) {
-                      if (i == 0) return const _NameCard();
-                      i -= 1;
-                    }
-                  }
-                  if (i == coach.messages.length) {
-                    return const _TypingBubble();
-                  }
-                  return _ChatBubble(message: coach.messages[i]);
-                },
-              ),
-            ),
-            // SafeArea alone, and nothing added to it.
-            //
-            // The shell sets extendBody: true, and Flutter folds the bottom bar
-            // height INTO this body's MediaQuery bottom padding so content can
-            // clear it. So SafeArea already steps over the whole bar plus the
-            // home indicator. Every version of this that also added
-            // navBarHeight was counting the bar twice, which is where the band
-            // of dead page between the composer and the bar came from.
-            SafeArea(
-              bottom: true,
-              child: Padding(
-                // Clear the nav bar, which now runs underneath this screen.
-                // The shell uses extendBody so the glass bar has something to
-                // blur, which means the composer has to reserve that height
-                // itself or it sits behind the bar. The bar is hidden while the
-                // keyboard is up, so the room is given back then rather than
-                // leaving a strip of dead space above the keyboard.
-                padding: EdgeInsets.fromLTRB(
-                  AppSpacing.screenH,
-                  0,
-                  AppSpacing.screenH,
-                  // SafeArea above has already stepped over the whole bar, so
-                  // this is only the breathing room between the composer and
-                  // the glyph row - which the reference has, rather than the
-                  // two being welded together.
-                  MediaQuery.of(context).viewInsets.bottom > 0 ? 8 : 10,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                    8, AppSpacing.screenTop, AppSpacing.screenH, 8),
+                child: Row(
                   children: [
-                    if (locked)
-                      const _LimitReachedCard()
-                    else ...[
-                      // Said before the wall, not at it. Silence followed by a
-                      // hard stop is what made running out feel like a bug.
-                      if (coach.quotaRunningLow) const _QuotaWarning(),
-                      // Only show quick prompts if the user hasn't sent a message
-                      // yet (messages.length <= 1 = only the welcome message).
-                      if (coach.messages.length <= 1) ...[
-                        SizedBox(
-                          height: 42,
-                          child: ListView.separated(
-                            scrollDirection: Axis.horizontal,
-                            itemCount: _prompts.length,
-                            separatorBuilder: (_, __) =>
-                                const SizedBox(width: 8),
-                            itemBuilder: (context, i) => _PromptChip(
-                              label: _prompts[i],
-                              urgent: i == 0,
-                              onTap: () => _send(_prompts[i]),
-                            ),
+                    // The drawer when this is the chat tab, a back arrow when it
+                    // was pushed.
+                    //
+                    // It used to be `if (Navigator.canPop())` show a back arrow
+                    // instead, which sounds reasonable and is not: canPop is a
+                    // live reading of the stack, so the icon changed the instant
+                    // anything at all was pushed over this screen. Tapping the
+                    // quota pill flipped the hamburger into a back arrow, which
+                    // looked like the sidebar glitching, because in a sense it
+                    // was.
+                    //
+                    // The fix for that was to drop the branch, on the grounds
+                    // that nothing pushes CoachScreen. That was not true:
+                    // "Need help? Talk to Mynd" in Focus pushes this route, and
+                    // on that path the drawer button is inert (OmPushDrawer lives
+                    // in the shell, so `of(context)` is null here) and there is no
+                    // nav bar, which left no way off the screen.
+                    //
+                    // So the branch is back, on `widget.pushed` instead. It is
+                    // fixed when the screen is built rather than re-read from the
+                    // navigator on every frame, so pushing a sheet over the chat
+                    // cannot change it.
+                    if (widget.pushed)
+                      OmBackButton(
+                          onTap: () => Navigator.of(context).maybePop())
+                    else
+                      _DrawerButton(
+                          onTap: () => OmPushDrawer.of(context)?.open()),
+                    const SizedBox(width: 4),
+                    // The agent's face, and it is a button: tapping it is the
+                    // fastest route to switching who you are talking to.
+                    //
+                    // The thinking cloud sits over the top of the head and is
+                    // allowed to overflow the row, which is why the Stack is
+                    // unclipped and the avatar keeps its own 44px footprint:
+                    // reserving space for the cloud would shift the whole header
+                    // every time the coach started composing.
+                    Stack(
+                      clipBehavior: Clip.none,
+                      alignment: Alignment.topCenter,
+                      children: [
+                        AgentAvatar(
+                          agent: speaking,
+                          size: 44,
+                          mood: _moodFor(coach),
+                          showThought: false,
+                          onTap: () => AgentPickerScreen.open(context),
+                        ),
+                        Positioned(
+                          top: -30,
+                          child: ThinkingCloud(
+                            visible: coach.isLoading && !coach.isStreaming,
+                            colour: speaking.accent,
                           ),
                         ),
-                        const SizedBox(height: 10),
                       ],
-                      const _ProviderConnectBanner(),
-                      _CoachInput(controller: _controller, onSend: _send),
-                    ],
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(speaking.name,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleLarge
+                                  ?.copyWith(
+                                      fontSize: 19,
+                                      fontWeight: FontWeight.w800)),
+                          const _CoachSubtitle(),
+                        ],
+                      ),
+                    ),
+                    // History and new chat used to sit here. Both are in the side
+                    // panel now, which is one tap away on the left of this very
+                    // row, and a control that exists twice on one screen is a
+                    // control somebody has to think about twice.
                   ],
                 ),
               ),
-            ), // Close SafeArea
-          ],
+              Expanded(
+                child: ListView.builder(
+                  controller: _scroll,
+                  // Drag the conversation, lose the keyboard. The expected
+                  // gesture in every chat app, and the one people reach for
+                  // first when the keyboard is covering what they want to read.
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.screenH,
+                    AppSpacing.xl,
+                    AppSpacing.screenH,
+                    AppSpacing.md,
+                  ),
+                  // Before the first exchange the screen is mostly empty, so it
+                  // leads with the orb and the question instead of one lonely
+                  // bubble in the corner.
+                  itemCount: coach.messages.length +
+                      (coach.isLoading && !coach.isStreaming ? 1 : 0) +
+                      (coach.messages.length <= 1
+                          ? (memory.needsName ? 2 : 1)
+                          : 0),
+                  itemBuilder: (context, i) {
+                    if (coach.messages.length <= 1) {
+                      if (i == 0) {
+                        // The orb, then one way back into everything before it.
+                        // Just the hero. The way back to an old chat is the
+                        // side panel, and this was the third place it appeared.
+                        return const _CoachHero();
+                      }
+                      i -= 1;
+                      // Before anything else is asked of them, the one question
+                      // we cannot answer ourselves.
+                      if (memory.needsName) {
+                        if (i == 0) return const _NameCard();
+                        i -= 1;
+                      }
+                    }
+                    if (i == coach.messages.length) {
+                      return const CoachTypingIndicator();
+                    }
+                    return _ChatBubble(message: coach.messages[i]);
+                  },
+                ),
+              ),
+              // SafeArea alone, and nothing added to it.
+              //
+              // The shell sets extendBody: true, and Flutter folds the bottom bar
+              // height INTO this body's MediaQuery bottom padding so content can
+              // clear it. So SafeArea already steps over the whole bar plus the
+              // home indicator. Every version of this that also added
+              // navBarHeight was counting the bar twice, which is where the band
+              // of dead page between the composer and the bar came from.
+              SafeArea(
+                bottom: true,
+                child: Padding(
+                  // Clear the nav bar, which now runs underneath this screen.
+                  // The shell uses extendBody so the glass bar has something to
+                  // blur, which means the composer has to reserve that height
+                  // itself or it sits behind the bar. The bar is hidden while the
+                  // keyboard is up, so the room is given back then rather than
+                  // leaving a strip of dead space above the keyboard.
+                  padding: EdgeInsets.fromLTRB(
+                    AppSpacing.screenH,
+                    0,
+                    AppSpacing.screenH,
+                    // SafeArea above has already stepped over the whole bar, so
+                    // this is only the breathing room between the composer and
+                    // the glyph row - which the reference has, rather than the
+                    // two being welded together.
+                    MediaQuery.of(context).viewInsets.bottom > 0 ? 8 : 10,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (locked)
+                        const _LimitReachedCard()
+                      else ...[
+                        // Said before the wall, not at it. Silence followed by a
+                        // hard stop is what made running out feel like a bug.
+                        if (coach.quotaRunningLow) const _QuotaWarning(),
+                        // Only show quick prompts if the user hasn't sent a message
+                        // yet (messages.length <= 1 = only the welcome message).
+                        if (coach.messages.length <= 1) ...[
+                          SizedBox(
+                            height: 42,
+                            child: ListView.separated(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: _prompts.length,
+                              separatorBuilder: (_, __) =>
+                                  const SizedBox(width: 8),
+                              itemBuilder: (context, i) => _PromptChip(
+                                label: _prompts[i],
+                                urgent: i == 0,
+                                onTap: () => _send(_prompts[i]),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                        ],
+                        const _ProviderConnectBanner(),
+                        _CoachInput(controller: _controller, onSend: _send),
+                      ],
+                    ],
+                  ),
+                ),
+              ), // Close SafeArea
+            ],
           ),
         );
       },
@@ -531,9 +535,7 @@ class _QuotaWarning extends StatelessWidget {
                       ? 'No messages left this week'
                       : '$left message${left == 1 ? '' : 's'} left this week',
                   style: TextStyle(
-                      color: c.text,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700),
+                      color: c.text, fontSize: 13, fontWeight: FontWeight.w700),
                 ),
               ),
             ],
@@ -603,14 +605,26 @@ class _ChatBubble extends StatelessWidget {
       bottomRight: Radius.circular(mine ? 7 : 20),
     );
 
-    final text = Text(
-      message.text.isEmpty && message.isStreaming ? '…' : message.text,
-      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: mine ? Colors.white : c.text,
-            height: 1.45,
-            fontWeight: mine ? FontWeight.w500 : FontWeight.w400,
-          ),
-    );
+    // A reply that has opened its bubble but has no words yet.
+    //
+    // This rendered a literal '…' - a full stop three times over, sitting
+    // there motionless for however long the model took. It reads as a
+    // finished message that says nothing, which is worse than no bubble at
+    // all. The travelling dots are the same indicator every messaging app
+    // uses for exactly this gap, and they occupy the bubble the words are
+    // about to fill, so nothing jumps when they arrive.
+    final awaitingFirstToken = message.text.isEmpty && message.isStreaming;
+
+    final Widget text = awaitingFirstToken
+        ? const TypingDots()
+        : Text(
+            message.text,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: mine ? Colors.white : c.text,
+                  height: 1.45,
+                  fontWeight: mine ? FontWeight.w500 : FontWeight.w400,
+                ),
+          );
 
     return Align(
       alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
@@ -696,8 +710,7 @@ class _CoachHero extends StatelessWidget {
             onTap: () => AgentPickerScreen.open(context),
             feedback: OmTapFeedback.light,
             child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
               decoration: BoxDecoration(
                 color: c.surfaceAlt,
                 borderRadius: BorderRadius.circular(AppRadius.pill),
@@ -879,12 +892,123 @@ class _NameCardState extends State<_NameCard> {
 /// Thinking. The agent's own face is the indicator: it is already animated,
 /// so it says "someone is there" better than the words "Mynd is typing" ever
 /// did, and it is the same character that is about to answer.
-class _TypingBubble extends StatelessWidget {
-  const _TypingBubble();
+/// Three travelling dots: Mynd is composing.
+///
+/// What was here was a literal '…' inside the reply bubble, and the word
+/// "thinking…" above it - both motionless, so neither said the app was still
+/// alive while a slow reply arrived, which is the one moment that matters.
+/// This is the indicator every messaging app uses for that gap.
+///
+/// Just the dots, no bubble, so it can sit inside the reply bubble that is
+/// about to be filled with words. Nothing jumps when they arrive.
+class TypingDots extends StatefulWidget {
+  const TypingDots({super.key, this.color});
+
+  /// Defaults to the secondary text colour, which is what a reply in
+  /// progress should weigh.
+  final Color? color;
+
+  @override
+  State<TypingDots> createState() => _TypingDotsState();
+}
+
+class _TypingDotsState extends State<TypingDots>
+    with SingleTickerProviderStateMixin {
+  /// One pass of the wave. Slow enough to read as breathing rather than
+  /// buzzing - this screen is used by people who find motion costly, and a
+  /// fast flicker at the edge of vision is exactly the wrong thing.
+  static const _period = Duration(milliseconds: 1100);
+
+  /// Built here, not in a `late final` initialiser.
+  ///
+  /// A lazy controller is first touched by whatever reaches it first, and if
+  /// that is dispose() the ticker attaches to an element already deactivated
+  /// and the framework asserts. Building it eagerly means dispose() always
+  /// has a real object to close.
+  late final AnimationController _wave;
+
+  @override
+  void initState() {
+    super.initState();
+    _wave = AnimationController(vsync: this, duration: _period);
+  }
+
+  @override
+  void dispose() {
+    _wave.dispose();
+    super.dispose();
+  }
+
+  /// Where one dot is in the wave, 0..1, given its place in the row.
+  double _phase(int index, double t) {
+    // Each dot trails the one before by a sixth of the cycle, so the movement
+    // reads left to right rather than as three things blinking at once.
+    const stagger = 1 / 6;
+    final shifted = (t - index * stagger) % 1.0;
+    // Up and back down over the first half, resting through the second. A dot
+    // that is always moving has no beat to it.
+    if (shifted >= 0.5) return 0;
+    return math.sin(shifted * 2 * math.pi);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final c = context.omColors;
+    final base = widget.color ?? context.omColors.text2;
+    final reduceMotion =
+        context.select<SettingsProvider, bool>((s) => s.reduceMotion);
+
+    // Reduce motion is honoured by not animating at all, rather than by
+    // animating slowly. The dots still say "a reply is coming" standing
+    // still, because they are not on screen in any other state.
+    if (reduceMotion) {
+      if (_wave.isAnimating) _wave.stop();
+    } else if (!_wave.isAnimating) {
+      _wave.repeat();
+    }
+
+    // Isolated so the dots moving does not invalidate the frosted bubble
+    // behind them on every frame. A backdrop blur is the most expensive thing
+    // on this screen; it should composite once, not sixty times a second.
+    return RepaintBoundary(
+      child: AnimatedBuilder(
+        animation: _wave,
+        builder: (context, _) => Row(
+          mainAxisSize: MainAxisSize.min,
+          children: List.generate(3, (i) {
+            final p = reduceMotion ? 0.0 : _phase(i, _wave.value);
+            return Padding(
+              padding: EdgeInsets.only(right: i == 2 ? 0 : 5),
+              child: Transform.translate(
+                offset: Offset(0, -3.5 * p),
+                child: Container(
+                  width: 7,
+                  height: 7,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    // Lifts towards full strength at the top of the arc, so
+                    // the wave is legible even where 3.5px of travel is not.
+                    color: Color.lerp(base.withValues(alpha: 0.45), base,
+                        reduceMotion ? 0.6 : p),
+                  ),
+                ),
+              ),
+            );
+          }),
+        ),
+      ),
+    );
+  }
+}
+
+/// The "Mynd is composing" row shown before a reply bubble exists at all.
+///
+/// Same dots, in one of Mynd's own glass bubbles, so the reply appears where
+/// they were holding rather than arriving somewhere new.
+class CoachTypingIndicator extends StatelessWidget {
+  const CoachTypingIndicator({super.key});
+
+  @override
+  Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12, left: 2),
       child: Row(
@@ -896,10 +1020,15 @@ class _TypingBubble extends StatelessWidget {
             showRing: false,
           ),
           const SizedBox(width: 10),
-          Text(
-            'thinking…',
-            style:
-                Theme.of(context).textTheme.bodySmall?.copyWith(color: c.text2),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: OmGlass(
+              borderRadius: 20,
+              blur: 22,
+              opacity: context.isDark ? 0.42 : 0.8,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              child: const TypingDots(),
+            ),
           ),
         ],
       ),
@@ -998,8 +1127,10 @@ class _LimitReachedCard extends StatelessWidget {
                 : 'That is $kCoachWeeklyLimit messages this week. They reset '
                     'every Monday, and everything else in the app keeps '
                     'working in the meantime.',
-            style:
-                Theme.of(context).textTheme.bodySmall?.copyWith(color: c.text2, height: 1.4),
+            style: Theme.of(context)
+                .textTheme
+                .bodySmall
+                ?.copyWith(color: c.text2, height: 1.4),
           ),
           // The button only exists where there is something to buy.
           //
@@ -1265,12 +1396,15 @@ class _CoachNeedsAiConsent extends StatelessWidget {
                 Container(
                   width: 56,
                   height: 56,
-                  decoration: BoxDecoration(color: c.primaryTint, shape: BoxShape.circle),
+                  decoration: BoxDecoration(
+                      color: c.primaryTint, shape: BoxShape.circle),
                   alignment: Alignment.center,
-                  child: Icon(OmIcons.byName('sparkles'), color: c.primary, size: 26),
+                  child: Icon(OmIcons.byName('sparkles'),
+                      color: c.primary, size: 26),
                 ),
                 const SizedBox(height: AppSpacing.lg),
-                Text('the coach is off', style: t.titleLarge, textAlign: TextAlign.center),
+                Text('the coach is off',
+                    style: t.titleLarge, textAlign: TextAlign.center),
                 const SizedBox(height: AppSpacing.sm),
                 Text(
                   'The coach needs to send what you type to a third-party AI '
@@ -1308,7 +1442,8 @@ class _CoachNeedsAiConsent extends StatelessWidget {
                   pressedScale: 0.97,
                   child: Container(
                     height: 52,
-                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                       gradient: c.brandGradient,
@@ -1384,8 +1519,8 @@ class _ProviderConnectBanner extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Text('Connect',
-                  style: t.labelLarge
-                      ?.copyWith(color: c.primary, fontWeight: FontWeight.w700)),
+                  style: t.labelLarge?.copyWith(
+                      color: c.primary, fontWeight: FontWeight.w700)),
             ],
           ),
         ),
