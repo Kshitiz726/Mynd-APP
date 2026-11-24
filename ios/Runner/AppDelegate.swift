@@ -17,7 +17,37 @@ import UserNotifications
     if #available(iOS 10.0, *) {
       UNUserNotificationCenter.current().delegate = self
     }
+    applySavedAppearance()
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+
+  /// Make UIKit follow the theme chosen inside the app, not the one chosen in
+  /// Settings.
+  ///
+  /// The launch screen is drawn by UIKit before a single line of Dart runs, so
+  /// it cannot ask the app which theme is in use; left alone it follows the
+  /// system appearance. For somebody running the app in dark while the phone
+  /// is in light, that meant a bright flash on every cold start before the
+  /// Flutter frame arrived - and this app's users are the ones least well
+  /// served by being flashed at.
+  ///
+  /// Setting the override on the window makes the launch screen's named colour
+  /// resolve to the app's own choice, and keeps every other UIKit surface
+  /// (share sheets, the keyboard, permission alerts) in agreement with it.
+  ///
+  /// The flag is written by SettingsProvider through shared_preferences, which
+  /// stores Dart keys under a `flutter.` prefix. Absent on a first launch, and
+  /// the default is light - the same default Dart uses, so the two agree
+  /// before anybody has chosen anything.
+  private func applySavedAppearance() {
+    let style: UIUserInterfaceStyle = Appearance.isDark ? .dark : .light
+    // On a scene-based app there is usually no window yet at this point, so
+    // SceneDelegate does the one that matters. This covers the window the
+    // Flutter app delegate owns, and anything already on screen.
+    for scene in UIApplication.shared.connectedScenes {
+      Appearance.apply(to: scene)
+    }
+    window?.overrideUserInterfaceStyle = style
   }
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {

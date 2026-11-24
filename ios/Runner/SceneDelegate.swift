@@ -11,6 +11,15 @@ class SceneDelegate: FlutterSceneDelegate {
     NSLog("[scene] willConnectTo — SceneDelegate is live")
     super.scene(scene, willConnectTo: session, options: connectionOptions)
 
+    // The theme the user chose inside the app, applied to the window that has
+    // just been created.
+    //
+    // The app delegate sets this too, but on a scene-based app there is no
+    // window yet when didFinishLaunching runs, so that call has nothing to
+    // apply it to on a cold start. This is the one that actually catches the
+    // launch screen, which is still on screen at this point.
+    Appearance.apply(to: scene)
+
     // A cold launch delivers the URL here rather than through
     // scene:openURLContexts:, so the same forwarding has to happen on this path
     // or a callback that starts the app is lost.
@@ -54,6 +63,26 @@ class SceneDelegate: FlutterSceneDelegate {
         open: context.url,
         options: [:]
       )
+    }
+  }
+}
+
+/// Where the app's chosen appearance is read from.
+///
+/// One place, because two copies of "which key holds dark mode" is how the
+/// launch screen and the app end up disagreeing. See SettingsProvider: the
+/// flag is written through shared_preferences, which prefixes Dart keys with
+/// `flutter.`.
+enum Appearance {
+  static var isDark: Bool {
+    UserDefaults.standard.bool(forKey: "flutter.om_dark_mode")
+  }
+
+  static func apply(to scene: UIScene) {
+    guard let windowScene = scene as? UIWindowScene else { return }
+    let style: UIUserInterfaceStyle = isDark ? .dark : .light
+    for window in windowScene.windows {
+      window.overrideUserInterfaceStyle = style
     }
   }
 }
