@@ -53,6 +53,32 @@ export function planCatalog(): PlanEntry[] {
   return allKnownPlans().filter((e) => e.tier === 'pro');
 }
 
+/**
+ * Apple's product ids, and what each one entitles the holder to.
+ *
+ * Deliberately independent of [allKnownPlans]. That list is filtered by which
+ * Stripe price ids are configured, which is right for a Stripe catalogue and
+ * wrong for Apple: an App Store purchase has to resolve on a server with no
+ * Stripe keys at all, and routing it through the Stripe list would have made
+ * every iOS subscription fail to verify the moment STRIPE_PRICE_PRO_MONTHLY
+ * was unset. Apple's ids are fixed and permanent, so they are simply written
+ * down.
+ *
+ * These strings must match IapProducts in the app and App Store Connect
+ * exactly; a product id can never be edited or reused there.
+ */
+const APPLE_PRODUCTS: Record<string, { id: string; tier: Exclude<Tier, 'free'>; interval: Interval }> = {
+  'com.ourmynd.app.pro.monthly': { id: 'pro_month', tier: 'pro', interval: 'month' },
+  'com.ourmynd.app.pro.yearly': { id: 'pro_year', tier: 'pro', interval: 'year' },
+};
+
+/** What an Apple product id entitles the holder to, or null if we do not sell it. */
+export function planForAppleProduct(
+  productId: string,
+): { id: string; tier: Exclude<Tier, 'free'>; interval: Interval } | null {
+  return APPLE_PRODUCTS[productId] ?? null;
+}
+
 /** Map a Stripe price id back to the tier/interval it represents. */
 export function planForPrice(priceId: string): { tier: Tier; interval: Interval | null } {
   // Against every plan, not just the sellable ones - see allKnownPlans.
@@ -68,6 +94,14 @@ export interface SubRecord {
   stripeSubscriptionId: string | null;
   priceId: string | null;
   currentPeriodEnd: string | null; // ISO
+
+  /**
+   * Apple's identity for the subscription, stable across every renewal,
+   * upgrade and restore. Non-null means Apple owns this one: we cannot cancel
+   * or change it, and the cancellation route to offer is Apple's, not ours.
+   */
+  appleOriginalTransactionId: string | null;
+  appleProductId: string | null;
 }
 
 const FREE: SubRecord = {
@@ -78,6 +112,8 @@ const FREE: SubRecord = {
   stripeSubscriptionId: null,
   priceId: null,
   currentPeriodEnd: null,
+  appleOriginalTransactionId: null,
+  appleProductId: null,
 };
 
 // In dev without a DB (embedded-postgres off) we still want the flow to be
@@ -97,7 +133,8 @@ export const billingStore = {
     if (!config.hasDb) return memStore.get(userId) ?? { ...FREE };
     const row = await db.oneOrNone(
       `select tier, status, interval, stripe_customer_id, stripe_subscription_id,
-              price_id, current_period_end
+              price_id, current_period_end,
+              apple_original_transaction_id, apple_product_id
          from subscriptions where user_id = $1`,
       [userId],
     );
@@ -110,6 +147,8 @@ export const billingStore = {
       stripeSubscriptionId: row.stripe_subscription_id,
       priceId: row.price_id,
       currentPeriodEnd: row.current_period_end ? new Date(row.current_period_end).toISOString() : null,
+      appleOriginalTransactionId: row.apple_original_transaction_id ?? null,
+      appleProductId: row.apple_product_id ?? null,
     };
   },
 
@@ -123,8 +162,9 @@ export const billingStore = {
     await db.none(
       `insert into subscriptions
          (user_id, tier, status, interval, stripe_customer_id, stripe_subscription_id,
-          price_id, current_period_end, updated_at)
-       values ($1,$2,$3,$4,$5,$6,$7,$8, now())
+          price_id, current_period_end, apple_original_transaction_id,
+          apple_product_id, updated_at)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10, now())
        on conflict (user_id) do update set
          tier = excluded.tier,
          status = excluded.status,
@@ -133,6 +173,8 @@ export const billingStore = {
          stripe_subscription_id = excluded.stripe_subscription_id,
          price_id = excluded.price_id,
          current_period_end = excluded.current_period_end,
+         apple_original_transaction_id = excluded.apple_original_transaction_id,
+         apple_product_id = excluded.apple_product_id,
          updated_at = now()`,
       [
         userId,
@@ -143,6 +185,8 @@ export const billingStore = {
         next.stripeSubscriptionId,
         next.priceId,
         next.currentPeriodEnd,
+        next.appleOriginalTransactionId,
+        next.appleProductId,
       ],
     );
     return next;
@@ -165,6 +209,30 @@ export const billingStore = {
       priceId: null,
       currentPeriodEnd: null,
     });
+  },
+
+  /**
+   * Who already owns this Apple subscription, if anybody.
+   *
+   * The guard against one paid Apple ID entitling several accounts. Restoring
+   * on a second account is the ordinary way that happens and it is the first
+   * thing anybody tries, so it is checked before anything is granted rather
+   * than left to the unique index to reject afterwards - the index protects
+   * the data, this produces an answer the app can explain.
+   */
+  async userForAppleTransaction(originalTransactionId: string): Promise<string | null> {
+    if (!config.hasDb) {
+      for (const [uid, rec] of memStore) {
+        if (rec.appleOriginalTransactionId === originalTransactionId) return uid;
+      }
+      return null;
+    }
+    const row = await db.oneOrNone(
+      `select user_id from subscriptions
+        where apple_original_transaction_id = $1 limit 1`,
+      [originalTransactionId],
+    );
+    return row?.user_id ?? null;
   },
 
   /** Find the user id we stamped on a Stripe customer, for webhook reconciliation. */

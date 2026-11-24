@@ -6,11 +6,17 @@ import { requireAuth } from '../auth.js';
 import {
   stripe,
   planCatalog,
+  planForAppleProduct,
   billingStore,
   isPremium,
   applyStripeSubscription,
   type SubRecord,
 } from '../services/billing.js';
+import {
+  AppleVerificationError,
+  entitlementIsLive,
+  verifySignedTransaction,
+} from '../services/apple.js';
 
 export const billingRouter = Router();
 
@@ -60,6 +66,65 @@ billingRouter.get('/billing/plans', requireAuth, async (_req, res) => {
 // ── Where does this user stand ──────────────────────────────────────────────
 billingRouter.get('/billing/status', requireAuth, async (req, res) => {
   const rec = await billingStore.get(req.user.id);
+  res.json(statusPayload(rec));
+});
+
+// ── Apple: record a verified StoreKit purchase ──────────────────────────────
+//
+// The app sends the signed transaction StoreKit gave it. Everything that
+// decides entitlement is read out of Apple's signature, never out of the
+// request body: the client sends a productId and a planId too, but those are
+// only used to notice a mismatch, never to grant anything. A client that could
+// name its own tier would not need to pay for one.
+billingRouter.post('/billing/apple/verify', requireAuth, async (req, res) => {
+  const receipt = typeof req.body?.receipt === 'string' ? req.body.receipt : '';
+
+  let tx;
+  try {
+    tx = await verifySignedTransaction(receipt);
+  } catch (err) {
+    if (err instanceof AppleVerificationError) {
+      console.warn('[billing] apple receipt rejected:', err.message);
+      return res.status(400).json({ error: 'receipt did not verify', code: 'apple_invalid_receipt' });
+    }
+    throw err;
+  }
+
+  // Apple's product id decides the plan. Whatever planId the client claimed is
+  // never read: a client that could name its own tier would not need to buy
+  // one.
+  const plan = planForAppleProduct(tx.productId);
+  if (!plan) {
+    console.warn('[billing] verified apple transaction for an unknown product:', tx.productId);
+    return res.status(400).json({ error: 'unknown product', code: 'apple_unknown_product' });
+  }
+
+  // One Apple subscription, one account.
+  //
+  // Without this, restoring on a second account is a free second subscription,
+  // and it is the first thing anybody tries. Checked before anything is
+  // granted so the app can say why, rather than surfacing a unique-constraint
+  // failure from the insert.
+  const owner = await billingStore.userForAppleTransaction(tx.originalTransactionId);
+  if (owner && owner !== req.user.id) {
+    return res.status(409).json({
+      error: 'this subscription is already active on another OurMynd account',
+      code: 'apple_already_claimed',
+    });
+  }
+
+  const live = entitlementIsLive(tx);
+  const rec = await billingStore.upsert(req.user.id, {
+    tier: live ? plan.tier : 'free',
+    // Apple has no 'past_due': a lapsed subscription simply stops. Mapping it
+    // to canceled keeps isPremium's existing rules working unchanged.
+    status: live ? 'active' : 'canceled',
+    interval: plan.interval,
+    currentPeriodEnd: tx.expiresAt ? tx.expiresAt.toISOString() : null,
+    appleOriginalTransactionId: tx.originalTransactionId,
+    appleProductId: tx.productId,
+  });
+
   res.json(statusPayload(rec));
 });
 

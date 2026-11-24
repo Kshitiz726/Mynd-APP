@@ -65,6 +65,12 @@ export const config = {
   // require; that is deliberately not wired here yet.)
   appleBundleId: process.env.APPLE_BUNDLE_ID ?? 'com.ourmynd.app',
 
+  // The app's numeric App Store id, which is what Apple puts in a signed
+  // StoreKit transaction rather than the bundle id. Not a secret - it is the
+  // number in every App Store URL for the app - but it has to match, or every
+  // production receipt fails verification with INVALID_APP_IDENTIFIER.
+  appleAppStoreId: Number(process.env.APPLE_APP_STORE_ID ?? '6838455123'),
+
   // Web/Android Sign in with Apple addresses the token to the Services ID
   // rather than the bundle id, so both have to be accepted as audiences.
   appleServiceId: process.env.APPLE_SERVICE_ID ?? '',
