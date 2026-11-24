@@ -70,12 +70,15 @@ class _FeedScreenState extends State<FeedScreen> {
                 // from, so it is the whole of "customise your feed". A free
                 // user still gets a feed, built from the default brief; what
                 // Pro buys is saying what it should be about.
+                Haptics.light();
                 if (!_canCustomise(context)) {
-                  Haptics.light();
-                  Navigator.of(context).pushNamed(AppRoutes.paywall);
+                  // Say what it is before asking for money. Dropping somebody
+                  // straight onto a paywall from a button they have never
+                  // been able to press tells them the price of something they
+                  // were never shown.
+                  _showFeedLocked(context);
                   return;
                 }
-                Haptics.light();
                 setState(() => _editing = !_editing);
               },
             ),
@@ -121,7 +124,7 @@ class _FeedScreenState extends State<FeedScreen> {
                         problem: feed.problem,
                         onEdit: () {
                           if (!_canCustomise(context)) {
-                            Navigator.of(context).pushNamed(AppRoutes.paywall);
+                            _showFeedLocked(context);
                             return;
                           }
                           setState(() => _editing = true);
@@ -148,6 +151,150 @@ class _FeedScreenState extends State<FeedScreen> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// What Pro buys here, said before the price is.
+///
+/// The locked button used to go straight to the paywall. Somebody who has
+/// never been able to press it has no idea what they are being sold, so the
+/// paywall arrives as an interruption rather than an answer - and a reviewer
+/// opening the app sees a button that only ever produces a payment screen.
+///
+/// Also the place where a lapsed subscription explains itself. Entitlement
+/// comes from the server, so a subscription that ends re-locks this on the
+/// next refresh with no code of its own; what was missing was anything
+/// telling the person why the control they used yesterday stopped working.
+void _showFeedLocked(BuildContext context) {
+  final c = context.omColors;
+  final t = Theme.of(context).textTheme;
+  final lapsed = context.read<PremiumProvider>().tier != 'free';
+
+  showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    builder: (sheetContext) => SafeArea(
+      top: false,
+      child: Container(
+        margin: const EdgeInsets.all(12),
+        padding: const EdgeInsets.fromLTRB(22, 20, 22, 18),
+        decoration: BoxDecoration(
+          color: c.surface,
+          borderRadius: BorderRadius.circular(26),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: c.primary.withValues(alpha: 0.14),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(OmIcons.byName('sliders'),
+                      size: 21, color: c.primary),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    lapsed
+                        ? 'Your Pro features have paused'
+                        : 'Make the Feed about what you choose',
+                    style: t.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Text(
+              lapsed
+                  ? 'Your subscription has ended, so writing your own brief '
+                      'is locked again. Your feed carries on from the '
+                      'default brief, and nothing you wrote has been deleted.'
+                  : 'Your feed is written from a brief. On the free plan '
+                      'that is our default one. With Pro you write it '
+                      'yourself: the subjects you want, the ones you do not, '
+                      'and the tone it is written in.',
+              style: t.bodyMedium?.copyWith(color: c.text2, height: 1.5),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'Everything else in the Feed stays free.',
+              style: t.bodySmall?.copyWith(color: c.text2),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Expanded(
+                  child: _LockedSheetButton(
+                    label: 'Not now',
+                    filled: false,
+                    onTap: () => Navigator.of(sheetContext).pop(),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _LockedSheetButton(
+                    label: lapsed ? 'Resubscribe' : 'See Pro',
+                    filled: true,
+                    onTap: () {
+                      Navigator.of(sheetContext).pop();
+                      Navigator.of(context).pushNamed(AppRoutes.paywall);
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _LockedSheetButton extends StatelessWidget {
+  const _LockedSheetButton({
+    required this.label,
+    required this.filled,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool filled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.omColors;
+    return OmTappable(
+      onTap: () {
+        Haptics.light();
+        onTap();
+      },
+      feedback: OmTapFeedback.none,
+      pressedScale: 0.97,
+      child: Container(
+        height: 48,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: filled ? c.primary : c.surfaceAlt,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: filled ? OmColors.onFill(c.primary) : c.text,
+            fontWeight: FontWeight.w800,
+            fontSize: 15,
+          ),
         ),
       ),
     );
@@ -220,32 +367,81 @@ class _FeedHeader extends StatelessWidget {
               right: 0,
               child: Semantics(
                 label: locked
-                    ? 'feed instructions, included with Pro'
-                    : 'feed instructions',
+                    ? 'customise your feed, included with OurMynd Pro'
+                    : 'customise your feed',
                 button: true,
                 child: OmTappable(
                   onTap: onToggleEdit,
                   feedback: OmTapFeedback.none,
                   pressedScale: 0.9,
-                  child: Container(
-                    width: 46,
-                    height: 46,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: editing
-                          ? c.primary.withValues(alpha: 0.16)
-                          : c.surfaceAlt,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      OmIcons.byName(
-                          locked ? 'lock' : (editing ? 'close' : 'sliders')),
-                      size: 20,
-                      color: editing
-                          ? c.primary
-                          : locked
-                              ? c.text2
-                              : c.text,
+                  // The badge sits outside the circle, so it needs room that
+                  // the 46pt button does not have on its own.
+                  child: SizedBox(
+                    width: 52,
+                    height: 52,
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      alignment: Alignment.center,
+                      children: [
+                        Container(
+                          width: 46,
+                          height: 46,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: editing
+                                ? c.primary.withValues(alpha: 0.16)
+                                : c.surfaceAlt,
+                            shape: BoxShape.circle,
+                          ),
+                          // The real control, dimmed - not a padlock in its
+                          // place.
+                          //
+                          // Swapping the sliders for a lock hid the feature
+                          // instead of pricing it: there was no longer
+                          // anything on screen saying what the button would
+                          // do, so it read as "something is blocked" rather
+                          // than "you can customise your feed". Showing the
+                          // same icon at reduced weight keeps the function
+                          // legible and lets the badge carry the cost.
+                          child: Opacity(
+                            opacity: locked ? 0.45 : 1,
+                            child: Icon(
+                              OmIcons.byName(editing ? 'close' : 'sliders'),
+                              size: 20,
+                              color: editing ? c.primary : c.text,
+                            ),
+                          ),
+                        ),
+                        if (locked)
+                          Positioned(
+                            right: 0,
+                            bottom: 0,
+                            // A word, not just a padlock glyph. "PRO" says
+                            // what the thing costs; a padlock on its own only
+                            // says no, and leaves somebody guessing whether
+                            // it is a subscription or something they unlock
+                            // by using the app. Same badge as the coach
+                            // picker, so the two read as one rule.
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: c.primary,
+                                borderRadius: BorderRadius.circular(999),
+                                border: Border.all(color: c.bg, width: 1.5),
+                              ),
+                              child: Text(
+                                'PRO',
+                                style: TextStyle(
+                                  color: OmColors.onFill(c.primary),
+                                  fontSize: 8.5,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 0.3,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                 ),

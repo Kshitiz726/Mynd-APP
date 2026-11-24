@@ -142,7 +142,7 @@ void main() {
     // shrank to the width of the name pill and dropped the control on top of
     // the name. It looked like a rendering glitch and was a layout one.
     final screen = tester.getSize(find.byType(FeedScreen)).width;
-    final control = tester.getRect(find.bySemanticsLabel('feed instructions'));
+    final control = tester.getRect(find.bySemanticsLabel('customise your feed'));
     // The agent's own name, not a hard-coded one: the header follows whoever
     // is currently coaching.
     final name = tester.getRect(find.text(Agent.fallback.name));
@@ -167,7 +167,7 @@ void main() {
     expect(find.text('Feed instructions'), findsNothing,
         reason: 'the editor is behind the control, not always open');
 
-    await tester.tap(find.bySemanticsLabel('feed instructions'));
+    await tester.tap(find.bySemanticsLabel('customise your feed'));
     await settle(tester);
 
     expect(find.text('Feed instructions'), findsOneWidget);
@@ -195,7 +195,7 @@ void main() {
 
     await tester.pumpWidget(host());
     await settle(tester);
-    await tester.tap(find.bySemanticsLabel('feed instructions'));
+    await tester.tap(find.bySemanticsLabel('customise your feed'));
     await settle(tester);
 
     // Rewriting an edition costs a model call. A Save that fires on an
