@@ -101,7 +101,35 @@ export interface AppleTransaction {
   expiresAt: Date | null;
   /** True while the subscription is in its introductory free period. */
   isTrial: boolean;
+  /**
+   * When Apple took the money back, if it ever did.
+   *
+   * A refund or a revocation ends access at the moment it happens, not at the
+   * end of the period that was paid for - the period was not paid for any
+   * more. Apple stamps this into the transaction itself, so it travels with
+   * every later restore of the same purchase.
+   */
+  revokedAt: Date | null;
   environment: Environment;
+}
+
+/** The one place a verified payload becomes an [AppleTransaction]. */
+function toAppleTransaction(payload: JWSTransactionDecodedPayload): AppleTransaction {
+  const originalTransactionId = payload.originalTransactionId;
+  const transactionId = payload.transactionId;
+  const productId = payload.productId;
+  if (!originalTransactionId || !transactionId || !productId) {
+    throw new AppleVerificationError('verified transaction is missing its identifiers');
+  }
+  return {
+    originalTransactionId,
+    transactionId,
+    productId,
+    expiresAt: payload.expiresDate ? new Date(payload.expiresDate) : null,
+    isTrial: payload.offerType === 1,
+    revokedAt: payload.revocationDate ? new Date(payload.revocationDate) : null,
+    environment: (payload.environment as Environment) ?? Environment.PRODUCTION,
+  };
 }
 
 /**
@@ -140,32 +168,27 @@ export async function verifySignedTransaction(
     );
   }
 
-  const originalTransactionId = payload.originalTransactionId;
-  const transactionId = payload.transactionId;
-  const productId = payload.productId;
-  if (!originalTransactionId || !transactionId || !productId) {
-    throw new AppleVerificationError('verified transaction is missing its identifiers');
-  }
-
-  return {
-    originalTransactionId,
-    transactionId,
-    productId,
-    expiresAt: payload.expiresDate ? new Date(payload.expiresDate) : null,
-    isTrial: payload.offerType === 1,
-    environment: (payload.environment as Environment) ?? Environment.PRODUCTION,
-  };
+  return toAppleTransaction(payload);
 }
 
 /**
  * Whether a verified transaction still entitles the user to anything.
  *
- * Expiry is the whole of it. A cancelled subscription keeps working until the
+ * Two things end it, and they are not the same thing.
+ *
+ * Expiry is the ordinary one. A cancelled subscription keeps working until the
  * period it was paid for runs out, which is what Apple charges for and what
  * the customer expects; revoking at the moment of cancellation would be taking
  * back time somebody already bought.
+ *
+ * Revocation is the other, and it was missing. A refund or a family-sharing
+ * removal means the money is gone, so the time is gone with it - checking only
+ * expiry let somebody buy a year, claim a refund, press Restore and keep the
+ * year. Apple stamps the revocation into the transaction, so the restore
+ * carries the evidence against itself.
  */
 export function entitlementIsLive(tx: AppleTransaction, now = new Date()): boolean {
+  if (tx.revokedAt) return false;
   if (!tx.expiresAt) return true; // non-expiring product
   return tx.expiresAt.getTime() > now.getTime();
 }
