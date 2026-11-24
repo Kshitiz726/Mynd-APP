@@ -14,6 +14,7 @@
     "start": "node dist/server.js",
     "migrate": "node --import tsx scripts/migrate.ts",
     "smoke": "node --import tsx scripts/smoke.ts",
+    "smoke:apple": "node --import tsx scripts/smoke_apple.ts",
     "smoke:rooms": "node --import tsx scripts/smoke_rooms.ts",
     "smoke:chat": "node --import tsx scripts/smoke_chat.ts",
     "smoke:keepalive": "node --import tsx scripts/smoke_keepalive.ts",

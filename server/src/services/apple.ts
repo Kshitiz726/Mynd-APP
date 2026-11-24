@@ -6,6 +6,7 @@ import {
   Environment,
   SignedDataVerifier,
   type JWSTransactionDecodedPayload,
+  type ResponseBodyV2DecodedPayload,
 } from '@apple/app-store-server-library';
 
 import { config } from '../config.js';
@@ -191,4 +192,131 @@ export function entitlementIsLive(tx: AppleTransaction, now = new Date()): boole
   if (tx.revokedAt) return false;
   if (!tx.expiresAt) return true; // non-expiring product
   return tx.expiresAt.getTime() > now.getTime();
+}
+
+/** An App Store Server Notification, verified. */
+export interface AppleNotification {
+  /** e.g. DID_RENEW, EXPIRED, REFUND. Apple adds new ones without notice. */
+  type: string;
+  subtype: string | null;
+  /** Apple's id for this delivery. The same event is retried under the same id. */
+  uuid: string | null;
+  /**
+   * The subscription the event is about.
+   *
+   * Null for the notifications that carry no transaction at all - TEST, which
+   * is what the "Send Test Notification" button in App Store Connect produces,
+   * and the external-purchase and consumption families.
+   */
+  transaction: AppleTransaction | null;
+  /**
+   * How long Apple will keep retrying a failed payment while still counting
+   * the person as a subscriber, if the billing grace period is switched on.
+   *
+   * Needed because it is the one case where the transaction alone gives the
+   * wrong answer: on DID_FAIL_TO_RENEW the transaction has already expired,
+   * but Apple is still trying the card and still treats them as entitled.
+   * Reading only the expiry would cut off somebody mid-grace who is about to
+   * pay, which is both unkind and pointless.
+   */
+  gracePeriodExpiresAt: Date | null;
+}
+
+/**
+ * Verify an App Store Server Notification V2 and return what it says.
+ *
+ * This is the half of the purchase loop the device cannot do. A renewal
+ * happens a month after anybody last opened the app, and a refund happens
+ * somewhere else entirely: without this the server's idea of who is paying
+ * only ever updates when the payer themselves launches the app, so a renewed
+ * subscriber reads as free until they do, and a refunded one reads as paid for
+ * ever.
+ *
+ * Verified exactly like a transaction, against the same Apple roots, and for
+ * the same reason: the request arrives from the open internet with no
+ * authentication of any kind. Anybody can POST to this endpoint. The signature
+ * is the only thing that makes it Apple's.
+ *
+ * Notably NOT needed here: the .p8 App Store Server API key. That is for
+ * asking Apple questions; this is Apple telling us, already signed.
+ */
+export async function verifySignedNotification(
+  signedPayload: string,
+): Promise<AppleNotification> {
+  if (!signedPayload || signedPayload.split('.').length !== 3) {
+    throw new AppleVerificationError('not a signed notification');
+  }
+
+  let payload: ResponseBodyV2DecodedPayload | null = null;
+  let verifier: SignedDataVerifier | null = null;
+  let lastError: unknown = null;
+
+  // Same environment sweep as a transaction, for the same reason: nothing
+  // outside the signature says whether this came from Sandbox or Production,
+  // and a TestFlight build produces Sandbox notifications from the very same
+  // binary that produces Production ones once it ships.
+  for (const env of allowedEnvironments()) {
+    try {
+      const v = verifierFor(env);
+      payload = await v.verifyAndDecodeNotification(signedPayload);
+      verifier = v;
+      break;
+    } catch (err) {
+      lastError = err;
+    }
+  }
+
+  if (!payload || !verifier) {
+    throw new AppleVerificationError(
+      `notification did not verify: ${lastError instanceof Error ? lastError.message : lastError}`,
+    );
+  }
+
+  // The transaction is a second signed document nested inside the first, and
+  // it is the one that carries the product, the expiry and any revocation. The
+  // outer envelope only says what kind of event this is.
+  const signedTx = payload.data?.signedTransactionInfo;
+  const transaction = signedTx
+    ? toAppleTransaction(await verifier.verifyAndDecodeTransaction(signedTx))
+    : null;
+
+  const signedRenewal = payload.data?.signedRenewalInfo;
+  const renewal = signedRenewal
+    ? await verifier.verifyAndDecodeRenewalInfo(signedRenewal)
+    : null;
+
+  return {
+    type: String(payload.notificationType ?? ''),
+    subtype: payload.subtype ? String(payload.subtype) : null,
+    uuid: payload.notificationUUID ?? null,
+    transaction,
+    gracePeriodExpiresAt: renewal?.gracePeriodExpiresDate
+      ? new Date(renewal.gracePeriodExpiresDate)
+      : null,
+  };
+}
+
+/**
+ * Whether a notification leaves the person entitled, right now.
+ *
+ * Deliberately derived from the signed documents rather than from
+ * [AppleNotification.type]. Apple adds notification types without warning, and
+ * a switch over them is a list of the ones that existed when it was written:
+ * the first unhandled type silently becomes "no change". The transaction, on
+ * the other hand, always says the same three things - what was bought, when it
+ * runs out, and whether the money was taken back - and those are the whole
+ * answer for every event that matters.
+ */
+export function notificationLeavesEntitlement(
+  note: AppleNotification,
+  now = new Date(),
+): boolean {
+  const tx = note.transaction;
+  if (!tx) return false;
+  // Revocation beats everything, including an unexpired grace period: there is
+  // no grace on a refund.
+  if (tx.revokedAt) return false;
+  if (entitlementIsLive(tx, now)) return true;
+  const grace = note.gracePeriodExpiresAt;
+  return grace !== null && grace.getTime() > now.getTime();
 }

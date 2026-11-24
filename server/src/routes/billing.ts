@@ -15,6 +15,8 @@ import {
 import {
   AppleVerificationError,
   entitlementIsLive,
+  notificationLeavesEntitlement,
+  verifySignedNotification,
   verifySignedTransaction,
 } from '../services/apple.js';
 
@@ -126,6 +128,92 @@ billingRouter.post('/billing/apple/verify', requireAuth, async (req, res) => {
   });
 
   res.json(statusPayload(rec));
+});
+
+// ── Apple tells us what happened later ─────────────────────────────
+//
+// App Store Server Notifications V2. Set the URL in App Store Connect ->
+// your app -> App Information -> App Store Server Notifications.
+//
+// Without this endpoint the server only learns about a subscription when the
+// subscriber themselves opens the app and StoreKit re-delivers the
+// transaction. That is the wrong moment for all three of the events that
+// matter: a renewal happens a month after anybody last looked, a refund
+// happens in a conversation with Apple we are not part of, and an expiry
+// happens to somebody who has stopped opening the app by definition. A
+// renewed subscriber read as free until they next launched, and a refunded
+// one read as paid for as long as the period they no longer own.
+//
+// Unauthenticated on purpose: Apple has no credential to present and this URL
+// is reachable by anybody. The JWS signature is the entire authentication, and
+// it is checked against Apple's own roots before a single field is read.
+billingRouter.post('/billing/apple/notifications', async (req, res) => {
+  const signedPayload =
+    typeof req.body?.signedPayload === 'string' ? req.body.signedPayload : '';
+
+  let note;
+  try {
+    note = await verifySignedNotification(signedPayload);
+  } catch (err) {
+    if (err instanceof AppleVerificationError) {
+      // 400 rather than a quiet 200. Apple retries a non-2xx for a day, but
+      // nothing Apple actually sent can fail here - this is a forgery or a
+      // misconfiguration, and both are worth seeing in the logs instead of
+      // being swallowed.
+      console.warn('[billing] apple notification rejected:', err.message);
+      return res.status(400).json({ error: 'notification did not verify' });
+    }
+    throw err;
+  }
+
+  const label = note.subtype ? `${note.type}/${note.subtype}` : note.type;
+
+  // TEST (the "Send Test Notification" button in App Store Connect) and the
+  // external-purchase family carry no transaction. Acknowledged rather than
+  // refused: they are genuinely Apple's, and a non-2xx would have Apple
+  // retrying a test message every hour for a day.
+  if (!note.transaction) {
+    console.log(`[billing] apple notification ${label}: no transaction, acknowledged`);
+    return res.json({ ok: true });
+  }
+
+  const tx = note.transaction;
+  const userId = await billingStore.userForAppleTransaction(tx.originalTransactionId);
+  if (!userId) {
+    // Apple can notify before the app has reported the purchase, and sandbox
+    // notifications arrive for tester accounts this server has never seen.
+    // There is nobody to grant or revoke anything for, and creating a row
+    // keyed to no user would be inventing a subscriber. The app's own
+    // /billing/apple/verify call is what introduces a subscription to us.
+    console.log(`[billing] apple notification ${label}: unknown subscription, acknowledged`);
+    return res.json({ ok: true });
+  }
+
+  const plan = planForAppleProduct(tx.productId);
+  if (!plan) {
+    console.warn(`[billing] apple notification ${label} for unknown product:`, tx.productId);
+    return res.json({ ok: true });
+  }
+
+  const live = notificationLeavesEntitlement(note);
+  await billingStore.upsert(userId, {
+    tier: live ? plan.tier : 'free',
+    // Apple has no 'past_due'. A lapsed subscription simply stops, and
+    // mapping that to canceled keeps isPremium's existing rules working.
+    status: live ? 'active' : 'canceled',
+    interval: plan.interval,
+    // Taken from the transaction even when access has ended, so the row still
+    // records when it ended rather than going blank.
+    currentPeriodEnd: tx.expiresAt ? tx.expiresAt.toISOString() : null,
+    appleOriginalTransactionId: tx.originalTransactionId,
+    appleProductId: tx.productId,
+  });
+
+  // No user id in the log line. This file is read while debugging somebody
+  // else's payment problem, and an account id is not needed to see that the
+  // loop is working.
+  console.log(`[billing] apple notification ${label}: -> ${live ? plan.tier : 'free'}`);
+  res.json({ ok: true });
 });
 
 // ── Start a subscription ────────────────────────────────────────────────────
