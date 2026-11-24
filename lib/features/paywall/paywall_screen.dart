@@ -2,18 +2,29 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/config/pro_features.dart';
+import '../../core/config/store_policy.dart';
 import '../../core/constants/app_spacing.dart';
+import '../../core/constants/legal.dart';
 import '../../core/services/billing_service.dart';
+import '../../core/services/iap_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/haptics.dart';
 import '../../core/utils/toast.dart';
 import '../../providers/premium_provider.dart';
 import '../../widgets/om_tappable.dart';
 
-/// The paywall: pick an interval (monthly or yearly),
-/// then subscribe through Stripe's hosted Checkout. We open the hosted page in
-/// the browser; when the app returns to the foreground we reconcile the session
-/// with the server, so premium unlocks the moment payment clears.
+/// The paywall: pick an interval (monthly or yearly), then subscribe on
+/// whichever rail this platform uses.
+///
+/// On iOS that is StoreKit - Apple's payment sheet appears over this screen,
+/// the transaction is verified by our server, and entitlement flips before the
+/// sheet has finished dismissing. Everywhere else it is Stripe's hosted
+/// Checkout in the system browser, reconciled when the app returns to the
+/// foreground.
+///
+/// The screen itself does not branch on which: [PremiumProvider.plans] is the
+/// same shape either way, and prices are always the store's own string rather
+/// than one we format.
 ///
 /// It takes its colours from the app, like every other screen - the offer
 /// arrives in the same room as everything else, so the only thing that changes
@@ -110,20 +121,39 @@ class _PaywallScreenState extends State<PaywallScreen>
   // and a second one may come back once it has a feature of its own.
   String _tier = 'pro';
 
+  /// Held, not looked up in dispose().
+  ///
+  /// dispose() used `context.read<PremiumProvider>()`, which is an inherited
+  /// widget lookup on an element that has already been deactivated - "looking
+  /// up a deactivated widget's ancestor is unsafe", thrown every time this
+  /// screen is closed. Reading it once while the element is still mounted is
+  /// the documented fix, and the provider outlives the screen anyway.
+  late final PremiumProvider _premium;
+
   @override
   void initState() {
     super.initState();
+    _premium = context.read<PremiumProvider>();
     WidgetsBinding.instance.addObserver(this);
-    // Load the catalogue and re-check where the user stands.
-    final premium = context.read<PremiumProvider>();
-    premium.loadPlans();
-    premium.refresh();
+    // After the frame, not during it.
+    //
+    // loadPlans notifies synchronously before its first await, so calling it
+    // straight from initState marks this screen's provider dirty while the
+    // tree is still being built - "setState() called during build", thrown on
+    // every single open of this screen. It was invisible because nothing had
+    // ever mounted the paywall outside the running app, where the framework
+    // logs it and carries on.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _premium.loadPlans();
+      _premium.refresh();
+    });
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    context.read<PremiumProvider>().clearPending();
+    _premium.clearPending();
     super.dispose();
   }
 
@@ -143,7 +173,7 @@ class _PaywallScreenState extends State<PaywallScreen>
     final nowPremium = await premium.reconcileOnResume();
     if (nowPremium && mounted) {
       Haptics.success();
-      Toast.show(context, "You're premium now — enjoy 🎉");
+      Toast.show(context, "You're premium now - enjoy");
       Navigator.of(context).maybePop();
     }
   }
@@ -151,9 +181,14 @@ class _PaywallScreenState extends State<PaywallScreen>
   Future<void> _manageSubscription() async {
     final premium = context.read<PremiumProvider>();
     Haptics.medium();
-    final ok = await premium.openBillingPortal();
+    // Apple owns the subscription on its own rail, so the only screen that can
+    // cancel or change it is Apple's. Sending somebody to Stripe's portal
+    // there would show them a page with nothing of theirs on it.
+    final ok = StorePolicy.useStoreKit
+        ? await premium.openAppleSubscriptions()
+        : await premium.openBillingPortal();
     if (!ok && mounted) {
-      Toast.show(context, "Couldn't open billing — try again");
+      Toast.show(context, "Couldn't open subscription settings - try again");
     }
   }
 
@@ -172,9 +207,40 @@ class _PaywallScreenState extends State<PaywallScreen>
       return;
     }
     Haptics.medium();
-    final launched = await premium.startCheckout(plan.id);
-    if (!launched && mounted) {
-      Toast.show(context, "Couldn't open checkout — try again");
+    try {
+      final nowPremium = await premium.buy(plan.id);
+      if (!mounted) return;
+      if (nowPremium) {
+        Haptics.success();
+        Toast.show(context, "You're Pro now - enjoy");
+        Navigator.of(context).maybePop();
+      } else if (!StorePolicy.useStoreKit) {
+        // The Stripe rail only opens a browser here; the result arrives on
+        // resume. A false means the browser itself would not open.
+        Toast.show(context, "Couldn't open checkout - try again");
+      }
+    } on IapException catch (e) {
+      // Backing out of Apple's sheet is the most common thing that happens on
+      // a paywall. Reporting it as a failure reads as "your card was
+      // declined" to somebody who simply changed their mind.
+      if (!mounted || e.failure == IapFailure.cancelled) return;
+      Toast.show(context, e.message);
+    }
+  }
+
+  Future<void> _restore() async {
+    final premium = context.read<PremiumProvider>();
+    Haptics.light();
+    final nowPremium = await premium.restore();
+    if (!mounted) return;
+    if (nowPremium) {
+      Haptics.success();
+      Toast.show(context, 'Your subscription is back');
+      Navigator.of(context).maybePop();
+    } else {
+      // Deliberately not an error. The commonest reason is that there is
+      // nothing to restore, which is not something the person did wrong.
+      Toast.show(context, 'No earlier purchase found on this Apple ID');
     }
   }
 
@@ -258,6 +324,11 @@ class _PaywallScreenState extends State<PaywallScreen>
             padding: EdgeInsets.symmetric(vertical: 60),
             child: Center(child: CircularProgressIndicator()),
           )
+        else if (premium.plans.isEmpty)
+          _StoreUnreachable(onRetry: () {
+            premium.clearPlans();
+            premium.loadPlans();
+          })
         else ...[
           for (final t in _tiers)
             Padding(
@@ -277,7 +348,9 @@ class _PaywallScreenState extends State<PaywallScreen>
           const SizedBox(height: 16),
           _CtaButton(
             label: premium.busy
-                ? 'Opening checkout…'
+                ? (StorePolicy.useStoreKit
+                    ? 'Confirming…'
+                    : 'Opening checkout…')
                 : 'Subscribe to Pro',
             busy: premium.busy,
             onTap: premium.busy ? null : _subscribe,
@@ -302,9 +375,102 @@ class _PaywallScreenState extends State<PaywallScreen>
               ),
             ),
           const SizedBox(height: 8),
-          const _LegalRow(),
+          _RenewalNotice(interval: _interval),
+          const SizedBox(height: 10),
+          _LegalRow(onRestore: _restore),
         ],
       ],
+    );
+  }
+}
+
+/// What the store told us, when it told us nothing.
+///
+/// An empty paywall is read as a broken app, and on this rail it almost never
+/// is: in the simulator it means no StoreKit configuration file is selected in
+/// the run scheme, and on a device it means the product ids do not match App
+/// Store Connect, the products are not Ready to Submit, or the Paid
+/// Applications agreement is not Active. None of that is the person's problem,
+/// so they get a retry rather than a diagnosis.
+class _StoreUnreachable extends StatelessWidget {
+  const _StoreUnreachable({required this.onRetry});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.omColors;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 44),
+      child: Column(
+        children: [
+          Icon(Icons.cloud_off_rounded, size: 34, color: c.text2),
+          const SizedBox(height: 14),
+          Text(
+            'Plans are unavailable right now',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+                color: c.text, fontSize: 16, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'The App Store did not answer. Nothing has been charged.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: c.text2, fontSize: 13.5, height: 1.4),
+          ),
+          const SizedBox(height: 18),
+          OmTappable(
+            onTap: onRetry,
+            feedback: OmTapFeedback.light,
+            pressedScale: 0.97,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 11),
+              decoration: BoxDecoration(
+                color: c.primary.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                'Try again',
+                style: TextStyle(
+                    color: c.primary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The auto-renewal disclosure.
+///
+/// Guideline 3.1.2 requires the length of the subscription and the fact that
+/// it renews to be on the screen that sells it, not only in the terms - and a
+/// paywall that does not say it is rejected. It also has to be true: Apple
+/// takes the payment and Apple cancels it, so this points at the one place
+/// that can.
+class _RenewalNotice extends StatelessWidget {
+  const _RenewalNotice({required this.interval});
+
+  final String interval;
+
+  @override
+  Widget build(BuildContext context) {
+    final period = interval == 'year' ? 'year' : 'month';
+    final where = StorePolicy.useStoreKit
+        ? 'Cancel any time in your Apple ID settings, at least 24 hours '
+            'before it renews.'
+        : 'Cancel any time from your account.';
+    return Text(
+      'Renews automatically every $period until cancelled. $where',
+      textAlign: TextAlign.center,
+      style: TextStyle(
+        color: context.omColors.text2,
+        fontSize: 11.5,
+        height: 1.45,
+      ),
     );
   }
 }
@@ -493,9 +659,7 @@ class _TierCard extends StatelessWidget {
                 ),
                 // Selection tick.
                 Icon(
-                  selected
-                      ? Icons.check_circle_rounded
-                      : Icons.circle_outlined,
+                  selected ? Icons.check_circle_rounded : Icons.circle_outlined,
                   color: selected ? c.primary : c.text2,
                   size: 24,
                 ),
@@ -766,8 +930,10 @@ class _AlreadyPremium extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         Text(
-          'Update your payment details or cancel anytime. Your subscription '
-          'is managed by whoever you bought it through.',
+          StorePolicy.useStoreKit
+              ? 'Apple handles the payment, so changing or cancelling happens '
+                  'in your Apple ID settings. This opens that screen.'
+              : 'Update your payment details or cancel anytime.',
           textAlign: TextAlign.center,
           style: TextStyle(color: c.text2, fontSize: 12, height: 1.4),
         ),
@@ -777,7 +943,8 @@ class _AlreadyPremium extends StatelessWidget {
 }
 
 class _CtaButton extends StatelessWidget {
-  const _CtaButton({required this.label, required this.onTap, this.busy = false});
+  const _CtaButton(
+      {required this.label, required this.onTap, this.busy = false});
 
   final String label;
   final VoidCallback? onTap;
@@ -827,18 +994,50 @@ class _CtaButton extends StatelessWidget {
   }
 }
 
+/// Restore, privacy, terms - all three of which have to work.
+///
+/// They were three pieces of inert text. Apple requires functional links to
+/// the terms and the privacy policy on the screen that sells a subscription
+/// (Guideline 3.1.2), and requires a working restore for anybody who has
+/// already paid and reinstalled; a label that looks like a link and does
+/// nothing fails both, and reads as a broken app besides. Legal.open already
+/// existed and nothing was calling it from here.
 class _LegalRow extends StatelessWidget {
-  const _LegalRow();
+  const _LegalRow({required this.onRestore});
+
+  final VoidCallback onRestore;
 
   @override
   Widget build(BuildContext context) {
-    final style = TextStyle(color: context.omColors.text2, fontSize: 11.5);
+    final c = context.omColors;
+    // Underlined, because a tappable word that is only a shade darker is not
+    // discoverable as a link - and these are the ones a reviewer looks for.
+    final style = TextStyle(
+      color: c.text2,
+      fontSize: 11.5,
+      fontWeight: FontWeight.w600,
+      decoration: TextDecoration.underline,
+      decorationColor: c.text2.withValues(alpha: 0.5),
+    );
+
+    Widget link(String label, VoidCallback onTap) => OmTappable(
+          onTap: onTap,
+          feedback: OmTapFeedback.light,
+          pressedScale: 0.96,
+          child: Padding(
+            // The text is 11.5pt, so the row needs padding of its own to reach
+            // a 44pt tap target.
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 12),
+            child: Text(label, style: style),
+          ),
+        );
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text('Restore Purchase', style: style),
-        Text('Privacy Policy', style: style),
-        Text('Terms of Use', style: style),
+        link('Restore Purchase', onRestore),
+        link('Privacy Policy', () => Legal.openPrivacy(context)),
+        link('Terms of Use', () => Legal.openTerms(context)),
       ],
     );
   }

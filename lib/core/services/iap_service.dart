@@ -64,7 +64,8 @@ class IapException implements Exception {
       };
 
   @override
-  String toString() => 'IapException(${failure.name}${detail == null ? '' : ': $detail'})';
+  String toString() =>
+      'IapException(${failure.name}${detail == null ? '' : ': $detail'})';
 }
 
 /// StoreKit, wrapped.
@@ -84,7 +85,11 @@ class IapService {
   IapService._();
   static final IapService instance = IapService._();
 
-  final InAppPurchase _iap = InAppPurchase.instance;
+  // A getter for the same reason PremiumProvider's is: InAppPurchase.instance
+  // registers a platform and, on Android, opens a billing connection the
+  // moment it is first read. Nothing here should happen because the singleton
+  // exists - only because something called into it.
+  InAppPurchase get _iap => InAppPurchase.instance;
 
   StreamSubscription<List<PurchaseDetails>>? _sub;
   List<ProductDetails> _products = const [];
@@ -198,16 +203,27 @@ class IapService {
               purchase.productID,
               IapException(IapFailure.notVerified),
             );
+            // Deliberately left unfinished.
+            //
+            // Somebody has paid and our server did not confirm it. Finishing
+            // here tells StoreKit the transaction is dealt with and it stops
+            // offering it, so a server that was merely down for a minute
+            // costs that person their subscription until they think to press
+            // Restore. Left open, StoreKit hands it back on the next launch
+            // and the verification simply happens then.
+            //
+            // Safe on StoreKit 2, which this plugin uses: unfinished
+            // transactions are re-delivered rather than blocking the queue
+            // the way StoreKit 1's did.
+            continue;
           }
       }
 
-      // Always, and only after verifying.
+      // Finished only once it has been accounted for.
       //
-      // An unfinished transaction is re-delivered by StoreKit on every launch
-      // for ever, and on iOS the payment queue will not move past it - so
-      // forgetting this wedges every future purchase. Finishing it before the
-      // server has confirmed is the opposite mistake: the receipt is gone and
-      // a purchase that failed verification can never be recovered.
+      // An unfinished transaction is re-delivered on every launch for ever,
+      // so skipping this for a purchase we HAVE honoured would mean
+      // re-verifying the same one indefinitely.
       if (purchase.pendingCompletePurchase) {
         await _iap.completePurchase(purchase);
       }

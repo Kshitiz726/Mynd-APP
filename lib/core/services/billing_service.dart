@@ -9,6 +9,7 @@ class BillingPlan {
     required this.interval,
     this.amount,
     this.currency,
+    this.displayPrice,
   });
 
   /// e.g. 'plus_month', 'pro_year'.
@@ -26,6 +27,39 @@ class BillingPlan {
   /// ISO currency code, e.g. 'gbp'. Null if unavailable.
   final String? currency;
 
+  /// The price already formatted by the store, when the store formats it.
+  ///
+  /// StoreKit hands back a string localised for the viewer's storefront, and
+  /// Apple requires that exact string to be what the paywall shows. Our own
+  /// [priceText] cannot reproduce it: it knows three currency symbols, puts
+  /// them all in front, and has no idea that most of the world writes
+  /// "1.200 Ft" or "R$ 19,90". So when the store gives us a price, we use it
+  /// verbatim and keep [amount] only for the savings arithmetic.
+  final String? displayPrice;
+
+  /// A StoreKit product as a plan, so the paywall renders one shape whichever
+  /// rail is selling.
+  ///
+  /// [id] is our own catalogue id rather than Apple's product id, because that
+  /// is what the server records a subscription against on either rail.
+  factory BillingPlan.fromStore({
+    required String planId,
+    required String interval,
+    required String displayPrice,
+    required double rawPrice,
+    required String currencyCode,
+  }) =>
+      BillingPlan(
+        id: planId,
+        tier: 'pro',
+        interval: interval,
+        // Apple gives a decimal major-unit price; the rest of this class is in
+        // minor units because that is what Stripe sends.
+        amount: (rawPrice * 100).round(),
+        currency: currencyCode.toLowerCase(),
+        displayPrice: displayPrice,
+      );
+
   factory BillingPlan.fromJson(Map<String, dynamic> j) => BillingPlan(
         id: j['id'] as String,
         tier: j['tier'] as String,
@@ -37,10 +71,13 @@ class BillingPlan {
   static const _symbols = {'gbp': '£', 'usd': r'$', 'eur': '€'};
 
   /// The currency symbol for [currency], defaulting to the code itself.
-  String get symbol => _symbols[currency ?? ''] ?? ((currency ?? '').toUpperCase());
+  String get symbol =>
+      _symbols[currency ?? ''] ?? ((currency ?? '').toUpperCase());
 
   /// "£9.99" - the amount alone, no interval suffix. Empty when unknown.
   String get priceText {
+    final store = displayPrice;
+    if (store != null && store.isNotEmpty) return store;
     final a = amount;
     if (a == null) return '';
     final major = a / 100;
@@ -71,7 +108,8 @@ class BillingStatus {
   final String? interval;
   final DateTime? currentPeriodEnd;
 
-  static const free = BillingStatus(premium: false, tier: 'free', status: 'canceled');
+  static const free =
+      BillingStatus(premium: false, tier: 'free', status: 'canceled');
 
   factory BillingStatus.fromJson(Map<String, dynamic> j) => BillingStatus(
         premium: j['premium'] == true,
@@ -115,6 +153,27 @@ class BillingService {
   /// the (possibly now-premium) status.
   Future<BillingStatus> confirm(String sessionId) async {
     final j = await _api.post('/api/billing/confirm', {'sessionId': sessionId});
+    return BillingStatus.fromJson(j);
+  }
+
+  /// Hands Apple's transaction to the server to be checked against the App
+  /// Store Server API, and returns the entitlement the server then believes in.
+  ///
+  /// The client never decides this. A verification that ran on the device is a
+  /// verification anybody with a jailbroken phone can forge, so the receipt
+  /// goes to the server and the server's answer is the only one that counts.
+  Future<BillingStatus> verifyApple({
+    required String planId,
+    required String productId,
+    required String transactionId,
+    required String receipt,
+  }) async {
+    final j = await _api.post('/api/billing/apple/verify', {
+      'planId': planId,
+      'productId': productId,
+      'transactionId': transactionId,
+      'receipt': receipt,
+    });
     return BillingStatus.fromJson(j);
   }
 
