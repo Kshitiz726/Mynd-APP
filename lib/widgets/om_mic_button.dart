@@ -7,6 +7,7 @@ import '../core/theme/app_colors.dart';
 import '../core/utils/haptics.dart';
 import '../core/utils/om_icons.dart';
 import 'om_tappable.dart';
+import 'voice_consent.dart';
 
 /// Where dictated words land in a field that may already have text in it.
 ///
@@ -176,6 +177,18 @@ class _OmMicButtonState extends State<OmMicButton>
       return;
     }
 
+    // Asked here, at the button, rather than by each screen that hosts one.
+    //
+    // Dictation uploads a recording of the person's voice to Groq. Whether
+    // they have agreed to that is a property of pressing this button, not of
+    // which screen it happens to be on - and leaving it to the hosts is how
+    // the brain dump ended up with a microphone that uploaded audio with
+    // nothing asked, while the chat's was covered only because the whole
+    // chat sits behind the consent screen. One gate, at the only place the
+    // microphone can be opened.
+    if (!await VoiceConsent.ensure(context)) return;
+    if (!mounted) return;
+
     Haptics.light();
     _setPhase(_Mic.opening);
 
@@ -246,8 +259,8 @@ class _OmMicButtonState extends State<OmMicButton>
       // came back", and that covers a mumble, an expired session and a
       // refusal to send the audio at all - three things the user has to do
       // three different things about.
-      widget.onError
-          ?.call(_stt.lastError ?? "Didn't catch that. Try again a bit closer.");
+      widget.onError?.call(
+          _stt.lastError ?? "Didn't catch that. Try again a bit closer.");
       return;
     }
 

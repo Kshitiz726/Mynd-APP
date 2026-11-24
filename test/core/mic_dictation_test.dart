@@ -13,7 +13,13 @@ import 'package:ourmynd/widgets/om_mic_button.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  setUp(() => SharedPreferences.setMockInitialValues({}));
+  setUp(() {
+    // Consent already given, so these exercise the recording path rather
+    // than the disclosure in front of it. The sheet itself, and the fact it
+    // is there at all, are pinned in voice_consent_test.dart - this file is
+    // about what the button does once the microphone is allowed to open.
+    SharedPreferences.setMockInitialValues({'om_voice_consent_granted': true});
+  });
 
   group('insertDictation', () {
     test('an empty field just takes the words', () {
