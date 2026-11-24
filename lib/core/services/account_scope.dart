@@ -47,11 +47,31 @@ class AccountScope {
   /// happens to sign in next.
   static const _unclaimed = '${_park}_unclaimed:';
 
-  /// The only two keys that stay put across a switch, because neither says
-  /// anything about a person: whether Android's notification permission dialog
-  /// has been shown (an OS-level, per-app fact - re-asking would just be a
-  /// prompt loop), and the pointer to who owns the live data.
-  static const _deviceKeys = <String>{_kOwner, 'om_notif_permission_asked'};
+  /// The keys that stay put across a switch, because none of them says
+  /// anything about a person.
+  ///
+  /// The pointer to who owns the live data, and whether Android's
+  /// notification permission dialog has been shown (an OS-level, per-app
+  /// fact - re-asking would just be a prompt loop).
+  ///
+  /// And the display settings. Those are a property of this phone and the
+  /// eyes looking at it, not of whoever is signed in: somebody who turned on
+  /// dark mode, the hyperlegible font or reduce-motion did so because of how
+  /// they read, and taking it away when they switch account would be taking
+  /// away an accessibility setting they never changed. `om_dark_mode` has a
+  /// second reason - iOS reads it natively to pick the launch screen's
+  /// appearance, before any account is known, so there is only ever one of
+  /// it to read.
+  static const _deviceKeys = <String>{
+    _kOwner,
+    'om_notif_permission_asked',
+    'om_dark_mode',
+    'om_low_stim',
+    'om_auto_low_stim',
+    'om_hyperlegible',
+    'om_reduce_motion',
+    'om_haptics',
+  };
 
   /// The session is written immediately after a switch; leaving it out keeps
   /// the swap independent of that ordering.

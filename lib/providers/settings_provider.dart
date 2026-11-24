@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -58,26 +60,31 @@ class SettingsProvider extends ChangeNotifier {
   void toggleDarkMode([bool? value]) {
     _darkMode = value ?? !_darkMode;
     notifyListeners();
+    unawaited(_put(_kDarkMode, _darkMode));
   }
 
   void toggleLowStim([bool? value]) {
     _lowStim = value ?? !_lowStim;
     notifyListeners();
+    unawaited(_put(_kLowStim, _lowStim));
   }
 
   void toggleAutoLowStim([bool? value]) {
     _autoLowStim = value ?? !_autoLowStim;
     notifyListeners();
+    unawaited(_put(_kAutoLowStim, _autoLowStim));
   }
 
   void toggleHyperlegible([bool? value]) {
     _hyperlegible = value ?? !_hyperlegible;
     notifyListeners();
+    unawaited(_put(_kHyperlegible, _hyperlegible));
   }
 
   void toggleReduceMotion([bool? value]) {
     _reduceMotion = value ?? !_reduceMotion;
     notifyListeners();
+    unawaited(_put(_kReduceMotion, _reduceMotion));
   }
 
   Future<void> toggleTypingSound([bool? value]) async {
@@ -93,6 +100,7 @@ class SettingsProvider extends ChangeNotifier {
     _haptics = value ?? !_haptics;
     Haptics.enabled = _haptics;
     notifyListeners();
+    unawaited(_put(_kHaptics, _haptics));
   }
 
   /// Called when energy is logged; turns low-stim on automatically if the user
@@ -119,6 +127,61 @@ class SettingsProvider extends ChangeNotifier {
   /// there is no provider to ask.
   static const _kRingtone = 'om_selected_ringtone';
   static const _kTypingSound = 'om_typing_sound';
+
+  /// Dark mode, read natively as well as from Dart.
+  ///
+  /// iOS reads this key directly in AppDelegate to pick the launch screen's
+  /// appearance, because the launch screen is drawn by UIKit before any Dart
+  /// has run. shared_preferences stores Dart keys with a `flutter.` prefix,
+  /// so the native side looks up `flutter.om_dark_mode`. Renaming this breaks
+  /// the launch screen silently, which is why it says so here.
+  static const _kDarkMode = 'om_dark_mode';
+  static const _kLowStim = 'om_low_stim';
+  static const _kAutoLowStim = 'om_auto_low_stim';
+  static const _kHyperlegible = 'om_hyperlegible';
+  static const _kReduceMotion = 'om_reduce_motion';
+  static const _kHaptics = 'om_haptics';
+
+  /// Everything on this screen, restored.
+  ///
+  /// None of these were ever written down. Dark mode, low-stim, the
+  /// hyperlegible font and reduce-motion all lived in memory only, so every
+  /// one of them silently reset on the next launch - and reduce-motion and
+  /// low-stim are accessibility settings, which makes resetting them without
+  /// being asked the worst version of this bug. Only the ringtone was saved.
+  ///
+  /// Called before runApp so the very first frame is already in the right
+  /// theme. Loading it afterwards would paint a light frame and then snap to
+  /// dark, which is the flash this was meant to remove.
+  Future<void> load() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      _darkMode = p.getBool(_kDarkMode) ?? _darkMode;
+      _lowStim = p.getBool(_kLowStim) ?? _lowStim;
+      _autoLowStim = p.getBool(_kAutoLowStim) ?? _autoLowStim;
+      _hyperlegible = p.getBool(_kHyperlegible) ?? _hyperlegible;
+      _reduceMotion = p.getBool(_kReduceMotion) ?? _reduceMotion;
+      _haptics = p.getBool(_kHaptics) ?? _haptics;
+      Haptics.enabled = _haptics;
+      _typingSound = p.getBool(_kTypingSound) ?? _typingSound;
+      _selectedRingtone = p.getString(_kRingtone) ?? _selectedRingtone;
+    } catch (e) {
+      // Defaults are a working app. Losing a preference is not worth
+      // refusing to start over.
+      debugPrint('[settings] could not restore: $e');
+    }
+    notifyListeners();
+  }
+
+  /// Fire and forget. A toggle must feel instant, and the write is a detail.
+  Future<void> _put(String key, bool value) async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.setBool(key, value);
+    } catch (e) {
+      debugPrint('[settings] could not save $key: $e');
+    }
+  }
 
   /// Restore the tone. Held only in memory before, so every launch silently
   /// reset the picker to 'Default' and the choice never survived a restart.

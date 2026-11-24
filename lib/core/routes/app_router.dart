@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -22,13 +21,15 @@ import 'app_routes.dart';
 abstract final class AppRouter {
   /// Which screen a route name resolves to.
   ///
-  /// Split out from [onGenerateRoute] so a test can ask what a name builds
-  /// without mounting it. That distinction matters here: the Route object is
-  /// byte-identical whether or not the paywall is reachable - only the page it
-  /// builds differs - so a test asserting on the Route passes for the wrong
-  /// reason, and mounting the fallback needs the whole provider tree.
-  /// Constructing a widget does neither.
-  @visibleForTesting
+  /// Split out from [onGenerateRoute] so a caller can get the *page* for a
+  /// name without the Route that normally wraps it.
+  ///
+  /// Two callers need that. A test can ask what a name builds without
+  /// mounting it - the Route object is byte-identical whether or not the
+  /// paywall is reachable, only the page differs, so a test asserting on the
+  /// Route passes for the wrong reason. And the launch screen hands over with
+  /// a cross-fade of its own rather than the platform slide, which means
+  /// building its own Route around this page.
   static WidgetBuilder builderFor(String? name) => switch (name) {
       AppRoutes.shell => (_) => const AppShell(),
       AppRoutes.login => (_) => const LoginScreen(),

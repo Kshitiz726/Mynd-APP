@@ -94,21 +94,42 @@ class _SplashScreenState extends State<SplashScreen> {
     await Future<void>.delayed(left < _floor ? _floor : left);
     if (!mounted) return;
 
-    debugPrint('[splash] fading out');
-    setState(() => _leaving = true);
-    await Future<void>.delayed(_fadeOut);
-    if (!mounted) return;
     debugPrint('[splash] handing over to ${widget.next}');
-    // Built straight from the router rather than pushed by name.
+    setState(() => _leaving = true);
+
+    // A cross-fade, not a fade-out followed by a push.
     //
-    // This used to be load-bearing: the shell was named '/', which is also
-    // where WidgetsApp registers `home` - this screen - so pushing the shell by
-    // name landed back here and looped forever. The shell now has a name of its
-    // own (see AppRoutes.shell), so the name would resolve correctly today.
-    // Kept because it is still the more direct thing to do, and because it does
-    // not depend on the route table agreeing with us.
-    Navigator.of(context).pushReplacement(
-      AppRouter.onGenerateRoute(RouteSettings(name: widget.next)),
+    // What was here faded the logo to nothing, waited for that to finish, and
+    // only then pushed the next screen - so between the two there was a beat
+    // showing an empty splash, and then a platform slide from it. The
+    // destination also got to paint its own first frame cold. That sequence
+    // is the "splash, then a white flash, then the chat" everyone saw.
+    //
+    // Pushing with a fade keeps both routes alive at once: the destination
+    // builds and paints *underneath* the splash and is only revealed as the
+    // splash dissolves, so the first thing seen of it is a finished frame.
+    // The logo's scale carries on through the fade, which is what makes it
+    // read as the app opening rather than one screen replacing another.
+    await Navigator.of(context).pushReplacement(
+      PageRouteBuilder<void>(
+        settings: RouteSettings(name: widget.next),
+        transitionDuration: _fadeOut,
+        reverseTransitionDuration: Duration.zero,
+        // Built straight from the router rather than pushed by name.
+        //
+        // This used to be load-bearing: the shell was named '/', which is also
+        // where WidgetsApp registers `home` - this screen - so pushing the
+        // shell by name landed back here and looped forever. The shell now has
+        // a name of its own (see AppRoutes.shell), so the name would resolve
+        // correctly today. Kept because it is still the more direct thing to
+        // do, and because it does not depend on the route table agreeing.
+        pageBuilder: (context, _, __) =>
+            AppRouter.builderFor(widget.next)(context),
+        transitionsBuilder: (_, animation, __, child) => FadeTransition(
+          opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
+          child: child,
+        ),
+      ),
     );
   }
 
@@ -126,62 +147,65 @@ class _SplashScreenState extends State<SplashScreen> {
         child: Stack(
           alignment: Alignment.center,
           children: [
-          // The same ambient wash the rest of the app sits on, so the fade out
-          // lands on a background that is already familiar rather than a cut
-          // from a white card to a coloured page.
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: RadialGradient(
-                  center: const Alignment(0, -0.35),
-                  radius: 1.1,
-                  colors: [
-                    c.primaryTint.withValues(alpha: context.isDark ? 0.5 : 0.9),
-                    c.bg,
-                  ],
+            // The same ambient wash the rest of the app sits on, so the fade out
+            // lands on a background that is already familiar rather than a cut
+            // from a white card to a coloured page.
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: RadialGradient(
+                    center: const Alignment(0, -0.35),
+                    radius: 1.1,
+                    colors: [
+                      c.primaryTint
+                          .withValues(alpha: context.isDark ? 0.5 : 0.9),
+                      c.bg,
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-          AnimatedOpacity(
-            duration: _fadeOut,
-            curve: Curves.easeOutCubic,
-            opacity: _leaving ? 0 : 1,
-            child: AnimatedScale(
-              duration: _fadeOut,
-              curve: Curves.easeInCubic,
-              // Leaves *towards* the viewer, which reads as the app opening
-              // rather than the logo being dismissed.
-              scale: _leaving ? 1.08 : 1,
-              // The app icon itself, at hero size.
-              //
-              // This was the shader orb, which is the right mark *inside* the
-              // app but the wrong one here: the launch screen's job is to
-              // continue the tap that started it, and what the user tapped was
-              // the icon on their home screen. Showing something else at that
-              // moment reads as a different app opening.
-              //
-              // The icon is a rounded square, so it is masked to match the
-              // platform's own app-icon shape rather than sitting as a hard
-              // square on the wash. Precached in didChangeDependencies, so it
-              // is decoded before the first frame that needs it and there is
-              // no blank beat where the mark should be.
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(_logoSize * 0.2237),
-                child: Image.asset(
-                  'assets/branding/app_icon.png',
-                  width: _logoSize,
-                  height: _logoSize,
-                  // The source is 1024px and this draws at 200; letting the
-                  // engine decode straight to the size it will paint saves
-                  // decoding a megapixel to throw most of it away.
-                  cacheWidth: (_logoSize * MediaQuery.devicePixelRatioOf(context)).round(),
-                  filterQuality: FilterQuality.medium,
+            // Scale only. Fading the logo here as well would double up with the
+            // route's cross-fade and leave a visibly empty splash underneath
+            // the incoming screen.
+            Builder(
+              builder: (context) => AnimatedScale(
+                duration: _fadeOut,
+                curve: Curves.easeInCubic,
+                // Leaves *towards* the viewer, which reads as the app opening
+                // rather than the logo being dismissed.
+                scale: _leaving ? 1.08 : 1,
+                // The app icon itself, at hero size.
+                //
+                // This was the shader orb, which is the right mark *inside* the
+                // app but the wrong one here: the launch screen's job is to
+                // continue the tap that started it, and what the user tapped was
+                // the icon on their home screen. Showing something else at that
+                // moment reads as a different app opening.
+                //
+                // The icon is a rounded square, so it is masked to match the
+                // platform's own app-icon shape rather than sitting as a hard
+                // square on the wash. Precached in didChangeDependencies, so it
+                // is decoded before the first frame that needs it and there is
+                // no blank beat where the mark should be.
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(_logoSize * 0.2237),
+                  child: Image.asset(
+                    'assets/branding/app_icon.png',
+                    width: _logoSize,
+                    height: _logoSize,
+                    // The source is 1024px and this draws at 200; letting the
+                    // engine decode straight to the size it will paint saves
+                    // decoding a megapixel to throw most of it away.
+                    cacheWidth:
+                        (_logoSize * MediaQuery.devicePixelRatioOf(context))
+                            .round(),
+                    filterQuality: FilterQuality.medium,
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
         ),
       ),
     );

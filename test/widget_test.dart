@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:ourmynd/core/routes/app_routes.dart';
 import 'package:ourmynd/main.dart';
+import 'package:ourmynd/providers/settings_provider.dart';
 
 void main() {
   testWidgets('OurMynd boots', (WidgetTester tester) async {
@@ -13,6 +14,9 @@ void main() {
       // The launch screen measures its entrance from when main() started, so
       // it needs a start time to measure against.
       bootAt: DateTime.now(),
+      // Loaded before runApp in the real app, so the first frame already
+      // knows which theme to paint. Defaults are fine here.
+      settings: SettingsProvider(),
     ));
     await tester.pump();
 

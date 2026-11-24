@@ -7,6 +7,8 @@ import 'package:provider/provider.dart';
 
 import 'core/routes/app_router.dart';
 import 'core/routes/app_routes.dart';
+import 'core/theme/app_colors.dart';
+import 'widgets/voice_consent.dart';
 import 'core/services/account_scope.dart';
 import 'core/services/api_client.dart';
 import 'core/services/api_config.dart';
@@ -169,6 +171,20 @@ void main() async {
     nav.pushNamedAndRemoveUntil(AppRoutes.login, (_) => false);
   };
 
+  // The theme, before the first frame.
+  //
+  // Built here rather than inside the provider tree because MaterialApp reads
+  // themeMode on its very first build. Created lazily and loaded afterwards,
+  // the app painted one light frame and then snapped to dark - and the iOS
+  // launch screen, drawn earlier still, had nothing to go on at all.
+  //
+  // Above the account-switch handler because that rebuilds the whole tree and
+  // has to hand the same instance back: display settings belong to the
+  // device, not the account, and a theme that flipped to light because
+  // somebody signed in as someone else would be a bug, not a reset.
+  final settings = SettingsProvider();
+  await _bootStep('settings', settings.load);
+
   // A different account just signed in on this device. Its own local data is
   // already in place and the previous account's is parked (see AccountScope);
   // this throws away everything still holding the previous user's data in
@@ -189,6 +205,11 @@ void main() async {
     // grants permission nobody on this account ever gave.
     unawaited(HealthConsentProvider.instance.clear());
     unawaited(AiConsentProvider.instance.clear());
+    // The stored answer is parked with the rest of the account's `om_` keys,
+    // but VoiceConsent caches it in a static that no rebuild touches. Left
+    // behind, the incoming account's first tap on a microphone would upload
+    // audio on the strength of the outgoing account's yes.
+    unawaited(VoiceConsent.clear());
     // The key is what makes this a restart rather than a repaint. runApp on an
     // app that is already running *updates* the root widget, and an updated
     // MultiProvider keeps every object it has already built - so the incoming
@@ -200,6 +221,7 @@ void main() async {
       key: ValueKey(AccountScope.generation),
       initialRoute: AppRoutes.shell,
       bootAt: DateTime.now(),
+      settings: settings,
     ));
     // And then say where to go, because the new tree does not get a new
     // Navigator.
@@ -222,6 +244,7 @@ void main() async {
   runApp(OurMyndApp(
     initialRoute: (hasSession || kDemoMode) ? AppRoutes.shell : AppRoutes.login,
     bootAt: bootAt,
+    settings: settings,
   ));
 }
 
@@ -263,9 +286,14 @@ class OurMyndApp extends StatelessWidget {
     super.key,
     required this.initialRoute,
     required this.bootAt,
+    required this.settings,
   });
 
   final String initialRoute;
+
+  /// Already loaded from disk. Passed in rather than created here so the
+  /// first build already knows which theme to paint.
+  final SettingsProvider settings;
 
   /// When main() began. Handed to the launch screen so it can time itself.
   final DateTime bootAt;
@@ -274,7 +302,7 @@ class OurMyndApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => SettingsProvider()..loadRingtone()),
+        ChangeNotifierProvider<SettingsProvider>.value(value: settings),
         // Subscription entitlement (Stripe). Gates premium-only features and
         // drives the paywall checkout. Refreshed after sign-in / on the paywall.
         ChangeNotifierProvider(create: (_) => PremiumProvider()..refresh()),
@@ -326,7 +354,9 @@ class OurMyndApp extends StatelessWidget {
         // calendar without each of those call sites having to remember.
         ChangeNotifierProxyProvider<TaskProvider, CalendarProvider>(
           create: (_) => CalendarProvider()..load(),
-          update: (_, tasks, prev) => (prev ?? CalendarProvider()..load())..watch(tasks),
+          update: (_, tasks, prev) => (prev ?? CalendarProvider()
+            ..load())
+            ..watch(tasks),
         ),
         // Bound to the mood and the memory rather than reading either at
         // generation time. The lines are written from what the app actually
@@ -336,10 +366,11 @@ class OurMyndApp extends StatelessWidget {
         ChangeNotifierProxyProvider3<MoodProvider, MemoryProvider, TaskProvider,
             MotivationProvider>(
           create: (_) => MotivationProvider(),
-          update: (_, mood, memory, tasks, prev) => (prev ?? MotivationProvider())
-            ..bindMood(mood)
-            ..bindMemory(memory)
-            ..bindTasks(tasks),
+          update: (_, mood, memory, tasks, prev) =>
+              (prev ?? MotivationProvider())
+                ..bindMood(mood)
+                ..bindMemory(memory)
+                ..bindTasks(tasks),
         ),
         // Consecutive days you showed up. Listens for the two things that
         // count rather than polling them, and reconciles a check-in that
@@ -356,11 +387,13 @@ class OurMyndApp extends StatelessWidget {
             return streak;
           },
         ),
-        ChangeNotifierProvider(create: (_) => NotesProvider(ApiClient.instance)),
+        ChangeNotifierProvider(
+            create: (_) => NotesProvider(ApiClient.instance)),
         // Goals depend on TaskProvider (they push today's milestones into it).
         ChangeNotifierProxyProvider<TaskProvider, GoalProvider>(
           create: (ctx) => GoalProvider(ctx.read<TaskProvider>()),
-          update: (_, tasks, previous) => (previous ?? GoalProvider(tasks))..updateTasks(tasks),
+          update: (_, tasks, previous) =>
+              (previous ?? GoalProvider(tasks))..updateTasks(tasks),
         ),
         // Reminders hand themselves to the OS scheduler, and follow today's
         // timed blocks so a block you move takes its nudge with it.
@@ -378,19 +411,14 @@ class OurMyndApp extends StatelessWidget {
           // which means the re-arm cannot wait to be asked for.
           lazy: false,
           create: (_) => RemindersProvider(),
-          update: (_, tasks, goals, previous) => (previous ??
-              RemindersProvider())
-            ..updateTasks(tasks.daySchedule)
-            ..updateGoals(goals.goals),
+          update: (_, tasks, goals, previous) =>
+              (previous ?? RemindersProvider())
+                ..updateTasks(tasks.daySchedule)
+                ..updateGoals(goals.goals),
         ),
         // CoachProvider needs all 5 others - ProxyProvider wires them live.
-        ChangeNotifierProxyProvider5<
-            EnergyProvider,
-            TaskProvider,
-            HabitProvider,
-            FocusProvider,
-            SettingsProvider,
-            CoachProvider>(
+        ChangeNotifierProxyProvider5<EnergyProvider, TaskProvider,
+            HabitProvider, FocusProvider, SettingsProvider, CoachProvider>(
           create: (ctx) => CoachProvider(
             energy: ctx.read<EnergyProvider>(),
             tasks: ctx.read<TaskProvider>(),
@@ -449,6 +477,17 @@ class OurMyndApp extends StatelessWidget {
             // webview and forcing it to fill would put it over the app.
             builder: (context, child) => Stack(
               children: [
+                // A themed floor under every route.
+                //
+                // Any route that has not painted yet shows whatever is behind
+                // it, and behind a Navigator is the bare window: white. That
+                // is the flash between the launch screen and the chat - not a
+                // screen being slow, but a gap with nothing in it. One opaque
+                // layer in the app's own background colour means the worst a
+                // slow route can look is empty, never bright.
+                Positioned.fill(
+                  child: ColoredBox(color: context.omColors.bg),
+                ),
                 if (child != null) Positioned.fill(child: child),
                 PuterHost(navigatorKey: rootNavigatorKey),
               ],
