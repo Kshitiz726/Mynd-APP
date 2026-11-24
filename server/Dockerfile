@@ -15,6 +15,14 @@ RUN npm ci --omit=dev
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/supabase ./supabase
 
+# Apple's public root certificates.
+#
+# Not optional, and easy to miss: StoreKit purchases are verified offline
+# against these, so a runtime image without them answers every purchase with
+# ENOENT and nobody who paid gets anything. The verifier resolves them as
+# dist/services/../../certs/apple, which is this path.
+COPY --from=build /app/certs ./certs
+
 # Drop root.
 #
 # The container was running as uid 0, so a remote-code-execution bug anywhere in
