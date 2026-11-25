@@ -574,6 +574,23 @@ class _MusicLinkSheetState extends State<_MusicLinkSheet> {
     }
   }
 
+  /// Music from the internet is switched off.
+  ///
+  /// Off deliberately and temporarily, not deleted. Search (the Audius
+  /// catalogue) and pasted links (direct audio, YouTube, Spotify) are the two
+  /// places this app touches somebody else's catalogue, and both are
+  /// judgement calls a reviewer makes rather than rules we can check
+  /// ourselves. With a rejection already on this app's record, the cost of
+  /// being wrong is weeks; the cost of leaving them off is one Pro line.
+  ///
+  /// Playing a file already on the phone carries none of that: no catalogue,
+  /// no third party, no rights question. That stays, on every plan.
+  ///
+  /// To turn the rest back on, set this true. The search field, the link
+  /// parser, the server's /api/music routes and MusicLink's providers are all
+  /// still here and still tested.
+  static const bool _internetMusicEnabled = false;
+
   @override
   Widget build(BuildContext context) {
     final c = context.omColors;
@@ -591,12 +608,14 @@ class _MusicLinkSheetState extends State<_MusicLinkSheet> {
               style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 4),
           Text(
-            _streamLocked
-                ? 'play a track from this device on any plan. searching for '
-                    'music and pasting links are part of Pro.'
-                : 'type what you want to hear and the closest match plays. or '
-                    'paste a link: an audio link plays here, while YouTube and '
-                    'Spotify open in their own apps.',
+            !_internetMusicEnabled
+                ? 'pick a track from this phone and it plays while you focus.'
+                : _streamLocked
+                    ? 'play a track from this device on any plan. searching for '
+                        'music and pasting links are part of Pro.'
+                    : 'type what you want to hear and the closest match plays. or '
+                        'paste a link: an audio link plays here, while YouTube and '
+                        'Spotify open in their own apps.',
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: AppSpacing.lg),
@@ -605,7 +624,7 @@ class _MusicLinkSheetState extends State<_MusicLinkSheet> {
           // every plan: a focus timer that cannot play anything at all would
           // be a worse free tier than the one that exists today, and this is
           // meant to add a reason to upgrade rather than take something away.
-          if (_streamLocked)
+          if (_internetMusicEnabled && _streamLocked)
             OmTappable(
               onTap: () {
                 Navigator.of(context).pop();
@@ -635,7 +654,7 @@ class _MusicLinkSheetState extends State<_MusicLinkSheet> {
                 ),
               ),
             )
-          else
+          else if (_internetMusicEnabled)
             TextField(
               controller: _controller,
               autofocus: true,
@@ -663,7 +682,7 @@ class _MusicLinkSheetState extends State<_MusicLinkSheet> {
               ),
               onSubmitted: _submitRaw,
             ),
-          if (!_streamLocked) ...[
+          if (_internetMusicEnabled && !_streamLocked) ...[
             const SizedBox(height: 6),
             // Named, because the catalogue is somebody else's work and
             // Audius's API is offered on the understanding that apps using it
