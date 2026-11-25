@@ -89,7 +89,7 @@ const _tiers = [
     benefits: [
       'Unlimited messages with Mynd',
       'Every coach, not just Ember',
-      'Search and stream any music while you focus',
+      'Search and stream focus music while you work',
       'Make the Feed about what you choose',
       'A memory ${ProFeatures.proMemoryContext ~/ ProFeatures.freeMemoryContext}x '
           'deeper, and editable by hand',

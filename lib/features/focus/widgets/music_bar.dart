@@ -663,6 +663,20 @@ class _MusicLinkSheetState extends State<_MusicLinkSheet> {
               ),
               onSubmitted: _submitRaw,
             ),
+          if (!_streamLocked) ...[
+            const SizedBox(height: 6),
+            // Named, because the catalogue is somebody else's work and
+            // Audius's API is offered on the understanding that apps using it
+            // say so. The per-track artist credit is in MusicSearchResult's
+            // label; this is the platform half of the same courtesy, and it
+            // also stops "search" reading as a promise of every song ever
+            // recorded.
+            Text(
+              'Results come from Audius, an open music platform. '
+              'Tracks are credited to their artists.',
+              style: TextStyle(fontSize: 11, color: c.text2, height: 1.4),
+            ),
+          ],
           if (preview != null) ...[
             const SizedBox(height: AppSpacing.sm),
             Row(
@@ -672,7 +686,7 @@ class _MusicLinkSheetState extends State<_MusicLinkSheet> {
                     MusicProvider.stream ||
                     MusicProvider.file =>
                       LucideIcons.audioLines,
-                    MusicProvider.youtube => LucideIcons.play,
+                    MusicProvider.youtube => LucideIcons.externalLink,
                     MusicProvider.spotify => LucideIcons.externalLink,
                   },
                   size: 14,
@@ -684,7 +698,14 @@ class _MusicLinkSheetState extends State<_MusicLinkSheet> {
                     MusicProvider.stream ||
                     MusicProvider.file =>
                       'plays here as audio, no video',
-                    MusicProvider.youtube => 'plays here as audio',
+                    // Not "plays here as audio", which is what this said and
+                    // is the one thing it must never say. playsInApp is false
+                    // for YouTube and the link is handed to the YouTube app,
+                    // because their API Terms require their player to stay
+                    // visible. The old line advertised audio-only YouTube
+                    // playback - a 5.2.3 rejection for a thing the app does
+                    // not even do.
+                    MusicProvider.youtube => 'opens in YouTube',
                     MusicProvider.spotify => 'opens in Spotify',
                   },
                   style: TextStyle(fontSize: 12, color: c.text2),
