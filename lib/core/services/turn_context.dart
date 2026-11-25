@@ -18,6 +18,7 @@ import 'package:flutter/foundation.dart';
 import '../../providers/calendar_provider.dart';
 import '../../providers/focus_provider.dart';
 import '../../providers/task_provider.dart';
+import '../../widgets/calendar_consent.dart';
 import 'mail_service.dart';
 
 /// Words that mean "look at my mail". Anchored on the nouns rather than on
@@ -168,7 +169,19 @@ Future<TurnContext> gatherTurnContext(
           // What the phone knows: real meetings, which are the things that
           // cannot be moved and the reason a plan survives contact with the
           // day or does not.
-          if (calendar.connected) {
+          //
+          // Gated on the consent here and not only at the moment a calendar is
+          // picked, because `connected` outlives the screen that set it. A
+          // calendar connected on an older build - one that asked iOS for
+          // permission but never asked about sending titles onward - stays
+          // connected across the update, and the sheet never runs again. Read
+          // at the point the titles would actually leave, this fails closed
+          // for those installs instead of inheriting a yes nobody gave.
+          //
+          // Event titles say who somebody is meeting and often why, and carry
+          // other people's names along with them. 5.1.1(i) and 5.1.2(i), and
+          // the guideline this app has already been rejected under once.
+          if (calendar.connected && await CalendarConsent.isGranted()) {
             final events = await calendar
                 .importDay(now)
                 .timeout(const Duration(seconds: 12));

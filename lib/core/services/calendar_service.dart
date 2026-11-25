@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/timezone.dart' as tz;
 
+import '../../widgets/calendar_consent.dart';
 import '../utils/free_slots.dart';
 
 /// The device's calendar, as much of it as this app needs.
@@ -52,7 +53,20 @@ class CalendarService {
   }
 
   /// Ask for access. Returns whether it was granted.
+  ///
+  /// Refuses to raise the OS sheet until our own disclosure has been agreed
+  /// to. The sheet in CalendarConsent is what the caller is supposed to show
+  /// first, and today exactly one caller does; this is the second lock, so
+  /// that a caller added later cannot quietly skip it. A comment asking
+  /// future code to remember is not a control.
+  ///
+  /// Fails closed: an unanswered question is not a yes, and the cost of being
+  /// wrong here is somebody's meetings reaching an AI company unasked.
   Future<bool> requestPermission() async {
+    if (!await CalendarConsent.isGranted()) {
+      debugPrint('[calendar] permission not requested: consent not given');
+      return false;
+    }
     try {
       if (await hasPermission()) return true;
       final r = await _plugin.requestPermissions();
