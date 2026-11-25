@@ -47,9 +47,9 @@
 		<true/>
 	</dict>
 	<key>NSCalendarsFullAccessUsageDescription</key>
-	<string>Mynd reads your calendar so it never schedules work on top of a meeting, and writes the blocks you plan here back to the calendar you choose.</string>
+	<string>Mynd reads the one calendar you choose so it never schedules work on top of a meeting, and writes the focus blocks you plan here back to it. When you ask Mynd about your day, the title and time of those events are sent to Groq, an AI company, to answer you. You can disconnect the calendar at any time.</string>
 	<key>NSCalendarsUsageDescription</key>
-	<string>Mynd reads your calendar so it never schedules work on top of a meeting, and writes the blocks you plan here back to the calendar you choose.</string>
+	<string>Mynd reads the one calendar you choose so it never schedules work on top of a meeting, and writes the focus blocks you plan here back to it. When you ask Mynd about your day, the title and time of those events are sent to Groq, an AI company, to answer you. You can disconnect the calendar at any time.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>OurMynd uses the camera for video in focus rooms.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>

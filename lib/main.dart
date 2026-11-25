@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import 'core/routes/app_router.dart';
 import 'core/routes/app_routes.dart';
 import 'core/theme/app_colors.dart';
+import 'widgets/calendar_consent.dart';
 import 'widgets/voice_consent.dart';
 import 'core/services/account_scope.dart';
 import 'core/services/api_client.dart';
@@ -210,6 +211,7 @@ void main() async {
     // behind, the incoming account's first tap on a microphone would upload
     // audio on the strength of the outgoing account's yes.
     unawaited(VoiceConsent.clear());
+    unawaited(CalendarConsent.clear());
     // The key is what makes this a restart rather than a repaint. runApp on an
     // app that is already running *updates* the root widget, and an updated
     // MultiProvider keeps every object it has already built - so the incoming

@@ -8,6 +8,7 @@ import '../../../core/utils/haptics.dart';
 import '../../../core/utils/toast.dart';
 import '../../../providers/calendar_provider.dart';
 import '../../../providers/task_provider.dart';
+import '../../../widgets/calendar_consent.dart';
 import '../../../widgets/om_tappable.dart';
 
 /// Connecting the phone's calendar, and saying plainly what that does.
@@ -45,6 +46,16 @@ class _CalendarConnectCardState extends State<CalendarConnectCard> {
 
   Future<void> _connect() async {
     Haptics.light();
+    // Asked before the OS sheet, never after. iOS asks whether Mynd may read
+    // the calendar; it cannot ask the question that matters, which is that
+    // event titles are sent to an AI company when somebody asks about their
+    // day. Afterwards is too late - the permission is already granted.
+    //
+    // This is the only place calendar access is requested, which is why the
+    // gate sits here. If a second place is ever added, the gate has to move
+    // with it or it is simply missing from the new one.
+    if (!await CalendarConsent.ensure(context)) return;
+    if (!mounted) return;
     final cal = context.read<CalendarProvider>();
     final ok = await cal.requestAccess();
     if (!mounted) return;
