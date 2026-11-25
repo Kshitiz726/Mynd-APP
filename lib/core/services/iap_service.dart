@@ -140,8 +140,32 @@ class IapService {
     await loadProducts();
   }
 
+  /// How long the store may take to name its own products.
+  ///
+  /// Bounded because the alternative is unbounded. queryProductDetails has no
+  /// timeout of its own, so a StoreKit that never answers left loadPlans()
+  /// awaiting for ever: _loadingPlans stayed true and the paywall sat on a
+  /// spinner with no way out. The paywall already has a "store unreachable"
+  /// state with a Retry on it, and it could never be reached.
+  ///
+  /// A perpetual spinner on the screen that takes money is how an app gets
+  /// read as broken under guideline 2.1, and a reviewer meeting one does not
+  /// file a bug, they reject.
+  @visibleForTesting
+  static Duration productQueryTimeout = const Duration(seconds: 15);
+
   Future<void> loadProducts() async {
-    final response = await _iap.queryProductDetails(IapProducts.all);
+    final response = await _iap
+        .queryProductDetails(IapProducts.all)
+        .timeout(productQueryTimeout, onTimeout: () {
+      // Rethrown rather than returning an empty response, so loadPlans()
+      // lands in its catch and leaves the plans empty. Empty plus not
+      // loading is what shows the Retry.
+      throw IapException(
+        IapFailure.unavailable,
+        'the store did not answer in ${productQueryTimeout.inSeconds}s',
+      );
+    });
     if (response.notFoundIDs.isNotEmpty) {
       // Almost always one of three things, and worth saying which so this is
       // not debugged as "the paywall is empty": the ids do not match App
