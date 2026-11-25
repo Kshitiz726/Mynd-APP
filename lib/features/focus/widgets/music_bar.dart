@@ -39,6 +39,29 @@ import '../../../widgets/om_tappable.dart';
 ///   Both degrade honestly to a hand-off, and the line says so instead of
 ///   letting someone find out by pressing play.
 class MusicBar extends StatefulWidget {
+  /// Music from the internet is switched off.
+  ///
+  /// Off deliberately and temporarily, not deleted. Search (the Audius
+  /// catalogue) and pasted links (direct audio, YouTube, Spotify) are the two
+  /// places this app touches somebody else's catalogue, and both are
+  /// judgement calls a reviewer makes rather than rules we can check
+  /// ourselves. With a rejection already on this app's record, the cost of
+  /// being wrong is weeks; the cost of leaving them off is one Pro line.
+  ///
+  /// Playing a file already on the phone carries none of that: no catalogue,
+  /// no third party, no rights question. That stays, on every plan.
+  ///
+  /// Public, and not private to the sheet, because a focus ROOM depends on it
+  /// too: a room's soundtrack is shared state, and a file on one phone cannot
+  /// play on anyone else's. With the internet sources off, a room has no
+  /// source left at all, so RoomMusicStrip reads this and shows nothing
+  /// rather than offering a picker whose every result is an error.
+  ///
+  /// To turn the rest back on, set this true. The search field, the link
+  /// parser, the server's /api/music routes and MusicLink's providers are all
+  /// still here and still tested.
+  static const bool internetMusicEnabled = false;
+
   const MusicBar({
     super.key,
     required this.music,
@@ -574,23 +597,6 @@ class _MusicLinkSheetState extends State<_MusicLinkSheet> {
     }
   }
 
-  /// Music from the internet is switched off.
-  ///
-  /// Off deliberately and temporarily, not deleted. Search (the Audius
-  /// catalogue) and pasted links (direct audio, YouTube, Spotify) are the two
-  /// places this app touches somebody else's catalogue, and both are
-  /// judgement calls a reviewer makes rather than rules we can check
-  /// ourselves. With a rejection already on this app's record, the cost of
-  /// being wrong is weeks; the cost of leaving them off is one Pro line.
-  ///
-  /// Playing a file already on the phone carries none of that: no catalogue,
-  /// no third party, no rights question. That stays, on every plan.
-  ///
-  /// To turn the rest back on, set this true. The search field, the link
-  /// parser, the server's /api/music routes and MusicLink's providers are all
-  /// still here and still tested.
-  static const bool _internetMusicEnabled = false;
-
   @override
   Widget build(BuildContext context) {
     final c = context.omColors;
@@ -608,7 +614,7 @@ class _MusicLinkSheetState extends State<_MusicLinkSheet> {
               style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 4),
           Text(
-            !_internetMusicEnabled
+            !MusicBar.internetMusicEnabled
                 ? 'pick a track from this phone and it plays while you focus.'
                 : _streamLocked
                     ? 'play a track from this device on any plan. searching for '
@@ -624,7 +630,7 @@ class _MusicLinkSheetState extends State<_MusicLinkSheet> {
           // every plan: a focus timer that cannot play anything at all would
           // be a worse free tier than the one that exists today, and this is
           // meant to add a reason to upgrade rather than take something away.
-          if (_internetMusicEnabled && _streamLocked)
+          if (MusicBar.internetMusicEnabled && _streamLocked)
             OmTappable(
               onTap: () {
                 Navigator.of(context).pop();
@@ -654,7 +660,7 @@ class _MusicLinkSheetState extends State<_MusicLinkSheet> {
                 ),
               ),
             )
-          else if (_internetMusicEnabled)
+          else if (MusicBar.internetMusicEnabled)
             TextField(
               controller: _controller,
               autofocus: true,
@@ -682,7 +688,7 @@ class _MusicLinkSheetState extends State<_MusicLinkSheet> {
               ),
               onSubmitted: _submitRaw,
             ),
-          if (_internetMusicEnabled && !_streamLocked) ...[
+          if (MusicBar.internetMusicEnabled && !_streamLocked) ...[
             const SizedBox(height: 6),
             // Named, because the catalogue is somebody else's work and
             // Audius's API is offered on the understanding that apps using it

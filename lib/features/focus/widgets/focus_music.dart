@@ -15,6 +15,18 @@ class RoomMusicStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Nothing to offer a room while the internet sources are off.
+    //
+    // A room's soundtrack is shared state on the server, so it only works for
+    // a source every member can reach. Search and pasted links are switched
+    // off (see MusicBar.internetMusicEnabled), and a file on one phone is
+    // refused by FocusRoomProvider.setMusic because it cannot play on anyone
+    // else's and its path carries the owner's name. That leaves no source at
+    // all, so the strip would be a picker whose every result is an error -
+    // broken functionality a reviewer meets on the way in, under guideline
+    // 2.1. Hidden until the sources come back.
+    if (!MusicBar.internetMusicEnabled) return const SizedBox.shrink();
+
     final room = context.watch<FocusRoomProvider>();
     return MusicBar(
       music: room.music,
