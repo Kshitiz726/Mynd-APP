@@ -66,10 +66,21 @@ export const config = {
   appleBundleId: process.env.APPLE_BUNDLE_ID ?? 'com.ourmynd.app',
 
   // The app's numeric App Store id, which is what Apple puts in a signed
-  // StoreKit transaction rather than the bundle id. Not a secret - it is the
-  // number in every App Store URL for the app - but it has to match, or every
-  // production receipt fails verification with INVALID_APP_IDENTIFIER.
-  appleAppStoreId: Number(process.env.APPLE_APP_STORE_ID ?? '6838455123'),
+  // notification rather than the bundle id. Not a secret - it is the number in
+  // every App Store URL for the app.
+  //
+  // It was wrong, and wrong in a way nothing would have reported. The library
+  // checks it only on the notification path and only in production
+  // (verifyNotification: bundleId mismatch OR production appAppleId mismatch
+  // throws). Purchases would have kept verifying perfectly, while every
+  // renewal, refund and expiry Apple sent was rejected as a forgery - a
+  // subscriber silently dropping to free at period end with nothing in the
+  // logs to connect it to.
+  //
+  // Verified against the App Store Connect API rather than copied from
+  // anywhere: GET /v1/apps?filter[bundleId]=com.ourmynd.app returns 6802791162
+  // for OurMynd. Re-check there if the app is ever recreated.
+  appleAppStoreId: Number(process.env.APPLE_APP_STORE_ID ?? '6802791162'),
 
   // Web/Android Sign in with Apple addresses the token to the Services ID
   // rather than the bundle id, so both have to be accepted as audiences.
