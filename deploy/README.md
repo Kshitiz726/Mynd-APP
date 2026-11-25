@@ -12,16 +12,35 @@ it before it goes anywhere.
 
 | | Address | State in Render |
 |---|---|---|
-| **Live** | `https://ourmynd-server.onrender.com` | **running** — holds the database and the `JWT_SECRET` |
-| Spare | `https://ourmynd-server-3bvh.onrender.com` | **suspended** — not listed in `servers.json` |
+| **Live** | `https://ourmynd-server.onrender.com` | running, paid plan — the server this file names |
+| Spare | `https://ourmynd-server-3bvh.onrender.com` | the lifeboat from the suspension; suspend it once traffic has moved |
 
-The spare is deliberately **not** listed. A standby is only worth having when it
-shares one `DATABASE_URL` and one `JWT_SECRET` with the live server; these two
-do not, so falling over would sign every user out rather than save them. Listing
-it would also wake a suspended instance on every probe and bill hours for it.
+Only one address is listed, and that is deliberate. A standby is worth listing
+only when it shares **both** `DATABASE_URL` and `JWT_SECRET` with the live
+server. These two share the database - same Supabase project, checked by
+comparing the `postgres.<ref>` segment on 2026-11-25 - but **not** the secret:
+`render.yaml` sets `JWT_SECRET` with `generateValue: true`, so each service
+minted its own. A token issued by one is rejected by the other, measured: the
+same session returned 200 on 3bvh and 401 on ourmynd-server.
 
-The app still trusts both addresses permanently, so switching is config, not a
+So a failover today would not lose anybody's data, but it would sign every user
+out mid-session. That is why the second address stays out of the file.
+
+The app trusts both addresses permanently, so switching is config, not a
 release.
+
+### If you want a real standby
+
+Copy `JWT_SECRET` from one service to the other in the Render dashboard. Once
+both the database and the secret match, listing two addresses is a genuine hot
+spare and a failover is invisible. Until then, one address only.
+
+### A note on what this file said before
+
+It used to claim the two servers shared neither the database nor the secret.
+Half of that was wrong, and the error was expensive: it is why the published
+file sat on the lifeboat for days after the code had moved back. Check a claim
+like that against the dashboard before trusting it.
 
 ## To move to the other server
 
