@@ -217,6 +217,20 @@ class _PaywallScreenState extends State<PaywallScreen>
         // The Stripe rail only opens a browser here; the result arrives on
         // resume. A false means the browser itself would not open.
         Toast.show(context, "Couldn't open checkout - try again");
+      } else {
+        // StoreKit, finished, and still not premium.
+        //
+        // There used to be no branch here at all, so this ended as silence on
+        // the one screen where silence is worst: somebody has just been
+        // through Apple's payment sheet and cannot tell whether they have
+        // been charged. Apple's own sheet can also close without an error of
+        // any kind - ask-to-buy, a parental approval, a sandbox account that
+        // signed in but could not complete - and all of those landed here.
+        Toast.show(
+          context,
+          "That didn't finish. If you were charged, Restore Purchases will "
+          'pick it up.',
+        );
       }
     } on IapException catch (e) {
       // Backing out of Apple's sheet is the most common thing that happens on

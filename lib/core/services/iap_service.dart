@@ -40,6 +40,13 @@ enum IapFailure {
   /// Apple took the payment but our server would not confirm it.
   notVerified,
 
+  /// A purchase for this account is already running.
+  ///
+  /// Its own case rather than a silent `false`, because silence here is
+  /// indistinguishable from a dead button: the second tap did nothing, said
+  /// nothing, and left somebody pressing it.
+  alreadyRunning,
+
   other,
 }
 
@@ -60,6 +67,9 @@ class IapException implements Exception {
           'Your purchase went through, but we could not confirm it yet. It '
               'will unlock shortly - contact support@ourmynd.com if it does '
               'not.',
+        IapFailure.alreadyRunning =>
+          'A purchase is already going through. Give it a moment, and use '
+              'Restore Purchases if it does not finish.',
         IapFailure.other => 'That purchase could not be completed.',
       };
 

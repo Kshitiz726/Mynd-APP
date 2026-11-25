@@ -159,7 +159,14 @@ class PremiumProvider extends ChangeNotifier {
   /// elsewhere when the browser would not open.
   Future<bool> buy(String planId) async {
     if (!StorePolicy.useStoreKit) return startCheckout(planId);
-    if (_busy) return false;
+    // Thrown, not returned false.
+    //
+    // The paywall only reports a false on the Stripe rail, so on StoreKit a
+    // false arrived as nothing at all: Subscribe did nothing, said nothing,
+    // and went on doing nothing until the app was force quit. _busy stays set
+    // while a purchase is in flight, and a sandbox sign-in that stalls can
+    // leave it set for a minute, which is exactly when somebody taps again.
+    if (_busy) throw IapException(IapFailure.alreadyRunning);
 
     final productId = _productIdFor(planId);
     final product = productId == null ? null : _iap.productFor(productId);
